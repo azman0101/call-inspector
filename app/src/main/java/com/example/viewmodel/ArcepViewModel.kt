@@ -40,8 +40,13 @@ data class ArcepUiState(
     val prefixSearchResults: List<ArcepLookupResult> = emptyList(),
     val isSearchingManual: Boolean = false,
     val databaseStats: DatabaseStats? = null,
-    val userNotice: String? = null
-)
+    val userNotice: String? = null,
+    val showPermissionDialog: Boolean = false,
+    val permissionDeniedCount: Int = 0
+) {
+    val isPermanentlyDenied: Boolean
+        get() = permissionDeniedCount >= 2
+}
 
 class ArcepViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -65,8 +70,34 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun onPermissionResult(granted: Boolean) {
-        _uiState.update { it.copy(hasPermission = granted) }
+        if (granted) {
+            _uiState.update {
+                it.copy(
+                    hasPermission = true,
+                    permissionDeniedCount = 0,
+                    showPermissionDialog = false,
+                    userNotice = "Journal d'appels synchronisé avec succès"
+                )
+            }
+        } else {
+            _uiState.update {
+                it.copy(
+                    hasPermission = false,
+                    permissionDeniedCount = it.permissionDeniedCount + 1,
+                    showPermissionDialog = false,
+                    userNotice = "Accès refusé. Mode Démo actif."
+                )
+            }
+        }
         loadCalls()
+    }
+
+    fun openPermissionDialog() {
+        _uiState.update { it.copy(showPermissionDialog = true) }
+    }
+
+    fun closePermissionDialog() {
+        _uiState.update { it.copy(showPermissionDialog = false) }
     }
 
     fun loadCalls() {

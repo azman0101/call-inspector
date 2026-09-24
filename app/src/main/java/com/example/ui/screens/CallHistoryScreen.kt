@@ -1,9 +1,14 @@
 package com.example.ui.screens
 
 import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,12 +27,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PhoneCallback
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -51,6 +60,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -58,8 +68,11 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.CallLogEntry
 import com.example.ui.components.CallDetailBottomSheet
 import com.example.ui.components.CallItemCard
+import com.example.ui.components.PermissionRationaleDialog
 import com.example.ui.theme.ArcepBlue
 import com.example.ui.theme.ArcepNavy
+import com.example.ui.theme.DangerRed
+import com.example.ui.theme.SuccessGreen
 import com.example.ui.theme.WarningAmber
 import com.example.ui.theme.WarningAmberSoft
 import com.example.viewmodel.ArcepUiState
@@ -73,6 +86,7 @@ fun CallHistoryScreen(
     viewModel: ArcepViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -92,14 +106,14 @@ fun CallHistoryScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp)
+                    .padding(horizontal = 20.dp, vertical = 14.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Journal d'appels",
                             style = MaterialTheme.typography.titleLarge,
@@ -113,15 +127,48 @@ fun CallHistoryScreen(
                         )
                     }
 
-                    IconButton(
-                        onClick = { viewModel.loadCalls() },
-                        modifier = Modifier.testTag("refresh_calls_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Actualiser",
-                            tint = Color.White
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Permission status chip
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (uiState.hasPermission) Color(0xFF1B5E20) else WarningAmber,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { viewModel.openPermissionDialog() }
+                                .testTag("permission_status_pill")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = if (uiState.hasPermission) Icons.Default.CheckCircle else Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (uiState.hasPermission) "Connecté" else "Non autorisé",
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        IconButton(
+                            onClick = { viewModel.loadCalls() },
+                            modifier = Modifier.testTag("refresh_calls_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Actualiser",
+                                tint = Color.White
+                            )
+                        }
                     }
                 }
             }
@@ -132,49 +179,98 @@ fun CallHistoryScreen(
             Card(
                 colors = CardDefaults.cardColors(containerColor = WarningAmberSoft),
                 shape = RoundedCornerShape(0.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Security,
-                            contentDescription = null,
-                            tint = WarningAmber,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Permission Journal d'appels",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = WarningAmber
-                        )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .background(WarningAmber.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Security,
+                                    contentDescription = null,
+                                    tint = WarningAmber,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Autorisation d'accès requise",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = WarningAmber
+                            )
+                        }
+
+                        TextButton(onClick = { viewModel.openPermissionDialog() }) {
+                            Text("Détails & Sécurité", fontSize = 11.sp, color = ArcepBlue)
+                        }
                     }
+
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Pour inspecter vos correspondants réels, autorisez l'accès au journal d'appels. Vous pouvez aussi explorer avec les exemples réalistes ci-dessous.",
+                        text = "Pour identifier l'entreprise titulaire de vos appels entrants et manqués, l'application doit lire l'historique d'appels. Toutes les données sont traitées 100% localement sur votre téléphone.",
                         fontSize = 12.sp,
                         color = Color(0xFF5D2E00),
                         lineHeight = 16.sp
                     )
+
                     Spacer(modifier = Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = {
-                                permissionLauncher.launch(Manifest.permission.READ_CALL_LOG)
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = WarningAmber),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.testTag("request_permission_button")
-                        ) {
-                            Text("Autoriser l'accès", fontSize = 12.sp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (uiState.isPermanentlyDenied) {
+                            Button(
+                                onClick = {
+                                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = Uri.fromParts("package", context.packageName, null)
+                                    }
+                                    context.startActivity(intent)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = ArcepBlue),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("open_settings_banner_button")
+                            ) {
+                                Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Ouvrir Paramètres", fontSize = 11.sp)
+                            }
+                        } else {
+                            Button(
+                                onClick = {
+                                    permissionLauncher.launch(Manifest.permission.READ_CALL_LOG)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = ArcepBlue),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("request_permission_button")
+                            ) {
+                                Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Autoriser l'accès", fontSize = 11.sp)
+                            }
                         }
 
                         OutlinedButton(
                             onClick = { viewModel.forceLoadSampleCalls() },
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Text("Mode Démo (Exemples)", fontSize = 12.sp)
+                            Text("Mode Démo (Exemples)", fontSize = 11.sp)
                         }
                     }
                 }
@@ -301,6 +397,16 @@ fun CallHistoryScreen(
             onToggleSpam = { viewModel.toggleSpamFlag(it) },
             onToggleFavorite = { viewModel.toggleFavorite(it) },
             onSaveNote = { phone, note -> viewModel.saveCallNote(phone, note) }
+        )
+    }
+
+    // Permission Rationale & Settings Dialog
+    if (uiState.showPermissionDialog) {
+        PermissionRationaleDialog(
+            isPermanentlyDenied = uiState.isPermanentlyDenied,
+            onDismiss = { viewModel.closePermissionDialog() },
+            onRequestPermission = { permissionLauncher.launch(Manifest.permission.READ_CALL_LOG) },
+            onUseSampleData = { viewModel.forceLoadSampleCalls() }
         )
     }
 }
