@@ -156,6 +156,15 @@ L'APK généré se trouve dans `app/build/outputs/apk/debug/app-debug.apk`.
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
+### Compilation automatisée et téléchargement d'APK de test (GitHub Actions)
+Un workflow GitHub Actions dédié (`.github/workflows/build_apk.yml`) est configuré pour compiler et tester automatiquement l'application :
+- **Déclencheurs** :
+  - À chaque `push` ou `pull_request` sur les branches principales.
+  - Déclenchement manuel via **Actions > Build Test APK > Run workflow** (avec option pour exécuter ou ignorer les tests unitaires Robolectric).
+- **Artefact généré** :
+  - L'APK de test signé avec la clé de debug (`app-debug.apk`) est automatiquement téléchargeable sous le nom **`info-operateur-debug-apk`** dans la section *Artifacts* de l'exécution GitHub Actions (durée de rétention : 14 jours).
+  - Cet APK peut être installé directement sur n'importe quel smartphone Android de test sans certificat de production.
+
 ### Environnement spécifique Termux (Android ARM64)
 Le fichier `setup.sh` à la racine automatise la préparation d'un environnement autonome sous Termux ARM64 :
 ```sh
