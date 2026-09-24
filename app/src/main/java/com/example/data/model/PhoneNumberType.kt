@@ -88,6 +88,7 @@ enum class PhoneNumberType(
             }
 
             return when {
+                normalizedNumber.startsWith("059") || normalizedNumber.startsWith("026") || normalizedNumber.startsWith("069") -> FIXE_OUTRE_MER
                 normalizedNumber.startsWith("06") || normalizedNumber.startsWith("07") -> MOBILE
                 normalizedNumber.startsWith("01") -> FIXE_ILE_DE_FRANCE
                 normalizedNumber.startsWith("02") -> FIXE_NORD_OUEST
@@ -96,7 +97,6 @@ enum class PhoneNumberType(
                 normalizedNumber.startsWith("05") -> FIXE_SUD_OUEST
                 normalizedNumber.startsWith("08") -> SVA_SPECIAL
                 normalizedNumber.startsWith("09") -> POLYVALENT_VOIP
-                normalizedNumber.startsWith("059") || normalizedNumber.startsWith("026") || normalizedNumber.startsWith("069") -> FIXE_OUTRE_MER
                 normalizedNumber.startsWith("+") && !normalizedNumber.startsWith("+33") -> INTERNATIONAL
                 else -> INCONNU
             }
