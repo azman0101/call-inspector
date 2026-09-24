@@ -1,0 +1,50 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Telecommunications Signal Arcs in Cyan -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M37,34 C47,26 61,26 71,34"
+        android:strokeWidth="3.2"
+        android:strokeColor="#00D2FF"
+        android:strokeLineCap="round" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M43,40 C49,34 59,34 65,40"
+        android:strokeWidth="2.8"
+        android:strokeColor="#38E1FF"
+        android:strokeLineCap="round" />
+
+    <!-- Modern Phone Handset Silhouette in Crisp White -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M39.5,47.5 C38.5,46.5 37,46.5 36,47.5 L33.2,50.3 C31.8,51.7 31.4,53.8 32.2,55.6 C35,61.8 40.2,67 46.4,69.8 C48.2,70.6 50.3,70.2 51.7,68.8 L54.5,66 C55.5,65 55.5,63.5 54.5,62.5 L49.8,57.8 C48.8,56.8 47.3,56.8 46.3,57.8 L45,59.1 C44.8,59.3 44.5,59.3 44.3,59.2 C40.7,57.2 38.8,55.3 36.8,51.7 C36.7,51.5 36.7,51.2 36.9,51 L38.2,49.7 C39.2,48.7 39.2,47.2 38.2,46.2 Z" />
+
+    <!-- Magnifying Glass / Inspection Ring in Bright Cyan & Yellow-Gold -->
+    <path
+        android:fillColor="#15004080"
+        android:pathData="M65,58 A11,11 0 1 1 64.9,58" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M65,58 A11,11 0 1 1 64.9,58"
+        android:strokeWidth="3.2"
+        android:strokeColor="#FFC107" />
+    <!-- Glass Handle -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M73,66 L81,74"
+        android:strokeWidth="3.8"
+        android:strokeColor="#FFC107"
+        android:strokeLineCap="round" />
+
+    <!-- Verification Checkmark inside Lens in Pure White -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M61,58 L64,61 L70,54"
+        android:strokeWidth="2.4"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

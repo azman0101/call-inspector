@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Arcep Opérateur</string>
+    <string name="title_call_history">Historique d\'appels</string>
+    <string name="title_manual_search">Recherche de numéro</string>
+    <string name="title_database_stats">Base &amp; Statistiques</string>
+    <string name="desc_arcep_service">Identification de l\'opérateur et de l\'entreprise titulaire selon l\'ARCEP</string>
+    <string name="permission_rationale">L\'accès au journal d\'appels est nécessaire pour analyser vos correspondants et identifier automatiquement leurs opérateurs via la base officielle ARCEP.</string>
+</resources>
