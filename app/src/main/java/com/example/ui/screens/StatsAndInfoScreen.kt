@@ -21,34 +21,41 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
-import androidx.compose.material.icons.filled.Business
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Policy
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ReportProblem
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.repository.UpdateStatus
 import com.example.ui.theme.ArcepBlue
 import com.example.ui.theme.ArcepNavy
 import com.example.ui.theme.DangerRed
@@ -59,11 +66,14 @@ import com.example.viewmodel.ArcepUiState
 @Composable
 fun StatsAndInfoScreen(
     uiState: ArcepUiState,
+    onTriggerUpdate: (() -> Unit)? = null,
+    onResetUpdateStatus: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val stats = uiState.databaseStats
     val calls = uiState.calls
+    val updateStatus = uiState.updateStatus
 
     val totalCalls = calls.size
     val demarchageCalls = calls.count { it.isSpamFlagged || it.lookupResult.numberType.isDemarchage }
@@ -174,6 +184,232 @@ fun StatsAndInfoScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 15.sp
                     )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Traçabilité de la version
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Version officielle :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                text = stats?.databaseVersionDate ?: "Tue, 15 Sep 2026",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        stats?.generatedAt?.let { genDate ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Génération locale :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(genDate, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+
+                        stats?.latestAttributionDate?.let { attrDate ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Dernière décision ARCEP :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(attrDate, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+
+                        stats?.majnumChecksum?.let { sha ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Empreinte SHA-256 :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${sha.take(16)}...", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // OTA Update Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFE0F4FF)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudDownload,
+                                    contentDescription = null,
+                                    tint = ArcepBlue,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Mise à jour en direct (OTA)",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Télécharger les derniers CSV de l'ARCEP",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    when (updateStatus) {
+                        is UpdateStatus.Idle -> {
+                            Text(
+                                text = "Télécharge MAJNUM.csv et identifiants_CE.csv directement depuis l'extranet de l'ARCEP, recompile la base SQLite locale et conserve vos notes et favoris.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 16.sp
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(
+                                onClick = { onTriggerUpdate?.invoke() },
+                                colors = ButtonDefaults.buttonColors(containerColor = ArcepBlue),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("ota_update_button")
+                            ) {
+                                Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Vérifier et actualiser la base ARCEP", fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+
+                        is UpdateStatus.Checking -> {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                                CircularProgressIndicator(modifier = Modifier.size(28.dp), color = ArcepBlue)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(updateStatus.message, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+
+                        is UpdateStatus.Downloading -> {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(updateStatus.step, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                    Text("${(updateStatus.progress * 100).toInt()}%", fontSize = 12.sp, color = ArcepBlue)
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                LinearProgressIndicator(
+                                    progress = { updateStatus.progress },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = ArcepBlue
+                                )
+                            }
+                        }
+
+                        is UpdateStatus.Processing -> {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(updateStatus.step, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                    Text("${(updateStatus.progress * 100).toInt()}%", fontSize = 12.sp, color = ArcepBlue)
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                LinearProgressIndicator(
+                                    progress = { updateStatus.progress },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = SuccessGreen
+                                )
+                            }
+                        }
+
+                        is UpdateStatus.Success -> {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFFE8F5E9),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(updateStatus.message, fontWeight = FontWeight.Bold, color = SuccessGreen, fontSize = 13.sp)
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "${updateStatus.rangesCount} tranches et ${updateStatus.operatorsCount} opérateurs compilés avec succès (${updateStatus.date}).",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF1B5E20)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    TextButton(
+                                        onClick = { onResetUpdateStatus?.invoke() },
+                                        modifier = Modifier.align(Alignment.End)
+                                    ) {
+                                        Text("Fermer", fontSize = 11.sp, color = SuccessGreen)
+                                    }
+                                }
+                            }
+                        }
+
+                        is UpdateStatus.Error -> {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFFFFEBEE),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Warning, contentDescription = null, tint = DangerRed, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Échec de la mise à jour", fontWeight = FontWeight.Bold, color = DangerRed, fontSize = 13.sp)
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(updateStatus.errorMessage, fontSize = 11.sp, color = Color(0xFFB71C1C))
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                                        TextButton(onClick = { onResetUpdateStatus?.invoke() }) {
+                                            Text("Fermer", fontSize = 11.sp)
+                                        }
+                                        Button(
+                                            onClick = { onTriggerUpdate?.invoke() },
+                                            colors = ButtonDefaults.buttonColors(containerColor = DangerRed),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Text("Réessayer", fontSize = 11.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 

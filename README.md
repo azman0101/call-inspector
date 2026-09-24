@@ -203,27 +203,62 @@ bash setup.sh
 
 ---
 
-## TODO & Pistes d'évolution
+## 7. TODO & Pistes d'évolution
 
-### Comment la base de données de l'ARCEP est-elle maintenue à jour ?
+### TODO initiale : Comment la base de donnée de l'ARCEP est-elle maintenue à jour ?
+> **Statut : ✅ Implémenté et fonctionnel**
 
-La base embarquée actuelle est un instantané compilé à partir des exports officiels de l'ARCEP :
-- **Fichier des tranches** : [`MAJNUM.csv`](https://extranet.arcep.fr/uploads/MAJNUM.csv) (mis à jour après chaque réunion du collège de l'ARCEP).
-- **Fichier des identifiants d'opérateurs** : [`identifiants_CE.csv`](https://extranet.arcep.fr/uploads/identifiants_CE.csv) (mis à jour chaque semaine).
+La question de la fraîcheur des données de l'ARCEP a été résolue par la mise en place d'une architecture à double niveau (statique & dynamique) :
 
-Pour assurer la pérennité et la fraîcheur des données, les chantiers suivants sont identifiés :
+1. **Au niveau du code source et des releases (CI/CD Automatisée)** :
+   - Le script Python `tools/update_arcep_db.py` interroge les serveurs officiels de l'ARCEP (`MAJNUM.csv` et `identifiants_CE.csv`).
+   - Le workflow GitHub Actions (`.github/workflows/update_arcep.yml`) s'exécute automatiquement deux fois par mois (les 1er et 15) pour générer une nouvelle version compilée de `arcep_data.db` dans les assets du projet.
+   - Les checksums SHA-256 et métadonnées de version sont stockés dans la table `arcep_metadata`.
 
-1. **Script d'import automatisé dans le dépôt (`tools/update_arcep_db.py`)** :
-   - Créer un script Python dédié prenant en charge le téléchargement direct des deux CSV officiels, la vérification de leur intégrité et de leur encodage (`latin1` / ANSI vers UTF-8), la jointure sur le code opérateur (`Mnémo` $\leftrightarrow$ `CODE_OPERATEUR`), et la régénération de `app/src/main/assets/arcep_data.db` avec `VACUUM` et indexation B-Tree.
-   - Intégrer l'exécution de ce script dans un workflow GitHub Actions mensuel ou déclenché avant chaque release de l'application.
+2. **Au niveau de l'application installée (Mise à jour Over-The-Air / OTA)** :
+   - L'utilisateur n'a pas besoin d'attendre une mise à jour d'APK sur le Play Store pour bénéficier des dernières attributions de numéros.
+   - Le composant `ArcepUpdateManager.kt` télécharge les flux ARCEP directement dans l'application, reconstruit une base SQLite locale sans blocage de l'interface, préserve les notes et favoris utilisateur, puis bascule de manière atomique sur la nouvelle base.
+   - Un bouton interactif et une jauge de progression sont disponibles dans l'onglet **Observatoire**.
 
-2. **Mise à jour dynamique OTA (Over-The-Air) dans l'application** :
-   - Mettre en place un service d'arrière-plan via `WorkManager` (déclenché périodiquement lorsque l'appareil est connecté en Wi-Fi et en charge).
-   - Ce service interrogerait un endpoint miroir léger ou vérifierait les en-têtes HTTP `Last-Modified` / `ETag` des exports data.gouv.fr / extranet ARCEP.
-   - En cas de nouvelle version, téléchargement d'un fichier compressé (gzip/zstd) et remplacement sécurisé de la base SQLite locale dans le dossier de l'application, sans nécessiter la publication d'une nouvelle version de l'APK.
+### Pistes d'évolution futures (Roadmap)
+- [ ] **Mise à jour automatique en arrière-plan via Android WorkManager** : planifier une vérification silencieuse mensuelle en Wi-Fi lorsque l'appareil est en charge.
+- [ ] **Détection en temps réel des appels entrants (Call Screening Service)** : afficher le titulaire légal ARCEP et l'avertissement de démarchage directement sur l'écran d'appel Android (`TelecomManager` / `CallScreeningService`).
+- [ ] **Export / Import des notes et favoris** au format JSON ou CSV pour sauvegarde locale.
+- [ ] **Recherche géolocalisée des ZAB (Zones de numérotation élémentaire)** : cartographie interactive des zones géographiques associées aux indicatifs fixes (01 à 05).
 
-3. **Traçabilité de la version de la base** :
-   - Remplacer la date statique affichée dans l'observatoire par une métadonnée injectée dynamiquement lors de la génération de la base (ex. table `arcep_metadata` contenant le timestamp précis de l'export source, le SHA-256 des CSV sources et le nombre exact de tranches).
+---
 
-4. **Optimisation des dépendances** :
-   - Nettoyer les dépendances inutilisées déclarées dans `app/build.gradle.kts` (scaffold Firebase AI, Retrofit/OkHttp non sollicités par la base locale) afin de réduire davantage la taille de l'APK final.
+## Maintenance et mise à jour de la base ARCEP (Détails techniques)
+
+La base officielle de l'ARCEP est maintenue à jour à travers deux mécanismes complémentaires implémentés dans le projet :
+
+### 1. Script d'import et CI/CD automatisée (`tools/update_arcep_db.py`)
+Un script Python autonome est disponible dans le dépôt :
+```sh
+python3 tools/update_arcep_db.py --output app/src/main/assets/arcep_data.db
+```
+- **Téléchargement direct** des exports officiels de l'ARCEP :
+  - [`MAJNUM.csv`](https://extranet.arcep.fr/uploads/MAJNUM.csv) (ressources de numérotation).
+  - [`identifiants_CE.csv`](https://extranet.arcep.fr/uploads/identifiants_CE.csv) (identifiants et adresses des opérateurs).
+- **Contrôle d'intégrité et empreinte SHA-256** calculée pour chaque fichier source.
+- **Préservation des données utilisateur** : les notes, favoris et statuts de spam locaux sont automatiquement sauvegardés et réinjectés.
+- **Indexation B-Tree optimisée** (`idx_tranche`, `idx_ezabpqm`, `idx_op_code`) et compression SQLite (`VACUUM`).
+- **Workflow GitHub Actions** (`.github/workflows/update_arcep.yml`) planifié le 1er et le 15 de chaque mois à 04:00 UTC pour mettre à jour la base embarquée du dépôt automatiquement.
+
+### 2. Mise à jour dynamique Over-The-Air (OTA) dans l'application (`ArcepUpdateManager.kt`)
+L'utilisateur peut actualiser sa base ARCEP directement depuis son smartphone, sans attendre une mise à jour d'APK :
+- **Moteur de mise à jour local** (`ArcepUpdateManager.kt`) : télécharge les flux CSV officiels, compile la base dans un fichier SQLite temporaire, préserve les notes personnelles de l'utilisateur (`backupUserNotesTo`), et permute atomiquement la base active (`replaceDatabaseFile`).
+- **Interface utilisateur dédiée dans l'Observatoire** (`StatsAndInfoScreen.kt`) :
+  - Affiche l'état de la mise à jour (progression en pourcentage, étapes en temps réel).
+  - Bouton interactif *« Vérifier et actualiser la base ARCEP »*.
+
+### 3. Traçabilité de la version de la base (`arcep_metadata`)
+Une table SQLite dédiée `arcep_metadata` enregistre la provenance exacte :
+- `version_date` : date de dernière modification de l'export ARCEP (`Last-Modified`).
+- `generated_at` : horodatage précis de la génération de la base.
+- `latest_attribution_date` : date d'attribution la plus récente accordée par l'ARCEP.
+- `majnum_sha256` et `ce_sha256` : empreintes cryptographiques pour auditabilité.
+
+### 4. Optimisation des dépendances (`app/build.gradle.kts`)
+- Les dépendances de scaffold superflues (Firebase AI, AppCheck, Retrofit) ont été désactivées pour réduire l'empreinte mémoire et la taille de l'APK.
+- Le client HTTP `OkHttp` est conservé pour le moteur de téléchargement OTA sécurisé de l'ARCEP.

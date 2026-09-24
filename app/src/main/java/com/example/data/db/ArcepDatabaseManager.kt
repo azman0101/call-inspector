@@ -17,7 +17,11 @@ data class DatabaseStats(
     val totalRanges: Int,
     val totalOperators: Int,
     val topOperators: List<Pair<String, Int>>,
-    val databaseVersionDate: String = "Septembre 2026 (Officiel ARCEP)"
+    val databaseVersionDate: String = "Officiel ARCEP",
+    val generatedAt: String? = null,
+    val latestAttributionDate: String? = null,
+    val majnumChecksum: String? = null,
+    val ceChecksum: String? = null
 )
 
 data class CallNote(
@@ -332,11 +336,96 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
             }
         }
 
+        // Read dynamic metadata from arcep_metadata table if available
+        var versionDate = "Officiel ARCEP (Septembre 2026)"
+        var generatedAt: String? = null
+        var latestAttributionDate: String? = null
+        var majnumChecksum: String? = null
+        var ceChecksum: String? = null
+
+        try {
+            database.rawQuery("SELECT key, value FROM arcep_metadata", null).use { cursor ->
+                val keyIdx = cursor.getColumnIndex("key")
+                val valIdx = cursor.getColumnIndex("value")
+                while (cursor.moveToNext()) {
+                    val key = cursor.getString(keyIdx)
+                    val value = cursor.getString(valIdx)
+                    when (key) {
+                        "version_date" -> versionDate = value
+                        "generated_at" -> generatedAt = value
+                        "latest_attribution_date" -> latestAttributionDate = value
+                        "majnum_sha256" -> majnumChecksum = value
+                        "ce_sha256" -> ceChecksum = value
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Table arcep_metadata might not exist on older versions
+        }
+
         return@withContext DatabaseStats(
             totalRanges = totalRanges,
             totalOperators = totalOperators,
-            topOperators = topOperators
+            topOperators = topOperators,
+            databaseVersionDate = versionDate,
+            generatedAt = generatedAt,
+            latestAttributionDate = latestAttributionDate,
+            majnumChecksum = majnumChecksum,
+            ceChecksum = ceChecksum
         )
+    }
+
+    /**
+     * Copie toutes les notes, drapeaux spam et favoris dans la nouvelle base cible
+     */
+    fun backupUserNotesTo(targetDb: SQLiteDatabase) {
+        val currentDb = getReadableDb()
+        try {
+            currentDb.rawQuery("SELECT phone_number, is_favorite, is_spam, user_tag, user_note, updated_at FROM call_notes", null).use { cursor ->
+                val stmt = targetDb.compileStatement(
+                    "INSERT OR REPLACE INTO call_notes (phone_number, is_favorite, is_spam, user_tag, user_note, updated_at) VALUES (?, ?, ?, ?, ?, ?);"
+                )
+                targetDb.beginTransaction()
+                while (cursor.moveToNext()) {
+                    stmt.bindString(1, cursor.getString(0))
+                    stmt.bindLong(2, cursor.getLong(1))
+                    stmt.bindLong(3, cursor.getLong(2))
+                    if (cursor.isNull(3)) stmt.bindNull(4) else stmt.bindString(4, cursor.getString(3))
+                    if (cursor.isNull(4)) stmt.bindNull(5) else stmt.bindString(5, cursor.getString(4))
+                    stmt.bindLong(6, cursor.getLong(5))
+                    stmt.executeInsert()
+                }
+                targetDb.setTransactionSuccessful()
+                targetDb.endTransaction()
+                stmt.close()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /**
+     * Remplacement atomique de la base active par un nouveau fichier SQLite compilé
+     */
+    @Synchronized
+    fun replaceDatabaseFile(newDbFile: File) {
+        try {
+            if (db != null && db!!.isOpen) {
+                db!!.close()
+                db = null
+            }
+            val activeDbFile = context.getDatabasePath(dbName)
+            if (activeDbFile.exists()) {
+                activeDbFile.delete()
+            }
+            newDbFile.copyTo(activeDbFile, overwrite = true)
+            newDbFile.delete()
+            // Re-open
+            db = SQLiteDatabase.openDatabase(activeDbFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            throw e
+        }
     }
 
     companion object {

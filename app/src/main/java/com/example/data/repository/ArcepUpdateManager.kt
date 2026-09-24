@@ -1,0 +1,303 @@
+package com.example.data.repository
+
+import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteStatement
+import android.util.Log
+import com.example.data.db.ArcepDatabaseManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.BufferedReader
+import java.io.File
+import java.io.InputStreamReader
+import java.nio.charset.Charset
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.concurrent.TimeUnit
+
+sealed class UpdateStatus {
+    object Idle : UpdateStatus()
+    data class Checking(val message: String = "Vérification des mises à jour sur l'extranet ARCEP...") : UpdateStatus()
+    data class Downloading(val step: String, val progress: Float) : UpdateStatus()
+    data class Processing(val step: String, val progress: Float) : UpdateStatus()
+    data class Success(val message: String, val rangesCount: Int, val operatorsCount: Int, val date: String) : UpdateStatus()
+    data class Error(val errorMessage: String) : UpdateStatus()
+}
+
+class ArcepUpdateManager(private val context: Context) {
+
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .build()
+
+    private val dbManager = ArcepDatabaseManager.getInstance(context)
+
+    companion object {
+        private const val TAG = "ArcepUpdateManager"
+        const val MAJNUM_URL = "https://extranet.arcep.fr/uploads/MAJNUM.csv"
+        const val CE_URL = "https://extranet.arcep.fr/uploads/identifiants_CE.csv"
+    }
+
+    suspend fun checkAndDownloadUpdate(
+        onProgress: (UpdateStatus) -> Unit
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            onProgress(UpdateStatus.Checking())
+
+            // 1. Check HEAD on MAJNUM
+            val headReq = Request.Builder()
+                .url(MAJNUM_URL)
+                .head()
+                .header("User-Agent", "ArcepOperateur/1.0 (Android)")
+                .build()
+
+            val lastModifiedHeader = try {
+                client.newCall(headReq).execute().use { response ->
+                    response.header("Last-Modified") ?: ""
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "HEAD request failed, proceeding with direct download: ${e.message}")
+                ""
+            }
+
+            // 2. Download identifiants_CE.csv
+            onProgress(UpdateStatus.Downloading("Téléchargement des identifiants opérateurs...", 0.15f))
+            val ceRequest = Request.Builder()
+                .url(CE_URL)
+                .header("User-Agent", "ArcepOperateur/1.0 (Android)")
+                .build()
+
+            val ceResponse = client.newCall(ceRequest).execute()
+            if (!ceResponse.isSuccessful) {
+                onProgress(UpdateStatus.Error("Échec du téléchargement des opérateurs : Code HTTP ${ceResponse.code}"))
+                return@withContext false
+            }
+            val ceBytes = ceResponse.body?.bytes() ?: run {
+                onProgress(UpdateStatus.Error("Fichier opérateurs vide"))
+                return@withContext false
+            }
+
+            // 3. Download MAJNUM.csv
+            onProgress(UpdateStatus.Downloading("Téléchargement des ressources de numérotation (MAJNUM)...", 0.45f))
+            val majRequest = Request.Builder()
+                .url(MAJNUM_URL)
+                .header("User-Agent", "ArcepOperateur/1.0 (Android)")
+                .build()
+
+            val majResponse = client.newCall(majRequest).execute()
+            if (!majResponse.isSuccessful) {
+                onProgress(UpdateStatus.Error("Échec du téléchargement de MAJNUM : Code HTTP ${majResponse.code}"))
+                return@withContext false
+            }
+            val majBytes = majResponse.body?.bytes() ?: run {
+                onProgress(UpdateStatus.Error("Fichier MAJNUM vide"))
+                return@withContext false
+            }
+
+            // 4. Compile into temporary SQLite database
+            onProgress(UpdateStatus.Processing("Compilation et indexation locale de la base...", 0.70f))
+            val tempDbFile = File(context.cacheDir, "arcep_update_temp.db")
+            if (tempDbFile.exists()) tempDbFile.delete()
+
+            val tempDb = SQLiteDatabase.openOrCreateDatabase(tempDbFile, null)
+            tempDb.execSQL("PRAGMA page_size = 4096;")
+            tempDb.execSQL("PRAGMA synchronous = OFF;")
+
+            // Create schema
+            tempDb.execSQL("""
+                CREATE TABLE operators (
+                    code TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    siret TEXT,
+                    rcs TEXT,
+                    address TEXT,
+                    declaration_date TEXT
+                );
+            """.trimIndent())
+
+            tempDb.execSQL("""
+                CREATE TABLE number_ranges (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ezabpqm TEXT NOT NULL,
+                    tranche_debut TEXT NOT NULL,
+                    tranche_fin TEXT NOT NULL,
+                    operator_code TEXT NOT NULL,
+                    operator_name TEXT NOT NULL,
+                    territory TEXT,
+                    attribution_date TEXT
+                );
+            """.trimIndent())
+
+            tempDb.execSQL("""
+                CREATE TABLE call_notes (
+                    phone_number TEXT PRIMARY KEY,
+                    is_favorite INTEGER DEFAULT 0,
+                    is_spam INTEGER DEFAULT 0,
+                    user_tag TEXT,
+                    user_note TEXT,
+                    updated_at INTEGER
+                );
+            """.trimIndent())
+
+            tempDb.execSQL("""
+                CREATE TABLE arcep_metadata (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
+            """.trimIndent())
+
+            // Insert operators
+            val operatorsDict = mutableMapOf<String, String>()
+            val ceReader = BufferedReader(InputStreamReader(ceBytes.inputStream(), Charset.forName("ISO-8859-1")))
+            val headerLineCe = ceReader.readLine() ?: ""
+            val headersCe = headerLineCe.split(";").map { it.trim().trim('"') }
+            val codeIdx = headersCe.indexOf("CODE_OPERATEUR")
+            val nameIdx = headersCe.indexOf("IDENTITE_OPERATEUR")
+            val siretIdx = headersCe.indexOf("SIRET_ACTEUR")
+            val rcsIdx = headersCe.indexOf("RCS_ACTEUR")
+            val addrIdx = headersCe.indexOf("ADRESSE_COMPLETE_ACTEUR")
+            val decDateIdx = headersCe.indexOf("DATE_DECLARATION_OPERATEUR")
+
+            tempDb.beginTransaction()
+            var opCount = 0
+            val insertOpStmt: SQLiteStatement = tempDb.compileStatement(
+                "INSERT OR REPLACE INTO operators VALUES (?, ?, ?, ?, ?, ?);"
+            )
+
+            ceReader.forEachLine { line ->
+                val cols = line.split(";")
+                if (codeIdx in cols.indices && nameIdx in cols.indices) {
+                    val code = cols[codeIdx].trim().trim('"')
+                    val name = cols[nameIdx].trim().trim('"')
+                    if (code.isNotEmpty()) {
+                        val siret = if (siretIdx in cols.indices) cols[siretIdx].trim().trim('"') else null
+                        val rcs = if (rcsIdx in cols.indices) cols[rcsIdx].trim().trim('"') else null
+                        val addr = if (addrIdx in cols.indices) cols[addrIdx].trim().trim('"') else null
+                        val decDate = if (decDateIdx in cols.indices) cols[decDateIdx].trim().trim('"') else null
+
+                        operatorsDict[code] = name
+                        insertOpStmt.bindString(1, code)
+                        insertOpStmt.bindString(2, name)
+                        if (siret != null) insertOpStmt.bindString(3, siret) else insertOpStmt.bindNull(3)
+                        if (rcs != null) insertOpStmt.bindString(4, rcs) else insertOpStmt.bindNull(4)
+                        if (addr != null) insertOpStmt.bindString(5, addr) else insertOpStmt.bindNull(5)
+                        if (decDate != null) insertOpStmt.bindString(6, decDate) else insertOpStmt.bindNull(6)
+                        insertOpStmt.executeInsert()
+                        opCount++
+                    }
+                }
+            }
+            tempDb.setTransactionSuccessful()
+            tempDb.endTransaction()
+            insertOpStmt.close()
+
+            // Insert ranges from MAJNUM
+            onProgress(UpdateStatus.Processing("Insertion des 20 000+ tranches de numérotation...", 0.85f))
+            val majReader = BufferedReader(InputStreamReader(majBytes.inputStream(), Charset.forName("ISO-8859-1")))
+            val headerLineMaj = majReader.readLine() ?: ""
+            val headersMaj = headerLineMaj.split(";").map { it.trim().trim('"') }
+            val ezIdx = headersMaj.indexOf("EZABPQM")
+            val debutIdx = headersMaj.indexOf("Tranche_Debut")
+            val finIdx = headersMaj.indexOf("Tranche_Fin")
+            var mnemoIdx = headersMaj.indexOf("Mnémo")
+            if (mnemoIdx < 0) mnemoIdx = headersMaj.indexOfFirst { it.startsWith("Mn") }
+            val terIdx = headersMaj.indexOf("Territoire")
+            val attrDateIdx = headersMaj.indexOf("Date_Attribution")
+
+            tempDb.beginTransaction()
+            var rangeCount = 0
+            var latestAttrDate = ""
+            val insertRangeStmt: SQLiteStatement = tempDb.compileStatement(
+                "INSERT INTO number_ranges (ezabpqm, tranche_debut, tranche_fin, operator_code, operator_name, territory, attribution_date) VALUES (?, ?, ?, ?, ?, ?, ?);"
+            )
+
+            majReader.forEachLine { line ->
+                val cols = line.split(";")
+                if (ezIdx in cols.indices && debutIdx in cols.indices && finIdx in cols.indices) {
+                    val ez = cols[ezIdx].trim().trim('"')
+                    val debut = cols[debutIdx].trim().trim('"')
+                    val fin = cols[finIdx].trim().trim('"')
+                    val opCode = if (mnemoIdx in cols.indices) cols[mnemoIdx].trim().trim('"') else ""
+                    val opName = operatorsDict[opCode] ?: opCode
+                    val ter = if (terIdx in cols.indices) cols[terIdx].trim().trim('"') else null
+                    val attrDate = if (attrDateIdx in cols.indices) cols[attrDateIdx].trim().trim('"') else null
+
+                    if (attrDate != null && attrDate > latestAttrDate) {
+                        latestAttrDate = attrDate
+                    }
+
+                    if (ez.isNotEmpty() && debut.isNotEmpty()) {
+                        insertRangeStmt.bindString(1, ez)
+                        insertRangeStmt.bindString(2, debut)
+                        insertRangeStmt.bindString(3, fin)
+                        insertRangeStmt.bindString(4, opCode)
+                        insertRangeStmt.bindString(5, opName)
+                        if (ter != null) insertRangeStmt.bindString(6, ter) else insertRangeStmt.bindNull(6)
+                        if (attrDate != null) insertRangeStmt.bindString(7, attrDate) else insertRangeStmt.bindNull(7)
+                        insertRangeStmt.executeInsert()
+                        rangeCount++
+                    }
+                }
+            }
+            tempDb.setTransactionSuccessful()
+            tempDb.endTransaction()
+            insertRangeStmt.close()
+
+            // 5. Restore user call notes from current database
+            dbManager.backupUserNotesTo(tempDb)
+
+            // 6. Write metadata
+            val nowStr = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRENCH).format(Date())
+            val dateLabel = if (lastModifiedHeader.isNotBlank()) lastModifiedHeader else nowStr
+
+            tempDb.beginTransaction()
+            val metaStmt = tempDb.compileStatement("INSERT INTO arcep_metadata VALUES (?, ?);")
+            val metaList = listOf(
+                Pair("version_date", dateLabel),
+                Pair("generated_at", nowStr),
+                Pair("ranges_count", rangeCount.toString()),
+                Pair("operators_count", opCount.toString()),
+                Pair("latest_attribution_date", latestAttrDate),
+                Pair("source_majnum_url", MAJNUM_URL),
+                Pair("source_ce_url", CE_URL)
+            )
+            for ((k, v) in metaList) {
+                metaStmt.bindString(1, k)
+                metaStmt.bindString(2, v)
+                metaStmt.executeInsert()
+            }
+            tempDb.setTransactionSuccessful()
+            tempDb.endTransaction()
+            metaStmt.close()
+
+            // Create indexes
+            onProgress(UpdateStatus.Processing("Finalisation et création des index...", 0.95f))
+            tempDb.execSQL("CREATE INDEX idx_tranche ON number_ranges (tranche_debut, tranche_fin);")
+            tempDb.execSQL("CREATE INDEX idx_ezabpqm ON number_ranges (ezabpqm);")
+            tempDb.execSQL("CREATE INDEX idx_op_code ON number_ranges (operator_code);")
+            tempDb.execSQL("VACUUM;")
+            tempDb.close()
+
+            // 7. Atomic replace in ArcepDatabaseManager
+            dbManager.replaceDatabaseFile(tempDbFile)
+
+            onProgress(
+                UpdateStatus.Success(
+                    message = "Base ARCEP mise à jour avec succès !",
+                    rangesCount = rangeCount,
+                    operatorsCount = opCount,
+                    date = dateLabel
+                )
+            )
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Erreur lors de la mise à jour ARCEP", e)
+            onProgress(UpdateStatus.Error("Erreur : ${e.localizedMessage ?: e.message}"))
+            false
+        }
+    }
+}

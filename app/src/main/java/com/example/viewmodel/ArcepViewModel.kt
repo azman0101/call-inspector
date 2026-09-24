@@ -42,7 +42,8 @@ data class ArcepUiState(
     val databaseStats: DatabaseStats? = null,
     val userNotice: String? = null,
     val showPermissionDialog: Boolean = false,
-    val permissionDeniedCount: Int = 0
+    val permissionDeniedCount: Int = 0,
+    val updateStatus: com.example.data.repository.UpdateStatus = com.example.data.repository.UpdateStatus.Idle
 ) {
     val isPermanentlyDenied: Boolean
         get() = permissionDeniedCount >= 2
@@ -52,6 +53,7 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = CallLogRepository(application)
     private val dbManager = ArcepDatabaseManager.getInstance(application)
+    private val updateManager = com.example.data.repository.ArcepUpdateManager(application)
 
     private val _uiState = MutableStateFlow(ArcepUiState())
     val uiState: StateFlow<ArcepUiState> = _uiState.asStateFlow()
@@ -272,6 +274,22 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
             val stats = dbManager.getStats()
             _uiState.update { it.copy(databaseStats = stats) }
         }
+    }
+
+    fun triggerDatabaseUpdate() {
+        viewModelScope.launch {
+            updateManager.checkAndDownloadUpdate { status ->
+                _uiState.update { it.copy(updateStatus = status) }
+                if (status is com.example.data.repository.UpdateStatus.Success) {
+                    loadStats()
+                    loadCalls()
+                }
+            }
+        }
+    }
+
+    fun resetUpdateStatus() {
+        _uiState.update { it.copy(updateStatus = com.example.data.repository.UpdateStatus.Idle) }
     }
 
     fun clearUserNotice() {

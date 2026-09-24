@@ -152,7 +152,11 @@ fun MainScreen(
                 when (tab) {
                     0 -> CallHistoryScreen(uiState = uiState, viewModel = viewModel)
                     1 -> NumberLookupScreen(uiState = uiState, viewModel = viewModel)
-                    2 -> StatsAndInfoScreen(uiState = uiState)
+                    2 -> StatsAndInfoScreen(
+                        uiState = uiState,
+                        onTriggerUpdate = { viewModel.triggerDatabaseUpdate() },
+                        onResetUpdateStatus = { viewModel.resetUpdateStatus() }
+                    )
                     else -> CallHistoryScreen(uiState = uiState, viewModel = viewModel)
                 }
             }
