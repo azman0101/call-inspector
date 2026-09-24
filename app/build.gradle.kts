@@ -6,6 +6,7 @@ plugins {
   alias(libs.plugins.google.devtools.ksp)
   alias(libs.plugins.secrets)
   alias(libs.plugins.google.services)
+  alias(libs.plugins.sentry)
 }
 
 android {
@@ -13,11 +14,15 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.arceplookup.wkvqmt"
+    applicationId = "com.aistudio.operatorlookup.wkvqmt"
     minSdk = 24
     targetSdk = 36
     versionCode = 1
     versionName = "1.0"
+
+    // DSN Sentry ou GlitchTip injecté via variable d'environnement au moment du build
+    val sentryDsnEnv = System.getenv("SENTRY_DSN") ?: ""
+    buildConfigField("String", "SENTRY_DSN", "\"$sentryDsnEnv\"")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -68,9 +73,18 @@ secrets {
   propertiesFileName = ".env"
   defaultPropertiesFileName = ".env.example"
   ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
+  ignoreList.add("SENTRY_DSN")
 }
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
+
+sentry {
+  // Désactive l'upload des mappings pour les builds locaux / compatibilité Termux
+  autoUploadProguardMapping.set(false)
+  tracingInstrumentation {
+    enabled.set(true)
+  }
+}
 
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.
@@ -97,6 +111,7 @@ dependencies {
   // implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
+  implementation(libs.sentry.android)
   // implementation(libs.coil.compose)
   // implementation(libs.converter.moshi)
   // implementation(libs.firebase.ai)

@@ -1,6 +1,8 @@
-# Arcep Opérateur
+# Info Opérateur
 
-Application Android Kotlin / Jetpack Compose qui analyse l'historique d'appels du téléphone et identifie automatiquement l'opérateur de télécommunication et l'entreprise titulaire de chaque numéro selon la base officielle de l'**ARCEP** (Autorité de régulation des communications électroniques, des postes et de la distribution de la presse).
+Application Android Kotlin / Jetpack Compose qui analyse l'historique d'appels du téléphone et identifie automatiquement l'opérateur de télécommunication et l'entreprise titulaire de chaque numéro selon les données publiques de l'**ARCEP** (Autorité de régulation des communications électroniques, des postes et de la distribution de la presse).
+
+> **Note sur le nom et la marque pour publication** : Initialement nommé « Arcep Opérateur », le projet a été renommé **« Info Opérateur »** pour respecter le droit des marques de l'ARCEP et les règles de publication du Google Play Store interdisant l'usage de marques institutionnelles comme nom d'application.
 
 ---
 
@@ -262,3 +264,41 @@ Une table SQLite dédiée `arcep_metadata` enregistre la provenance exacte :
 ### 4. Optimisation des dépendances (`app/build.gradle.kts`)
 - Les dépendances de scaffold superflues (Firebase AI, AppCheck, Retrofit) ont été désactivées pour réduire l'empreinte mémoire et la taille de l'APK.
 - Le client HTTP `OkHttp` est conservé pour le moteur de téléchargement OTA sécurisé de l'ARCEP.
+
+---
+
+## Suivi d'exceptions et crash reporting (Sentry / GlitchTip)
+
+L'application intègre le SDK Sentry pour le monitoring des exceptions en production (également compatible GlitchTip) avec des garanties renforcées de confidentialité et de portabilité.
+
+### 1. Configuration Gradle (`app/build.gradle.kts`)
+- **Plugin Sentry** : Version officielle `6.22.0` (`io.sentry.android.gradle`), compatible AGP 9+ et Kotlin 2.2+.
+- **Tracing Instrumentation** : Le bloc `tracingInstrumentation` est activé pour instrumenter les requêtes de base de données Room/SQLite et les appels réseau OkHttp.
+- **Désactivation de l'upload des mappings** (`autoUploadProguardMapping.set(false)`) : Évite l'exécution locale de `sentry-cli` (qui échoue sous Termux et les architectures sans binaire natif).
+
+### 2. Désactivation en mode Debug (`src/debug/AndroidManifest.xml`)
+L'option `ignoredBuildTypes` du plugin ne coupant pas l'envoi d'événements au runtime, Sentry est explicitement désactivé pour tous les builds de debug via la métadonnée manifest :
+```xml
+<meta-data
+    android:name="io.sentry.enabled"
+    android:value="false" />
+```
+
+### 3. Respect absolu de la vie privée et confidentialité des appels
+L'application manipulant le journal d'appels personnel de l'utilisateur, des règles strictes de non-divulgation sont appliquées dans `OperatorInfoApp.kt` via le callback `beforeSend` :
+- **Aucune donnée personnelle transmise** : `event.user` est forcé à `null` (aucun identifiant, email ou nom d'utilisateur n'est associé).
+- **Nettoyage automatique des breadcrumbs** : Tous les événements de navigation et d'interface ont leurs messages et données assainis. Les clés contenant `phone`, `number`, `call`, `contact`, `email` ou `note` sont purgées.
+- **Masquage regex** : Les numéros de téléphone sont automatiquement remplacés par `[REDACTED_PHONE]` et les adresses courriel par `[REDACTED_EMAIL]`.
+
+### 4. Gestion des secrets et du DSN
+- Le DSN ou token Sentry n'est **jamais stocké en dur** dans le dépôt git.
+- Il est injecté au moment du build via la variable d'environnement `SENTRY_DSN` dans `BuildConfig.SENTRY_DSN` ou lu à l'exécution via `System.getenv("SENTRY_DSN")`.
+- En l'absence de DSN (valeur vide par défaut), le SDK reste inactif sans émettre de requête.
+
+---
+
+## Spécificités de build sous Termux (Android ARM64)
+
+Pour compiler le projet directement sous un terminal Android Termux :
+1. **AAPT2 natif** : Gradle télécharge par défaut un binaire `aapt2` compilé pour Linux x86_64, incompatible avec l'architecture ARM64 de Termux. Le fichier `settings.gradle.kts` détecte automatiquement si `/data/data/com.termux/files/usr/bin/aapt2` est présent et configure l'override `android.aapt2FromMavenOverride`. Vous pouvez aussi décommenter la ligne dédiée dans `gradle.properties`.
+2. **SDK Android & local.properties** : Sous Termux, votre fichier `local.properties` (non versionné) doit définir `sdk.dir` vers votre dossier SDK (ex: `sdk.dir=/data/data/com.termux/files/usr/share/android-sdk`). Vérifiez que `compileSdk` (36) et les build-tools correspondent aux paquets installés via `pkg`.

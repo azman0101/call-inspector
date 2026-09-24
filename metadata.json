@@ -1,6 +1,6 @@
 {
-  "name": "Arcep Opérateur",
-  "description": "Inspectez l'historique des appels et identifiez l'opérateur et l'entreprise titulaire via la base officielle ARCEP.",
+  "name": "Info Opérateur",
+  "description": "Inspectez l'historique des appels et identifiez l'opérateur et l'entreprise titulaire via les données ouvertes du plan national de numérotation.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
