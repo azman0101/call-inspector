@@ -19,7 +19,7 @@ Application Android Kotlin/Jetpack Compose qui lit le journal d'appels du télé
 - `ANDROID_HOME` ou `ANDROID_SDK_ROOT` pointant vers ce SDK, ou un `sdk.dir` local configuré dans `local.properties`.
 - Un accès réseau lors du premier build pour télécharger Gradle et les dépendances Maven.
 
-Le wrapper Gradle du dépôt utilise Gradle 9.6.0. Sur macOS/Linux avec le SDK déjà installé :
+Sur macOS, installer ces composants dans **Android Studio > Settings > Languages & Frameworks > Android SDK** (sur macOS, aussi accessible via **Tools > SDK Manager**). Le chemin SDK standard est `~/Library/Android/sdk`; Android Studio peut le fournir à Gradle via `local.properties`. Le wrapper Gradle du dépôt utilise Gradle 9.6.0. Une fois le SDK installé, depuis un terminal macOS/Linux à la racine du dépôt :
 
 ```sh
 ./gradlew --version
@@ -82,7 +82,7 @@ Au moment de cet audit, le fichier embarqué contenait 20 655 tranches et 1 
 
 ### Source officielle et actualisation
 
-L'ARCEP publie les ressources de numérotation attribuées dans son fichier **MAJNUM**, ainsi que des fichiers décrivant les opérateurs attributaires. Les exports sont disponibles en CSV sur l'[extranet ARCEP – Numérotation](https://extranet.arcep.fr/communications-electroniques/numerotation); la [spécification des fichiers](https://extranet.arcep.fr/uploads/spec_export_num_arcep.pdf) décrit les colonnes et précise que les exports sont des états complets, mis à jour après les réunions du collège. Le dépôt ne télécharge ni ne transforme automatiquement ces fichiers en `arcep_data.db`.
+L'ARCEP publie les ressources de numérotation attribuées dans son fichier **MAJNUM**, ainsi que des fichiers décrivant les opérateurs attributaires. Le portail public liste notamment le [CSV MAJNUM](https://extranet.arcep.fr/uploads/MAJNUM.csv) et le [CSV des identifiants CE](https://extranet.arcep.fr/uploads/identifiants_CE.csv); au moment de l'audit, il indiquait une mise à jour de MAJNUM au 15/09/2026. La [spécification des fichiers](https://extranet.arcep.fr/uploads/spec_export_num_arcep.pdf) décrit les colonnes et précise que les exports sont des états complets, mis à jour après les réunions du collège. Le dépôt ne télécharge ni ne transforme automatiquement ces fichiers en `arcep_data.db`.
 
 Pour actualiser la base, récupérer les exports publics à jour, vérifier leur schéma et leur date de publication, transformer les colonnes vers le schéma SQLite du projet, valider le résultat, puis remplacer `app/src/main/assets/arcep_data.db`. Une automatisation nécessiterait un importeur explicite; l'application ne possède actuellement ni endpoint d'API ni mécanisme de synchronisation.
 
@@ -112,4 +112,3 @@ La configuration de build a été rendue portable pendant cet audit : Gradle uti
 - `app/src/main/java/com/example/ui/` : écrans et composants Compose.
 - `app/src/main/assets/arcep_data.db` : base de données embarquée.
 - `setup.sh` : préparation de l'environnement de build Termux ARM64.
-
