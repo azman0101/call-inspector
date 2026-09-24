@@ -43,7 +43,7 @@ class CallLogRepository(private val context: Context) {
                 projection,
                 null,
                 null,
-                "${CallLog.Calls.DATE} DESC LIMIT 100"
+                "${CallLog.Calls.DATE} DESC"
             )
 
             cursor?.use {
@@ -54,7 +54,7 @@ class CallLogRepository(private val context: Context) {
                 val durationIdx = it.getColumnIndex(CallLog.Calls.DURATION)
                 val typeIdx = it.getColumnIndex(CallLog.Calls.TYPE)
 
-                while (it.moveToNext()) {
+                while (it.moveToNext() && entries.size < 100) {
                     val id = if (idIdx >= 0) it.getLong(idIdx) else 0L
                     val rawNum = if (numberIdx >= 0) it.getString(numberIdx) ?: "" else ""
                     val cachedName = if (nameIdx >= 0) it.getString(nameIdx) else null
