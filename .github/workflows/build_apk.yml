@@ -70,6 +70,8 @@ jobs:
         run: ./gradlew testDebugUnitTest --stacktrace
 
       - name: Build Debug APK
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload Debug APK Artifact
