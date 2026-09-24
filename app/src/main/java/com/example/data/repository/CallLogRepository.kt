@@ -3,6 +3,7 @@ package com.example.data.repository
 import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.CallLog
+import android.util.Log
 import androidx.core.content.ContextCompat
 import com.example.data.db.ArcepDatabaseManager
 import com.example.data.model.CallLogEntry
@@ -93,7 +94,7 @@ class CallLogRepository(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Failed to read the device call log", e)
         }
 
         if (entries.isEmpty() && useSampleIfEmpty) {
@@ -188,5 +189,9 @@ class CallLogRepository(private val context: Context) {
             userTag = note?.userTag,
             userNote = noteText
         )
+    }
+
+    private companion object {
+        const val TAG = "CallLogRepository"
     }
 }
