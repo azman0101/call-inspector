@@ -33,6 +33,8 @@ class OperatorInfoApp : Application() {
 
         SentryAndroid.init(this) { options ->
             options.dsn = dsn
+            // Activer les logs Sentry SDK >= 8.12.0
+            options.logs.isEnabled = true
             // Désactiver l'envoi automatique de données d'identification personnelle (PII)
             options.isSendDefaultPii = false
 
