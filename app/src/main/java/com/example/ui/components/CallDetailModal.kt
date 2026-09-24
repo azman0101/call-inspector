@@ -291,7 +291,7 @@ fun ArcepDossierContent(
 
                 // Detail Items Grid
                 DossierRow(
-                    label = "Code Opérateur (ARCEP)",
+                    label = "Code exploitant (CE)",
                     value = lookup.operatorCode
                 )
 
@@ -348,9 +348,9 @@ fun ArcepDossierContent(
             onClick = {
                 // Copy number to clipboard so user can easily search
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                val clip = ClipData.newPlainText("Numéro ARCEP", lookup.normalizedNumber)
+                val clip = ClipData.newPlainText("Numéro de téléphone", lookup.normalizedNumber)
                 clipboard.setPrimaryClip(clip)
-                Toast.makeText(context, "Numéro copié ! Ouverture du site ARCEP...", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Numéro copié ! Ouverture du site officiel...", Toast.LENGTH_SHORT).show()
 
                 // Open official ARCEP webpage
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(lookup.officialArcepUrl))
@@ -365,7 +365,7 @@ fun ArcepDossierContent(
             Icon(imageVector = Icons.Default.OpenInBrowser, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Vérifier sur la page officielle ARCEP",
+                text = "Consulter le portail officiel (arcep.fr)",
                 fontWeight = FontWeight.SemiBold
             )
         }
@@ -448,9 +448,9 @@ fun ArcepDossierContent(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // ARCEP Legal Notice Note
+        // Regulatory Notice Note
         Text(
-            text = "Information ARCEP : Cet outil identifie l'opérateur attributaire de la tranche initiale. En cas de portabilité du numéro, l'abonné final peut être chez un autre opérateur, mais la responsabilité de routage initial incombe à l'opérateur mentionné ci-dessus.",
+            text = "Information réglementaire : Cet outil identifie l'opérateur attributaire de la tranche initiale selon le plan national de numérotation. En cas de portabilité du numéro, l'abonné final peut être chez un autre opérateur, mais la responsabilité de routage initial incombe à l'opérateur mentionné ci-dessus.",
             fontSize = 11.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             lineHeight = 15.sp

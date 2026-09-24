@@ -111,7 +111,7 @@ fun StatsAndInfoScreen(
                     color = Color.White
                 )
                 Text(
-                    text = "Statistiques d'appels & Réglementation ARCEP",
+                    text = "Statistiques d'appels & Cadre réglementaire",
                     fontSize = 12.sp,
                     color = Color(0xFFBACEDB)
                 )
@@ -125,6 +125,32 @@ fun StatsAndInfoScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Mention légale / Disclaimer de non-affiliation
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Avertissement : Info Opérateur est une application tierce indépendante. Elle n'est ni affiliée, ni éditée, ni approuvée par l'ARCEP. Les attributions de blocs proviennent des publications ouvertes du plan de numérotation.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 15.sp
+                    )
+                }
+            }
+
             // ARCEP Database Summary Card
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -146,12 +172,12 @@ fun StatsAndInfoScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "Base Officielle ARCEP",
+                                text = "Base nationale de numérotation",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Plan national de numérotation français",
+                                text = "Plan officiel français en données ouvertes",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -273,7 +299,7 @@ fun StatsAndInfoScreen(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "Télécharger les derniers CSV de l'ARCEP",
+                                    text = "Télécharger les données ouvertes de numérotation",
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -302,7 +328,7 @@ fun StatsAndInfoScreen(
                             ) {
                                 Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Vérifier et actualiser la base ARCEP", fontWeight = FontWeight.SemiBold)
+                                Text("Vérifier et actualiser la base locale", fontWeight = FontWeight.SemiBold)
                             }
                         }
 

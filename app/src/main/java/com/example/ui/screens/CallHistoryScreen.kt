@@ -121,7 +121,7 @@ fun CallHistoryScreen(
                             color = Color.White
                         )
                         Text(
-                            text = "Identification opérateur ARCEP en temps réel",
+                            text = "Identification opérateur selon le plan officiel",
                             fontSize = 12.sp,
                             color = Color(0xFFBACEDB)
                         )

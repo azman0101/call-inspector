@@ -57,7 +57,7 @@ Application Android Kotlin / Jetpack Compose qui analyse l'historique d'appels d
 
 ### 2. Lien interactif avec la page officielle de l'ARCEP
 Pour répondre au besoin de vérification sur le site web officiel mentionné dans la demande initiale :
-- Chaque fiche d'appel ou résultat de recherche propose le bouton **« Vérifier sur la page officielle ARCEP »**.
+- Chaque fiche d'appel ou résultat de recherche propose le bouton **« Consulter le portail officiel (arcep.fr) »**.
 - Ce bouton copie automatiquement le numéro normalisé dans le presse-papiers du smartphone et lance le navigateur vers `https://www.arcep.fr/mes-demarches-et-services/entreprises/fiches-pratiques/identifier-un-operateur-par-un-numero.html` pour que l'utilisateur puisse coller et corroborer l'information en un geste.
 
 ### 3. Gestion transparente des autorisations Android (`READ_CALL_LOG`)

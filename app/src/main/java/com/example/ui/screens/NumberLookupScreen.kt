@@ -279,7 +279,7 @@ fun NumberLookupScreen(
                             ) {
                                 Icon(Icons.Default.OpenInBrowser, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Ouvrir la fiche ARCEP")
+                                Text("Consulter la fiche officielle")
                             }
                         }
                     }
@@ -393,7 +393,7 @@ private fun InitialLookupExplainer(context: Context) {
             ) {
                 Icon(Icons.Default.OpenInBrowser, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("En savoir plus sur le site de l'ARCEP", fontSize = 12.sp)
+                Text("En savoir plus sur le site officiel (arcep.fr)", fontSize = 12.sp)
             }
         }
     }
