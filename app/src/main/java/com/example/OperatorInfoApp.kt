@@ -1,6 +1,7 @@
 package com.example
 
 import android.app.Application
+import io.sentry.Sentry
 import io.sentry.SentryOptions
 import io.sentry.android.core.SentryAndroid
 
@@ -70,6 +71,14 @@ class OperatorInfoApp : Application() {
 
                 event
             }
+        }
+
+        // Vérification et émission d'un log de test au démarrage
+        try {
+            Sentry.logger().info("A simple log message")
+            Sentry.logger().error("A %s log message", "formatted")
+        } catch (_: Throwable) {
+            // Ignoré si le logger n'est pas actif
         }
     }
 

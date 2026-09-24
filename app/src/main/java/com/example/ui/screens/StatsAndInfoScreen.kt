@@ -3,6 +3,8 @@ package com.example.ui.screens
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
+import io.sentry.Sentry
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
@@ -571,6 +574,48 @@ fun StatsAndInfoScreen(
                 }
             }
 
+            // Télémétrie & Logs Sentry Test Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Télémétrie & Diagnostic Sentry",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Vérifiez la réception des logs d'erreurs et d'informations sur votre tableau de bord Sentry.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = {
+                            try {
+                                Sentry.logger().info("A simple log message")
+                                Sentry.logger().error("A %s log message", "formatted")
+                                Toast.makeText(context, "Logs envoyés à Sentry !", Toast.LENGTH_SHORT).show()
+                            } catch (_: Throwable) {
+                                Toast.makeText(context, "Logger Sentry non actif", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("send_sentry_test_log_button")
+                    ) {
+                        Icon(Icons.Default.BugReport, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Envoyer un log de test Sentry")
+                    }
+                }
+            }
+
             // Direct Links to ARCEP Portal & J'alerte l'Arcep
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
@@ -579,7 +624,7 @@ fun StatsAndInfoScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Services en ligne ARCEP",
+                        text = "Liens utiles & démarches officielles",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -602,7 +647,7 @@ fun StatsAndInfoScreen(
                     ) {
                         Icon(Icons.Default.OpenInBrowser, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Outil Identifier un opérateur (arcep.fr)")
+                        Text("Portail officiel (arcep.fr)")
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -617,7 +662,7 @@ fun StatsAndInfoScreen(
                     ) {
                         Icon(Icons.Default.ReportProblem, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Signaler un abus sur J'alerte l'Arcep")
+                        Text("Signaler un abus (jalerte.arcep.fr)")
                     }
                 }
             }

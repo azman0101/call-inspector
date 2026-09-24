@@ -16,6 +16,10 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
+
+        <!-- Active la capture des logs Sentry (SDK >= 8.12.0) -->
+        <meta-data android:name="io.sentry.logs.enabled" android:value="true" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
