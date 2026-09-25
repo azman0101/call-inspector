@@ -73,7 +73,7 @@ android {
 }
 
 dependencyCheck {
-  failBuildOnCVSS = 7.0
+  failBuildOnCVSS = 7.0f
   formats = listOf("HTML", "SARIF")
 }
 
