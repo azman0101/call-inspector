@@ -31,6 +31,13 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          # Dependency-Check stores the NVD H2 database outside Gradle's
+          # default caches; include it so cold runners do not redownload it.
+          gradle-home-cache-includes: |
+            caches
+            notifications
+            dependency-check-data
 
       - name: Prepare build environment
         run: |
