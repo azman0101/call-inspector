@@ -80,9 +80,10 @@ jobs:
             if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
               echo "Restoring my-upload-key.jks from secrets.KEYSTORE_BASE64..."
               echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
-            elif [ -f debug.keystore ]; then
-              echo "Fallback: creating my-upload-key.jks from debug.keystore for CI builds..."
-              cp debug.keystore my-upload-key.jks
+            else
+              # Alias must match keyAlias "upload" in app/build.gradle.kts.
+              echo "::warning::KEYSTORE_BASE64 secret is not set: signing with a throwaway key. This APK cannot update an install signed by any other build."
+              keytool -genkeypair -keystore my-upload-key.jks -storepass android -alias upload -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=CI Ephemeral Upload Key,O=call-inspector,C=FR"
             fi
           fi
 
