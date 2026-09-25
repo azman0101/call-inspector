@@ -243,6 +243,11 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
             delay(150) // Small debounce for fluid typing
 
             val lookup = dbManager.lookupNumber(input)
+            if (lookup.isFound) {
+                val prefix = lookup.range?.ezabpqm ?: lookup.range?.trancheDebut?.take(4) ?: input.take(4)
+                val opName = lookup.operatorDisplayName
+                com.example.util.SentryHelper.logLookupEvent(getApplication(), prefix, opName)
+            }
             val prefixList = if (input.length in 2..6) {
                 dbManager.searchPrefixesOrOperators(input)
             } else {

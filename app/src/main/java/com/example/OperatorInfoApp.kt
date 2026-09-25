@@ -17,24 +17,19 @@ class OperatorInfoApp : Application() {
     }
 
     private fun setupSentry() {
-        // Le DSN n'est JAMAIS stocké en dur : il provient de BuildConfig (injecté via .env)
-        // ou d'une variable d'environnement système.
-        val dsn = try {
-            val configDsn = BuildConfig.SENTRY_DSN
-            if (configDsn.isNotBlank()) configDsn else (System.getenv("SENTRY_DSN") ?: "")
-        } catch (_: Throwable) {
-            System.getenv("SENTRY_DSN") ?: ""
-        }
+        try {
+            val dsn = com.example.util.SentryHelper.getResolvedDsn(this)
 
-        if (dsn.isBlank()) {
-            // Aucun DSN fourni : Sentry reste inactif (mode local, tests, CI)
-            return
-        }
+            if (dsn.isBlank()) {
+                return
+            }
 
-        SentryAndroid.init(this) { options ->
-            options.dsn = dsn
-            // Désactiver l'envoi automatique de données d'identification personnelle (PII)
-            options.isSendDefaultPii = false
+            SentryAndroid.init(this) { options ->
+                options.dsn = dsn
+                options.isDebug = BuildConfig.DEBUG
+                options.logs.isEnabled = BuildConfig.DEBUG
+                options.tracesSampleRate = 1.0
+                options.isSendDefaultPii = false
 
             // Filtre de confidentialité strict via beforeSend :
             // Aucune donnée d'appel (numéro, email, note, contenu) ne doit être transmise
@@ -73,12 +68,15 @@ class OperatorInfoApp : Application() {
             }
         }
 
-        // Vérification et émission d'un log de test au démarrage
-        try {
-            Sentry.logger().info("A simple log message")
-            Sentry.logger().error("A %s log message", "formatted")
+            // Journalisation de démarrage de l'application
+            try {
+                Sentry.logger().info("Info Opérateur initialisé avec succès (Android SDK)")
+                Sentry.flush(2000)
+            } catch (_: Throwable) {
+                // Ignoré si le logger n'est pas actif
+            }
         } catch (_: Throwable) {
-            // Ignoré si le logger n'est pas actif
+            // Empêche tout crash au démarrage si Sentry ne peut s'initialiser
         }
     }
 

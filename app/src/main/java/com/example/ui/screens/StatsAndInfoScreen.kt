@@ -17,13 +17,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
@@ -32,6 +35,7 @@ import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ReportProblem
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Warning
@@ -46,9 +50,16 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.example.util.SentryHelper
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,6 +88,10 @@ fun StatsAndInfoScreen(
     val stats = uiState.databaseStats
     val calls = uiState.calls
     val updateStatus = uiState.updateStatus
+
+    var devModeEnabled by remember { mutableStateOf(SentryHelper.isDevModeEnabled(context)) }
+    var tapCount by remember { mutableIntStateOf(0) }
+    var isToastEnabled by remember { mutableStateOf(SentryHelper.isToastEnabled(context)) }
 
     val totalCalls = calls.size
     val demarchageCalls = calls.count { it.isSpamFlagged || it.lookupResult.numberType.isDemarchage }
@@ -261,6 +276,50 @@ fun StatsAndInfoScreen(
                                 Text("Empreinte SHA-256 :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text("${sha.take(16)}...", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
+                        }
+
+                        // Ligne Version de l'application cliquable (activation du mode développeur par 7 taps)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (devModeEnabled) {
+                                        Toast.makeText(context, "Mode développeur déjà actif !", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        tapCount++
+                                        if (tapCount in 3..6) {
+                                            val remaining = 7 - tapCount
+                                            Toast.makeText(context, "Plus que $remaining étape${if (remaining > 1) "s" else ""} pour activer le mode développeur", Toast.LENGTH_SHORT).show()
+                                        } else if (tapCount >= 7) {
+                                            devModeEnabled = true
+                                            SentryHelper.setDevModeEnabled(context, true)
+                                            Toast.makeText(context, "🚀 Mode développeur activé !", Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                }
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Version de l'application :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                if (devModeEnabled) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        shape = RoundedCornerShape(4.dp)
+                                    ) {
+                                        Text(
+                                            text = "DEV",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            Text("1.0 (build 1)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         }
                     }
                 }
@@ -574,44 +633,198 @@ fun StatsAndInfoScreen(
                 }
             }
 
-            // Télémétrie & Logs Sentry Test Card
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Télémétrie & Diagnostic Sentry",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Vérifiez la réception des logs d'erreurs et d'informations sur votre tableau de bord Sentry.",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedButton(
-                        onClick = {
-                            try {
-                                Sentry.logger().info("A simple log message")
-                                Sentry.logger().error("A %s log message", "formatted")
-                                Toast.makeText(context, "Logs envoyés à Sentry !", Toast.LENGTH_SHORT).show()
-                            } catch (_: Throwable) {
-                                Toast.makeText(context, "Logger Sentry non actif", Toast.LENGTH_SHORT).show()
+            // Menu Développeur & Diagnostics Sentry
+            if (devModeEnabled) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("sentry_dev_menu_card")
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.Build,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Options Développeur & Sentry",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
-                        },
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("send_sentry_test_log_button")
+
+                            TextButton(
+                                onClick = {
+                                    devModeEnabled = false
+                                    tapCount = 0
+                                    SentryHelper.setDevModeEnabled(context, false)
+                                    Toast.makeText(context, "Mode développeur masqué", Toast.LENGTH_SHORT).show()
+                                }
+                            ) {
+                                Text("Masquer", fontSize = 12.sp)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Console de validation et télémétrie Sentry (SDK 8.58.0)",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // État et DSN
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Statut Sentry :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("Actif (Logs + Erreurs)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = SuccessGreen)
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("DSN configuré :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    val dsn = SentryHelper.getResolvedDsn(context)
+                                    val masked = if (dsn.length > 25) "${dsn.take(16)}...${dsn.takeLast(10)}" else dsn
+                                    Text(masked, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Switch Toaster en direct
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Toaster d'événements Sentry",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = "Affiche une bulle Toast dès qu'un log ou une erreur est transmis à Sentry",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Switch(
+                                checked = isToastEnabled,
+                                onCheckedChange = {
+                                    isToastEnabled = it
+                                    SentryHelper.setToastEnabled(context, it)
+                                }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Text("Déclencheurs de test en direct :", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Bouton 1: Erreur Dummy (RuntimeException)
+                        Button(
+                            onClick = {
+                                SentryHelper.sendTestDummyError(context)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = DangerRed),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("send_sentry_dummy_error_button")
+                        ) {
+                            Icon(Icons.Default.BugReport, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Déclencher une erreur test (Dummy Error)")
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Bouton 2: Logs structurés Dummy (INFO, WARN, ERROR)
+                        Button(
+                            onClick = {
+                                SentryHelper.sendTestDummyLogs(context)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = ArcepBlue),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("send_sentry_dummy_logs_button")
+                        ) {
+                            Icon(Icons.Default.Article, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Émettre 3 logs structurés (INFO, WARN, ERROR)")
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Bouton 3: Message simple
+                        OutlinedButton(
+                            onClick = {
+                                SentryHelper.sendTestMessage(context)
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("send_sentry_dummy_message_button")
+                        ) {
+                            Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Envoyer un message Sentry (captureMessage)")
+                        }
+                    }
+                }
+            } else {
+                // Info discrète pour débloquer le mode développeur
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.BugReport, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Envoyer un log de test Sentry")
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Astuce : appuyez 7 fois sur la « Version de l'application » ci-dessus pour déverrouiller le Mode Développeur et tester Sentry.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 15.sp
+                        )
                     }
                 }
             }

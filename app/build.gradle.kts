@@ -7,6 +7,7 @@ plugins {
   alias(libs.plugins.secrets)
   alias(libs.plugins.google.services)
   alias(libs.plugins.sentry)
+  id("org.owasp.dependencycheck")
 }
 
 android {
@@ -40,13 +41,17 @@ android {
       storePassword = "android"
       keyAlias = "androiddebugkey"
       keyPassword = "android"
+      enableV1Signing = true
+      enableV2Signing = true
     }
   }
 
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = false
+      isDebuggable = false
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
@@ -65,6 +70,14 @@ android {
     includeInApk = false
     includeInBundle = true
   }
+}
+
+dependencyCheck {
+  failBuildOnCVSS = 7.0f
+  formats = listOf("HTML", "SARIF")
+  scanConfigurations = listOf("debugRuntimeClasspath", "releaseRuntimeClasspath")
+  suppressionFiles = listOf("$rootDir/config/dependency-check-suppressions.xml")
+  nvd.apiKey.set(providers.environmentVariable("NVD_API_KEY_RAW").orElse(""))
 }
 
 // Configure the Secrets Gradle Plugin to use .env and .env.example files

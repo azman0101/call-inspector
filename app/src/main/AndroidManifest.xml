@@ -8,14 +8,25 @@
 
     <application
         android:name=".OperatorInfoApp"
-        android:allowBackup="true"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
+
+        <!-- Désactive l'auto-initialisation par le ContentProvider -->
+        <meta-data android:name="io.sentry.auto-init" android:value="false" />
+        <meta-data android:name="io.sentry.auto-init.enable" android:value="false" />
+
+        <!-- DSN Sentry par défaut -->
+        <meta-data android:name="io.sentry.dsn" android:value="https://32fcd96b74ca3fe4ac168c459b53f0c7@o4511450241302528.ingest.de.sentry.io/4512142920384592" />
+
+        <!-- Suppression du ContentProvider d'initialisation pour laisser OperatorInfoApp gérer Sentry -->
+        <provider
+            android:name="io.sentry.android.core.SentryInitProvider"
+            android:authorities="${applicationId}.SentryInitProvider"
+            tools:node="remove" />
 
         <!-- Active la capture des logs Sentry (SDK >= 8.12.0) -->
         <meta-data android:name="io.sentry.logs.enabled" android:value="true" />
@@ -25,6 +36,7 @@
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.MyApplication">
+            <!-- Exported is required for the Android launcher entry point. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
