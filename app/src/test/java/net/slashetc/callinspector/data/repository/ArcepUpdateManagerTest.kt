@@ -1,4 +1,4 @@
-package com.example.data.repository
+package net.slashetc.callinspector.data.repository
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull

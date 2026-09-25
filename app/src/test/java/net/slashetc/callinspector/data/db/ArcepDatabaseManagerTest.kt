@@ -1,4 +1,4 @@
-package com.example.data.db
+package net.slashetc.callinspector.data.db
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
