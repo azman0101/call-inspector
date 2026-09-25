@@ -15,8 +15,18 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
 
-        <!-- Désactive l'auto-initialisation par le ContentProvider sans DSN -->
+        <!-- Désactive l'auto-initialisation par le ContentProvider -->
+        <meta-data android:name="io.sentry.auto-init" android:value="false" />
         <meta-data android:name="io.sentry.auto-init.enable" android:value="false" />
+
+        <!-- DSN Sentry par défaut -->
+        <meta-data android:name="io.sentry.dsn" android:value="https://32fcd96b74ca3fe4ac168c459b53f0c7@o4511450241302528.ingest.de.sentry.io/4512142920384592" />
+
+        <!-- Suppression du ContentProvider d'initialisation pour laisser OperatorInfoApp gérer Sentry -->
+        <provider
+            android:name="io.sentry.android.core.SentryInitProvider"
+            android:authorities="${applicationId}.SentryInitProvider"
+            tools:node="remove" />
 
         <!-- Active la capture des logs Sentry (SDK >= 8.12.0) -->
         <meta-data android:name="io.sentry.logs.enabled" android:value="true" />
