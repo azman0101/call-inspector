@@ -59,8 +59,9 @@ jobs:
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
-          if [ -n "${NVD_API_KEY:-}" ]; then
-            ./gradlew dependencyCheckAnalyze --no-configuration-cache --stacktrace
+          nvd_api_key_trimmed="$(printf '%s' "${NVD_API_KEY:-}" | tr -d '[:space:]')"
+          if [ -n "${nvd_api_key_trimmed}" ]; then
+            NVD_API_KEY="${nvd_api_key_trimmed}" ./gradlew dependencyCheckAnalyze --no-configuration-cache --stacktrace
           else
             env -u NVD_API_KEY ./gradlew dependencyCheckAnalyze --no-configuration-cache --stacktrace
           fi
