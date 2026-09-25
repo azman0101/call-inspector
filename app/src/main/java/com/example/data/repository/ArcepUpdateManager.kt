@@ -40,6 +40,27 @@ class ArcepUpdateManager(private val context: Context) {
         private const val TAG = "ArcepUpdateManager"
         const val MAJNUM_URL = "https://extranet.arcep.fr/uploads/MAJNUM.csv"
         const val CE_URL = "https://extranet.arcep.fr/uploads/identifiants_CE.csv"
+
+        const val MAX_LINE_LENGTH = 4096
+        const val MAX_CODE_LENGTH = 20
+        const val MAX_NAME_LENGTH = 200
+        const val MAX_SIRET_LENGTH = 20
+        const val MAX_RCS_LENGTH = 100
+        const val MAX_ADDRESS_LENGTH = 500
+        const val MAX_DATE_LENGTH = 30
+        const val MAX_NUMBER_LENGTH = 20
+        const val MAX_TERRITORY_LENGTH = 100
+
+        fun sanitizeToken(token: String?, maxLength: Int): String? {
+            if (token == null) return null
+            val cleaned = token.replace(Regex("[\\x00-\\x1F\\x7F]"), "").trim().trim('"').trim('\'').trim()
+            if (cleaned.isEmpty()) return null
+            return cleaned.take(maxLength)
+        }
+
+        fun sanitizeNonNullableToken(token: String?, maxLength: Int, defaultIfEmpty: String = ""): String {
+            return sanitizeToken(token, maxLength) ?: defaultIfEmpty
+        }
     }
 
     suspend fun checkAndDownloadUpdate(
@@ -154,7 +175,7 @@ class ArcepUpdateManager(private val context: Context) {
             val operatorsDict = mutableMapOf<String, String>()
             val ceReader = BufferedReader(InputStreamReader(ceBytes.inputStream(), Charset.forName("ISO-8859-1")))
             val headerLineCe = ceReader.readLine() ?: ""
-            val headersCe = headerLineCe.split(";").map { it.trim().trim('"') }
+            val headersCe = headerLineCe.split(";").map { sanitizeNonNullableToken(it, 100) }
             val codeIdx = headersCe.indexOf("CODE_OPERATEUR")
             val nameIdx = headersCe.indexOf("IDENTITE_OPERATEUR")
             val siretIdx = headersCe.indexOf("SIRET_ACTEUR")
@@ -169,15 +190,16 @@ class ArcepUpdateManager(private val context: Context) {
             )
 
             ceReader.forEachLine { line ->
+                if (line.length > MAX_LINE_LENGTH) return@forEachLine
                 val cols = line.split(";")
                 if (codeIdx in cols.indices && nameIdx in cols.indices) {
-                    val code = cols[codeIdx].trim().trim('"')
-                    val name = cols[nameIdx].trim().trim('"')
+                    val code = sanitizeNonNullableToken(cols[codeIdx], MAX_CODE_LENGTH)
+                    val name = sanitizeNonNullableToken(cols[nameIdx], MAX_NAME_LENGTH)
                     if (code.isNotEmpty()) {
-                        val siret = if (siretIdx in cols.indices) cols[siretIdx].trim().trim('"') else null
-                        val rcs = if (rcsIdx in cols.indices) cols[rcsIdx].trim().trim('"') else null
-                        val addr = if (addrIdx in cols.indices) cols[addrIdx].trim().trim('"') else null
-                        val decDate = if (decDateIdx in cols.indices) cols[decDateIdx].trim().trim('"') else null
+                        val siret = if (siretIdx in cols.indices) sanitizeToken(cols[siretIdx], MAX_SIRET_LENGTH) else null
+                        val rcs = if (rcsIdx in cols.indices) sanitizeToken(cols[rcsIdx], MAX_RCS_LENGTH) else null
+                        val addr = if (addrIdx in cols.indices) sanitizeToken(cols[addrIdx], MAX_ADDRESS_LENGTH) else null
+                        val decDate = if (decDateIdx in cols.indices) sanitizeToken(cols[decDateIdx], MAX_DATE_LENGTH) else null
 
                         operatorsDict[code] = name
                         insertOpStmt.bindString(1, code)
@@ -199,7 +221,7 @@ class ArcepUpdateManager(private val context: Context) {
             onProgress(UpdateStatus.Processing("Insertion des 20 000+ tranches de numérotation...", 0.85f))
             val majReader = BufferedReader(InputStreamReader(majBytes.inputStream(), Charset.forName("ISO-8859-1")))
             val headerLineMaj = majReader.readLine() ?: ""
-            val headersMaj = headerLineMaj.split(";").map { it.trim().trim('"') }
+            val headersMaj = headerLineMaj.split(";").map { sanitizeNonNullableToken(it, 100) }
             val ezIdx = headersMaj.indexOf("EZABPQM")
             val debutIdx = headersMaj.indexOf("Tranche_Debut")
             val finIdx = headersMaj.indexOf("Tranche_Fin")
@@ -216,15 +238,16 @@ class ArcepUpdateManager(private val context: Context) {
             )
 
             majReader.forEachLine { line ->
+                if (line.length > MAX_LINE_LENGTH) return@forEachLine
                 val cols = line.split(";")
                 if (ezIdx in cols.indices && debutIdx in cols.indices && finIdx in cols.indices) {
-                    val ez = cols[ezIdx].trim().trim('"')
-                    val debut = cols[debutIdx].trim().trim('"')
-                    val fin = cols[finIdx].trim().trim('"')
-                    val opCode = if (mnemoIdx in cols.indices) cols[mnemoIdx].trim().trim('"') else ""
-                    val opName = operatorsDict[opCode] ?: opCode
-                    val ter = if (terIdx in cols.indices) cols[terIdx].trim().trim('"') else null
-                    val attrDate = if (attrDateIdx in cols.indices) cols[attrDateIdx].trim().trim('"') else null
+                    val ez = sanitizeNonNullableToken(cols[ezIdx], MAX_NUMBER_LENGTH)
+                    val debut = sanitizeNonNullableToken(cols[debutIdx], MAX_NUMBER_LENGTH)
+                    val fin = sanitizeNonNullableToken(cols[finIdx], MAX_NUMBER_LENGTH)
+                    val opCode = if (mnemoIdx in cols.indices) sanitizeNonNullableToken(cols[mnemoIdx], MAX_CODE_LENGTH) else ""
+                    val opName = operatorsDict[opCode] ?: sanitizeNonNullableToken(opCode, MAX_NAME_LENGTH)
+                    val ter = if (terIdx in cols.indices) sanitizeToken(cols[terIdx], MAX_TERRITORY_LENGTH) else null
+                    val attrDate = if (attrDateIdx in cols.indices) sanitizeToken(cols[attrDateIdx], MAX_DATE_LENGTH) else null
 
                     if (attrDate != null && attrDate > latestAttrDate) {
                         latestAttrDate = attrDate
