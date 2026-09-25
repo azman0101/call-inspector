@@ -117,16 +117,23 @@ fun ArcepDossierContent(
     onToggleFavorite: (() -> Unit)? = null,
     onSaveNote: ((String?) -> Unit)? = null,
     onDismiss: (() -> Unit)? = null,
+    isScrollable: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var editingNote by remember { mutableStateOf(userNote ?: "") }
     var isNoteExpanded by remember { mutableStateOf(!userNote.isNullOrBlank()) }
 
+    val scrollModifier = if (isScrollable) {
+        Modifier.verticalScroll(rememberScrollState())
+    } else {
+        Modifier
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
+            .then(scrollModifier)
             .padding(horizontal = 20.dp)
             .padding(bottom = 32.dp)
     ) {

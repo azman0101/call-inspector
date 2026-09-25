@@ -223,6 +223,7 @@ fun NumberLookupScreen(
             if (uiState.manualLookupResult != null && uiState.manualLookupResult.isFound) {
                 ArcepDossierContent(
                     lookup = uiState.manualLookupResult,
+                    isScrollable = false,
                     onSaveNote = { note ->
                         viewModel.saveCallNote(uiState.manualLookupResult.normalizedNumber, note)
                     }
