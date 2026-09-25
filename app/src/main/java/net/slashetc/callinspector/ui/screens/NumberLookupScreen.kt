@@ -302,45 +302,55 @@ private fun PrefixResultCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .testTag("prefix_card_${item.range?.ezabpqm ?: item.queryNumber}"),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(14.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Bloc ${item.range?.ezabpqm ?: item.queryNumber}",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = ArcepNavy
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    PhoneCategoryBadge(type = item.numberType)
-                }
-                Spacer(modifier = Modifier.height(3.dp))
+            // Header Row: Bloc number on left, Category badge on right
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
                 Text(
-                    text = item.operatorDisplayName,
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurface
+                    text = "Bloc ${item.range?.ezabpqm ?: item.queryNumber}",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    color = MaterialTheme.colorScheme.primary
                 )
-                Text(
-                    text = "${item.range?.trancheDebut} à ${item.range?.trancheFin}",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+
+                PhoneCategoryBadge(type = item.numberType)
             }
 
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Operator Badge on its own full-width row
             OperatorBadge(
                 operatorName = item.operatorDisplayName,
                 operatorCode = item.operatorCode
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Number range details
+            val trancheDebut = item.range?.trancheDebut
+            val trancheFin = item.range?.trancheFin
+            val trancheText = if (!trancheDebut.isNullOrBlank() && !trancheFin.isNullOrBlank()) {
+                "$trancheDebut à $trancheFin"
+            } else {
+                item.blockDisplay
+            }
+            Text(
+                text = "Tranche : $trancheText",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

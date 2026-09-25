@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.slashetc.callinspector.data.model.PhoneNumberType
@@ -61,7 +62,10 @@ fun OperatorBadge(
             color = textColor,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
-            maxLines = 1
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
         )
         if (operatorCode.isNotBlank() && operatorCode != "—") {
             Spacer(modifier = Modifier.width(4.dp))
@@ -69,7 +73,9 @@ fun OperatorBadge(
                 text = "($operatorCode)",
                 color = textColor.copy(alpha = 0.7f),
                 fontSize = 10.sp,
-                fontWeight = FontWeight.Normal
+                fontWeight = FontWeight.Normal,
+                maxLines = 1,
+                softWrap = false
             )
         }
     }
@@ -121,7 +127,10 @@ fun PhoneCategoryBadge(
             text = type.label,
             color = textColor,
             fontSize = 11.sp,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
