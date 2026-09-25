@@ -9,6 +9,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import io.sentry.Sentry
+import javax.net.ssl.SSLPeerUnverifiedException
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
@@ -281,9 +283,23 @@ class ArcepUpdateManager(private val context: Context) {
             )
             true
         } catch (e: Exception) {
+            if (e.hasTlsPinningFailure()) {
+                Sentry.captureMessage("TLS certificate pinning failed for extranet.arcep.fr")
+                Sentry.captureException(e)
+            }
             Log.e(TAG, "Erreur lors de la mise à jour ARCEP", e)
             onProgress(UpdateStatus.Error("Erreur : ${e.localizedMessage ?: e.message}"))
             false
         }
+    }
+
+    private fun Throwable.hasTlsPinningFailure(): Boolean {
+        var current: Throwable? = this
+        val seen = mutableSetOf<Throwable>()
+        while (current != null && seen.add(current)) {
+            if (current is SSLPeerUnverifiedException) return true
+            current = current.cause
+        }
+        return false
     }
 }

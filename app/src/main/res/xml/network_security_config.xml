@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">extranet.arcep.fr</domain>
+        <pin-set expiration="2027-09-25">
+            <!-- GlobalSign RSA OV SSL CA 2018, observed in the live ARCEP chain on 2026-09-25. -->
+            <pin digest="SHA-256">hETpgVvaLC0bvcGG3t0cuqiHvr4XyP2MTwCiqhgRWwU=</pin>
+            <!-- GlobalSign Root CA - R3, independently verified from the macOS trust store. -->
+            <pin digest="SHA-256">cGuxAXyFXFkWm61cF4HPWX8S0srS9j0aSqN0k4AP+4A=</pin>
+        </pin-set>
+    </domain-config>
+</network-security-config>
