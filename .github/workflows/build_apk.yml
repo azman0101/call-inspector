@@ -1,24 +1,14 @@
 name: Build Test APK
 
 on:
-  push:
-    branches:
-      - main
-      - master
-    paths-ignore:
-      - '**.md'
-      - '.github/workflows/update_arcep.yml'
   pull_request:
     branches:
       - main
-      - master
-  workflow_dispatch:
-    inputs:
-      run_tests:
-        description: 'Exécuter les tests unitaires (Robolectric)'
-        required: false
-        type: boolean
-        default: true
+  # Build the production-branch APK only after the dependency gate passes.
+  # Feature branches still run through pull_request and may publish dev APKs.
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -27,6 +17,7 @@ jobs:
   build:
     name: Build & Test Android APK
     runs-on: ubuntu-latest
+    environment: production
 
     steps:
       - name: Checkout repository
@@ -66,8 +57,29 @@ jobs:
           fi
 
       - name: Run Unit & Robolectric Tests
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_tests }}
         run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: Scan dependencies (OWASP Dependency-Check)
+        env:
+          NVD_API_KEY_RAW: ${{ secrets.NVD_API_KEY }}
+        # A scan finding is advisory for PR/dev APKs; on main it gates APK creation.
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
+        run: |
+          nvd_api_key_trimmed="$(printf '%s' "${NVD_API_KEY_RAW:-}" | tr -d '[:space:]')"
+          if [ -n "${nvd_api_key_trimmed}" ]; then
+            export NVD_API_KEY_RAW="${nvd_api_key_trimmed}"
+          fi
+          unset NVD_API_KEY
+          ./gradlew dependencyCheckAnalyze --no-daemon --no-configuration-cache --stacktrace --info
+
+      - name: Upload dependency scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: app/build/reports
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Build Debug APK
         env:

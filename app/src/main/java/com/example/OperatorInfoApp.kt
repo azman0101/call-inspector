@@ -26,8 +26,8 @@ class OperatorInfoApp : Application() {
 
             SentryAndroid.init(this) { options ->
                 options.dsn = dsn
-                options.isDebug = true
-                options.logs.isEnabled = true
+                options.isDebug = BuildConfig.DEBUG
+                options.logs.isEnabled = BuildConfig.DEBUG
                 options.tracesSampleRate = 1.0
                 options.isSendDefaultPii = false
 

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.4.xsd"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.4.xsd
+                                  https://dependency-check.github.io/DependencyCheck/dependency-suppression.1.4.xsd">
+    <suppress until="2027-03-25Z">
+        <notes><![CDATA[
+        The report matches the AndroidX artifact version 2.5.0 to the SQLite engine CPE
+        sqlite:sqlite:2.5.0. AndroidX's version is the wrapper/API release, not the version
+        of the SQLite engine. Reviewed against the 2026-09-25 Dependency-Check report;
+        re-evaluate this mapping before the expiry date.
+        ]]></notes>
+        <packageUrl regex="true">pkg:maven/androidx\.sqlite/sqlite-(android|framework-android)@.*</packageUrl>
+        <cpe>cpe:/a:sqlite:sqlite</cpe>
+    </suppress>
+
+</suppressions>
