@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.4.xsd"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.4.xsd
+                                  https://dependency-check.github.io/DependencyCheck/dependency-suppression.1.4.xsd">
+    <suppress until="2027-03-25Z">
+        <notes><![CDATA[
+        The report matches the AndroidX artifact version 2.5.0 to the SQLite engine CPE
+        sqlite:sqlite:2.5.0. AndroidX's version is the wrapper/API release, not the version
+        of the SQLite engine. Reviewed against the 2026-09-25 Dependency-Check report;
+        re-evaluate this mapping before the expiry date.
+        ]]></notes>
+        <packageUrl regex="true">pkg:maven/androidx\.sqlite/sqlite-(android|framework-android)@.*</packageUrl>
+        <cpe>cpe:/a:sqlite:sqlite</cpe>
+    </suppress>
+
+    <suppress until="2027-03-25Z">
+        <notes><![CDATA[
+        CVE-2026-53914 concerns unsafe deserialization of Kotlin build-cache metadata.
+        It does not apply to kotlin-stdlib-jdk7 itself; the broad Kotlin CPE match in the
+        2026-09-25 report is not evidence of an affected runtime library.
+        ]]></notes>
+        <packageUrl>pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk7@1.9.24</packageUrl>
+        <cve>CVE-2026-53914</cve>
+    </suppress>
+
+    <suppress until="2027-03-25Z">
+        <notes><![CDATA[
+        CVE-2026-53914 concerns unsafe deserialization of Kotlin build-cache metadata.
+        It does not apply to kotlin-stdlib-jdk8 itself; the broad Kotlin CPE match in the
+        2026-09-25 report is not evidence of an affected runtime library.
+        ]]></notes>
+        <packageUrl>pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk8@1.9.24</packageUrl>
+        <cve>CVE-2026-53914</cve>
+    </suppress>
+
+    <suppress until="2027-03-25Z">
+        <notes><![CDATA[
+        NVD describes CVE-2020-29582 as affecting Kotlin before 1.4.21. The 1.9.24
+        stdlib-jdk7 artifact in this report is outside that affected range; the broad CPE
+        range produces a false positive.
+        ]]></notes>
+        <packageUrl>pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk7@1.9.24</packageUrl>
+        <cve>CVE-2020-29582</cve>
+    </suppress>
+
+    <suppress until="2027-03-25Z">
+        <notes><![CDATA[
+        NVD describes CVE-2020-29582 as affecting Kotlin before 1.4.21. The 1.9.24
+        stdlib-jdk8 artifact in this report is outside that affected range; the broad CPE
+        range produces a false positive.
+        ]]></notes>
+        <packageUrl>pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk8@1.9.24</packageUrl>
+        <cve>CVE-2020-29582</cve>
+    </suppress>
+</suppressions>

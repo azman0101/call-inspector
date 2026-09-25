@@ -4,6 +4,11 @@ on:
   pull_request:
     branches:
       - main
+  # Build the production-branch APK only after the dependency gate passes.
+  # Feature branches still run through pull_request and may publish dev APKs.
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -57,13 +62,15 @@ jobs:
       - name: Scan dependencies (OWASP Dependency-Check)
         env:
           NVD_API_KEY_RAW: ${{ secrets.NVD_API_KEY }}
+        # A scan finding is advisory for PR/dev APKs; on main it gates APK creation.
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: |
           nvd_api_key_trimmed="$(printf '%s' "${NVD_API_KEY_RAW:-}" | tr -d '[:space:]')"
           if [ -n "${nvd_api_key_trimmed}" ]; then
             export NVD_API_KEY_RAW="${nvd_api_key_trimmed}"
           fi
           unset NVD_API_KEY
-          ./gradlew dependencyCheckUpdate dependencyCheckAnalyze --no-daemon --no-configuration-cache --stacktrace --info
+          ./gradlew dependencyCheckAnalyze --no-daemon --no-configuration-cache --stacktrace --info
 
       - name: Upload dependency scan report
         if: always()

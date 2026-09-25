@@ -75,6 +75,8 @@ android {
 dependencyCheck {
   failBuildOnCVSS = 7.0f
   formats = listOf("HTML", "SARIF")
+  scanConfigurations = listOf("debugRuntimeClasspath", "releaseRuntimeClasspath")
+  suppressionFiles = listOf("$rootDir/config/dependency-check-suppressions.xml")
   nvd.apiKey.set(providers.environmentVariable("NVD_API_KEY_RAW").orElse(""))
 }
 
