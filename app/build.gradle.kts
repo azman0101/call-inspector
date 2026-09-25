@@ -7,6 +7,7 @@ plugins {
   alias(libs.plugins.secrets)
   alias(libs.plugins.google.services)
   alias(libs.plugins.sentry)
+  id("org.owasp.dependencycheck")
 }
 
 android {
@@ -48,7 +49,9 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = false
+      isDebuggable = false
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
@@ -67,6 +70,11 @@ android {
     includeInApk = false
     includeInBundle = true
   }
+}
+
+dependencyCheck {
+  failBuildOnCVSS = 7.0
+  formats = listOf("HTML", "SARIF")
 }
 
 // Configure the Secrets Gradle Plugin to use .env and .env.example files

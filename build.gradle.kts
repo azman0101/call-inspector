@@ -6,4 +6,5 @@ plugins {
   alias(libs.plugins.secrets) apply false
   alias(libs.plugins.google.services) apply false
   alias(libs.plugins.sentry) apply false
+  id("org.owasp.dependencycheck") version "13.0.0" apply false
 }

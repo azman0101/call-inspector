@@ -69,6 +69,20 @@ jobs:
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_tests }}
         run: ./gradlew testDebugUnitTest --stacktrace
 
+      - name: Scan dependencies (OWASP Dependency-Check)
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: ./gradlew dependencyCheckAnalyze --stacktrace
+
+      - name: Upload dependency scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: build/reports
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Build Debug APK
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
