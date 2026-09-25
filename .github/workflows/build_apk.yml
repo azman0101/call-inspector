@@ -72,14 +72,19 @@ jobs:
       - name: Scan dependencies (OWASP Dependency-Check)
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-        run: ./gradlew dependencyCheckAnalyze --stacktrace
+        run: |
+          if [ -n "${NVD_API_KEY:-}" ]; then
+            ./gradlew dependencyCheckAnalyze --no-configuration-cache --stacktrace
+          else
+            env -u NVD_API_KEY ./gradlew dependencyCheckAnalyze --no-configuration-cache --stacktrace
+          fi
 
       - name: Upload dependency scan report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dependency-check-report
-          path: build/reports
+          path: app/build/reports
           if-no-files-found: ignore
           retention-days: 30
 
