@@ -56,12 +56,11 @@ jobs:
         run: ./gradlew testDebugUnitTest --stacktrace
 
       - name: Scan dependencies (OWASP Dependency-Check)
-        env:
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
-          nvd_api_key_trimmed="$(printf '%s' "${NVD_API_KEY:-}" | tr -d '[:space:]')"
+          nvd_api_key_raw="${{ secrets.NVD_API_KEY }}"
+          nvd_api_key_trimmed="$(printf '%s' "${nvd_api_key_raw}" | tr -d '[:space:]')"
           if [ -n "${nvd_api_key_trimmed}" ]; then
-            NVD_API_KEY="${nvd_api_key_trimmed}" ./gradlew dependencyCheckAnalyze --no-configuration-cache --stacktrace
+            env -u NVD_API_KEY ./gradlew dependencyCheckAnalyze -Dnvd.api.key="${nvd_api_key_trimmed}" --no-configuration-cache --stacktrace
           else
             env -u NVD_API_KEY ./gradlew dependencyCheckAnalyze --no-configuration-cache --stacktrace
           fi
