@@ -12,7 +12,7 @@ plugins {
 }
 
 android {
-  namespace = "com.example"
+  namespace = "net.slashetc.callinspector"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   // Versioning dynamique :
@@ -45,7 +45,7 @@ android {
   }
 
   defaultConfig {
-    applicationId = "com.aistudio.operatorlookup.wkvqmt"
+    applicationId = "net.slashetc.callinspector"
     minSdk = 24
     targetSdk = 36
     versionCode = resolvedVersionCode
