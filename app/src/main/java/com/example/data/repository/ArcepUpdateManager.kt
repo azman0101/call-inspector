@@ -133,17 +133,6 @@ class ArcepUpdateManager(private val context: Context) {
             """.trimIndent())
 
             tempDb.execSQL("""
-                CREATE TABLE call_notes (
-                    phone_number TEXT PRIMARY KEY,
-                    is_favorite INTEGER DEFAULT 0,
-                    is_spam INTEGER DEFAULT 0,
-                    user_tag TEXT,
-                    user_note TEXT,
-                    updated_at INTEGER
-                );
-            """.trimIndent())
-
-            tempDb.execSQL("""
                 CREATE TABLE arcep_metadata (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL
@@ -247,10 +236,7 @@ class ArcepUpdateManager(private val context: Context) {
             tempDb.endTransaction()
             insertRangeStmt.close()
 
-            // 5. Restore user call notes from current database
-            dbManager.backupUserNotesTo(tempDb)
-
-            // 6. Write metadata
+            // 5. Write metadata (call notes remain only in the encrypted Room database)
             val nowStr = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRENCH).format(Date())
             val dateLabel = if (lastModifiedHeader.isNotBlank()) lastModifiedHeader else nowStr
 
@@ -282,7 +268,7 @@ class ArcepUpdateManager(private val context: Context) {
             tempDb.execSQL("VACUUM;")
             tempDb.close()
 
-            // 7. Atomic replace in ArcepDatabaseManager
+            // 6. Atomically import public ARCEP rows into the encrypted Room database.
             dbManager.replaceDatabaseFile(tempDbFile)
 
             onProgress(

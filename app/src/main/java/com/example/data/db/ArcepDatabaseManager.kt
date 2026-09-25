@@ -1,8 +1,9 @@
 package com.example.data.db
 
-import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
+import androidx.room.Room
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.data.model.ArcepLookupResult
 import com.example.data.model.ArcepNumberRange
 import com.example.data.model.ArcepOperator
@@ -12,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
 data class DatabaseStats(
     val totalRanges: Int,
@@ -34,52 +36,127 @@ data class CallNote(
 
 class ArcepDatabaseManager private constructor(private val context: Context) {
 
-    private val dbName = "arcep_data.db"
-    private var db: SQLiteDatabase? = null
+    private val dbName = "arcep_data_secure.db"
+    private val legacyDbName = "arcep_data.db"
+    private val secureDatabase: SecureArcepDatabase
 
     init {
-        ensureDatabaseCopied()
+        System.loadLibrary("sqlcipher")
+        val passphrase = KeyStoreHelper(context).getDatabasePassphrase()
+        secureDatabase = Room.databaseBuilder(context, SecureArcepDatabase::class.java, dbName)
+            .openHelperFactory(SupportOpenHelperFactory(passphrase))
+            .build()
+        try {
+            initializeEncryptedDatabase()
+        } finally {
+            passphrase.fill(0)
+        }
     }
 
-    private fun ensureDatabaseCopied() {
-        val dbFile = context.getDatabasePath(dbName)
-        if (!dbFile.exists() || dbFile.length() < 100_000) {
-            dbFile.parentFile?.mkdirs()
-            context.assets.open(dbName).use { inputStream ->
-                FileOutputStream(dbFile).use { outputStream ->
-                    val buffer = ByteArray(8192)
-                    var length: Int
-                    while (inputStream.read(buffer).also { length = it } > 0) {
-                        outputStream.write(buffer, 0, length)
+    private fun getReadableDb(): SupportSQLiteDatabase = secureDatabase.openHelper.writableDatabase
+
+    private fun initializeEncryptedDatabase() {
+        val target = getReadableDb()
+        if (target.query("SELECT COUNT(*) FROM number_ranges", emptyArray()).use { it.moveToFirst() && it.getLong(0) == 0L }) {
+            val seedFile = File(context.cacheDir, "arcep-public-seed.db")
+            try {
+                context.assets.open("arcep_data.db").use { input ->
+                    FileOutputStream(seedFile).use { output -> input.copyTo(output) }
+                }
+                val seed = SQLiteDatabase.openDatabase(seedFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+                try {
+                    target.beginTransaction()
+                    try {
+                        copyPublicTables(seed, target)
+                        target.setTransactionSuccessful()
+                    } finally {
+                        target.endTransaction()
                     }
-                    outputStream.flush()
+                } finally {
+                    seed.close()
+                }
+            } finally {
+                seedFile.delete()
+            }
+        }
+
+        val legacyFile = context.getDatabasePath(legacyDbName)
+        if (legacyFile.exists()) {
+            val legacy = SQLiteDatabase.openDatabase(legacyFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
+            try {
+                if (tableExists(legacy, "call_notes")) {
+                    target.beginTransaction()
+                    try {
+                        legacy.rawQuery(
+                            "SELECT phone_number, is_favorite, is_spam, user_tag, user_note, updated_at FROM call_notes",
+                            null
+                        ).use { cursor ->
+                            while (cursor.moveToNext()) {
+                                secureDatabase.callNoteDao().save(
+                                    CallNoteEntity(
+                                        phoneNumber = cursor.getString(0),
+                                        isFavorite = cursor.getInt(1) == 1,
+                                        isSpam = cursor.getInt(2) == 1,
+                                        userTag = cursor.getString(3),
+                                        userNote = cursor.getString(4),
+                                        updatedAt = if (cursor.isNull(5)) null else cursor.getLong(5)
+                                    )
+                                )
+                            }
+                        }
+                        target.setTransactionSuccessful()
+                        // Scrub legacy plaintext rows before removing the pre-encryption database.
+                        legacy.execSQL("PRAGMA secure_delete = ON")
+                        legacy.beginTransaction()
+                        try {
+                            legacy.execSQL("DELETE FROM call_notes")
+                            legacy.setTransactionSuccessful()
+                        } finally {
+                            legacy.endTransaction()
+                        }
+                        legacy.execSQL("PRAGMA wal_checkpoint(TRUNCATE)")
+                        legacy.execSQL("VACUUM")
+                    } finally {
+                        target.endTransaction()
+                    }
+                }
+            } finally {
+                legacy.close()
+            }
+            deleteDatabaseFiles(legacyFile)
+        }
+    }
+
+    private fun tableExists(database: SQLiteDatabase, name: String): Boolean = database.rawQuery(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1", arrayOf(name)
+    ).use { it.moveToFirst() }
+
+    private fun copyPublicTables(source: SQLiteDatabase, target: SupportSQLiteDatabase) {
+        listOf("operators", "number_ranges", "arcep_metadata").forEach { table ->
+            if (!tableExists(source, table)) return@forEach
+            source.rawQuery("SELECT * FROM $table", null).use { cursor ->
+                val columns = cursor.columnNames
+                val placeholders = columns.joinToString(",") { "?" }
+                val insert = "INSERT OR REPLACE INTO $table (${columns.joinToString(",")}) VALUES ($placeholders)"
+                while (cursor.moveToNext()) {
+                    val values = Array<Any?>(columns.size) { index ->
+                        if (cursor.isNull(index)) null else when (cursor.getType(index)) {
+                            android.database.Cursor.FIELD_TYPE_INTEGER -> cursor.getLong(index)
+                            android.database.Cursor.FIELD_TYPE_FLOAT -> cursor.getDouble(index)
+                            android.database.Cursor.FIELD_TYPE_BLOB -> cursor.getBlob(index)
+                            else -> cursor.getString(index)
+                        }
+                    }
+                    target.execSQL(insert, values)
                 }
             }
         }
     }
 
-    private fun getReadableDb(): SQLiteDatabase {
-        if (db == null || !db!!.isOpen) {
-            val dbFile = context.getDatabasePath(dbName)
-            if (!dbFile.exists()) {
-                ensureDatabaseCopied()
-            }
-            db = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
-            // Ensure call_notes table exists
-            db?.execSQL(
-                """
-                CREATE TABLE IF NOT EXISTS call_notes (
-                    phone_number TEXT PRIMARY KEY,
-                    is_favorite INTEGER DEFAULT 0,
-                    is_spam INTEGER DEFAULT 0,
-                    user_tag TEXT,
-                    user_note TEXT,
-                    updated_at INTEGER
-                )
-                """.trimIndent()
-            )
-        }
-        return db!!
+    private fun deleteDatabaseFiles(databaseFile: File) {
+        databaseFile.delete()
+        File(databaseFile.path + "-wal").delete()
+        File(databaseFile.path + "-shm").delete()
     }
 
     suspend fun lookupNumber(rawNumber: String): ArcepLookupResult = withContext(Dispatchers.IO) {
@@ -104,7 +181,7 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
         // 1. Direct range lookup
         var range: ArcepNumberRange? = null
         if (normalized.length >= 4) {
-            val cursor = database.rawQuery(
+            val cursor = database.query(
                 """
                 SELECT r.id, r.ezabpqm, r.tranche_debut, r.tranche_fin, r.operator_code, r.operator_name, r.territory, r.attribution_date 
                 FROM number_ranges r
@@ -135,7 +212,7 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
             for (len in listOf(7, 6, 5, 4, 3, 2)) {
                 if (normalized.length >= len) {
                     val prefix = normalized.substring(0, len)
-                    val cursor = database.rawQuery(
+                    val cursor = database.query(
                         """
                         SELECT r.id, r.ezabpqm, r.tranche_debut, r.tranche_fin, r.operator_code, r.operator_name, r.territory, r.attribution_date 
                         FROM number_ranges r
@@ -166,7 +243,7 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
         var operator: ArcepOperator? = null
         val opCode = range?.operatorCode
         if (!opCode.isNullOrBlank()) {
-            val cursorOp = database.rawQuery(
+            val cursorOp = database.query(
                 """
                 SELECT code, name, siret, rcs, address, declaration_date
                 FROM operators
@@ -208,22 +285,9 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
     }
 
     suspend fun getCallNote(phoneNumber: String): CallNote? = withContext(Dispatchers.IO) {
-        val database = getReadableDb()
         val normalized = PhoneNumberFormatter.normalize(phoneNumber)
-        val cursor = database.rawQuery(
-            "SELECT is_favorite, is_spam, user_tag, user_note FROM call_notes WHERE phone_number = ? LIMIT 1",
-            arrayOf(normalized)
-        )
-        cursor.use {
-            if (it.moveToFirst()) {
-                CallNote(
-                    phoneNumber = normalized,
-                    isFavorite = it.getInt(0) == 1,
-                    isSpam = it.getInt(1) == 1,
-                    userTag = it.getString(2),
-                    userNote = it.getString(3)
-                )
-            } else null
+        secureDatabase.callNoteDao().find(normalized)?.let {
+            CallNote(it.phoneNumber, it.isFavorite, it.isSpam, it.userTag, it.userNote)
         }
     }
 
@@ -234,17 +298,10 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
         userTag: String?,
         userNote: String?
     ) = withContext(Dispatchers.IO) {
-        val database = getReadableDb()
         val normalized = PhoneNumberFormatter.normalize(phoneNumber)
-        val values = ContentValues().apply {
-            put("phone_number", normalized)
-            put("is_favorite", if (isFavorite) 1 else 0)
-            put("is_spam", if (isSpam) 1 else 0)
-            put("user_tag", userTag)
-            put("user_note", userNote)
-            put("updated_at", System.currentTimeMillis())
-        }
-        database.insertWithOnConflict("call_notes", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        secureDatabase.callNoteDao().save(
+            CallNoteEntity(normalized, isFavorite, isSpam, userTag, userNote, System.currentTimeMillis())
+        )
     }
 
     suspend fun searchPrefixesOrOperators(query: String): List<ArcepLookupResult> = withContext(Dispatchers.IO) {
@@ -254,7 +311,7 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
         val database = getReadableDb()
         val results = mutableListOf<ArcepLookupResult>()
 
-        val cursor = database.rawQuery(
+        val cursor = database.query(
             """
             SELECT r.id, r.ezabpqm, r.tranche_debut, r.tranche_fin, r.operator_code, r.operator_name, r.territory, r.attribution_date,
                    o.siret, o.rcs, o.address, o.declaration_date
@@ -313,15 +370,15 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
         var totalOperators = 0
         val topOperators = mutableListOf<Pair<String, Int>>()
 
-        database.rawQuery("SELECT COUNT(*) FROM number_ranges", null).use {
+        database.query("SELECT COUNT(*) FROM number_ranges", emptyArray()).use {
             if (it.moveToFirst()) totalRanges = it.getInt(0)
         }
 
-        database.rawQuery("SELECT COUNT(*) FROM operators", null).use {
+        database.query("SELECT COUNT(*) FROM operators", emptyArray()).use {
             if (it.moveToFirst()) totalOperators = it.getInt(0)
         }
 
-        database.rawQuery(
+        database.query(
             """
             SELECT operator_name, COUNT(*) as cnt 
             FROM number_ranges 
@@ -344,7 +401,7 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
         var ceChecksum: String? = null
 
         try {
-            database.rawQuery("SELECT key, value FROM arcep_metadata", null).use { cursor ->
+            database.query("SELECT key, value FROM arcep_metadata", emptyArray()).use { cursor ->
                 val keyIdx = cursor.getColumnIndex("key")
                 val valIdx = cursor.getColumnIndex("value")
                 while (cursor.moveToNext()) {
@@ -375,56 +432,25 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
         )
     }
 
-    /**
-     * Copie toutes les notes, drapeaux spam et favoris dans la nouvelle base cible
-     */
-    fun backupUserNotesTo(targetDb: SQLiteDatabase) {
-        val currentDb = getReadableDb()
-        try {
-            currentDb.rawQuery("SELECT phone_number, is_favorite, is_spam, user_tag, user_note, updated_at FROM call_notes", null).use { cursor ->
-                val stmt = targetDb.compileStatement(
-                    "INSERT OR REPLACE INTO call_notes (phone_number, is_favorite, is_spam, user_tag, user_note, updated_at) VALUES (?, ?, ?, ?, ?, ?);"
-                )
-                targetDb.beginTransaction()
-                while (cursor.moveToNext()) {
-                    stmt.bindString(1, cursor.getString(0))
-                    stmt.bindLong(2, cursor.getLong(1))
-                    stmt.bindLong(3, cursor.getLong(2))
-                    if (cursor.isNull(3)) stmt.bindNull(4) else stmt.bindString(4, cursor.getString(3))
-                    if (cursor.isNull(4)) stmt.bindNull(5) else stmt.bindString(5, cursor.getString(4))
-                    stmt.bindLong(6, cursor.getLong(5))
-                    stmt.executeInsert()
-                }
-                targetDb.setTransactionSuccessful()
-                targetDb.endTransaction()
-                stmt.close()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    /**
-     * Remplacement atomique de la base active par un nouveau fichier SQLite compilé
-     */
+    /** Import ARCEP data in one encrypted transaction; user notes stay in place. */
     @Synchronized
     fun replaceDatabaseFile(newDbFile: File) {
+        val source = SQLiteDatabase.openDatabase(newDbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
         try {
-            if (db != null && db!!.isOpen) {
-                db!!.close()
-                db = null
+            val target = getReadableDb()
+            target.beginTransaction()
+            try {
+                target.delete("number_ranges", null, null)
+                target.delete("operators", null, null)
+                target.delete("arcep_metadata", null, null)
+                copyPublicTables(source, target)
+                target.setTransactionSuccessful()
+            } finally {
+                target.endTransaction()
             }
-            val activeDbFile = context.getDatabasePath(dbName)
-            if (activeDbFile.exists()) {
-                activeDbFile.delete()
-            }
-            newDbFile.copyTo(activeDbFile, overwrite = true)
+        } finally {
+            source.close()
             newDbFile.delete()
-            // Re-open
-            db = SQLiteDatabase.openDatabase(activeDbFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            throw e
         }
     }
 

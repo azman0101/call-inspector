@@ -73,7 +73,7 @@ android {
 }
 
 dependencyCheck {
-  failBuildOnCVSS = 7.0
+  failBuildOnCVSS = 7.0f
   formats = listOf("HTML", "SARIF")
 }
 
@@ -121,6 +121,7 @@ dependencies {
   // implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
+  implementation(libs.sqlcipher.android)
   implementation(libs.sentry.android)
   // implementation(libs.coil.compose)
   // implementation(libs.converter.moshi)
