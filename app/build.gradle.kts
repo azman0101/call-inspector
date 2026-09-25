@@ -75,6 +75,7 @@ android {
 dependencyCheck {
   failBuildOnCVSS = 7.0f
   formats = listOf("HTML", "SARIF")
+  nvd.apiKey.set(providers.environmentVariable("NVD_API_KEY_RAW").orElse(""))
 }
 
 // Configure the Secrets Gradle Plugin to use .env and .env.example files

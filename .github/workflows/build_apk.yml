@@ -4,7 +4,6 @@ on:
   pull_request:
     branches:
       - main
-      - master
 
 permissions:
   contents: read
@@ -61,10 +60,10 @@ jobs:
         run: |
           nvd_api_key_trimmed="$(printf '%s' "${NVD_API_KEY_RAW:-}" | tr -d '[:space:]')"
           if [ -n "${nvd_api_key_trimmed}" ]; then
-            env -u NVD_API_KEY ./gradlew dependencyCheckAnalyze -Dnvd.api.key="${nvd_api_key_trimmed}" --no-configuration-cache --stacktrace
-          else
-            env -u NVD_API_KEY ./gradlew dependencyCheckAnalyze --no-configuration-cache --stacktrace
+            export NVD_API_KEY_RAW="${nvd_api_key_trimmed}"
           fi
+          unset NVD_API_KEY
+          ./gradlew dependencyCheckUpdate dependencyCheckAnalyze --no-daemon --no-configuration-cache --stacktrace --info
 
       - name: Upload dependency scan report
         if: always()
