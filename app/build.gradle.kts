@@ -14,12 +14,41 @@ android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
+  // Versioning dynamique :
+  // Développements locaux : 1.0.0-dev (code 1)
+  // CI Branches (Debug) : 1.0.<run_number>-<branch>.<sha> (code <run_number>)
+  // CI Main (Release) : 1.0.<run_number> (code <run_number>)
+  val baseVersion = "1.0"
+  val envRunNumber = System.getenv("VERSION_CODE")
+    ?: System.getenv("BUILD_NUMBER")
+    ?: System.getenv("GITHUB_RUN_NUMBER")
+    ?: project.findProperty("versionCode")?.toString()
+  val resolvedVersionCode = envRunNumber?.toIntOrNull() ?: 1
+
+  val explicitVersionName = System.getenv("VERSION_NAME") ?: project.findProperty("versionName")?.toString()
+  val envBranch = (System.getenv("GITHUB_HEAD_REF") ?: System.getenv("GITHUB_REF_NAME") ?: "").trim()
+  val isReleaseBranch = envBranch == "main" || envBranch == "master" || System.getenv("IS_RELEASE") == "true"
+  val isCi = System.getenv("CI") == "true" || System.getenv("GITHUB_ACTIONS") == "true"
+  val rawSha = System.getenv("GITHUB_SHA") ?: ""
+  val shortSha = if (rawSha.length >= 7) rawSha.substring(0, 7) else rawSha
+
+  val resolvedVersionName = when {
+    !explicitVersionName.isNullOrBlank() -> explicitVersionName
+    isCi && isReleaseBranch -> "$baseVersion.$resolvedVersionCode"
+    isCi && !isReleaseBranch -> {
+      val sanitizedBranch = envBranch.replace(Regex("[^a-zA-Z0-9.-]"), "-").take(20).ifEmpty { "dev" }
+      val shaSuffix = if (shortSha.isNotBlank()) ".$shortSha" else ""
+      "$baseVersion.$resolvedVersionCode-$sanitizedBranch$shaSuffix"
+    }
+    else -> "$baseVersion.0-dev"
+  }
+
   defaultConfig {
     applicationId = "com.aistudio.operatorlookup.wkvqmt"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = resolvedVersionCode
+    versionName = resolvedVersionName
 
     // DSN Sentry ou GlitchTip injecté via variable d'environnement au moment du build
     val sentryDsnEnv = System.getenv("SENTRY_DSN") ?: ""

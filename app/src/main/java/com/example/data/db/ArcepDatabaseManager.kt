@@ -41,15 +41,20 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
         val dbFile = context.getDatabasePath(dbName)
         if (!dbFile.exists() || dbFile.length() < 100_000) {
             dbFile.parentFile?.mkdirs()
+            val tempFile = File(dbFile.parentFile, "$dbName.tmp")
             context.assets.open(dbName).use { inputStream ->
-                FileOutputStream(dbFile).use { outputStream ->
-                    val buffer = ByteArray(8192)
+                FileOutputStream(tempFile).use { outputStream ->
+                    val buffer = ByteArray(65536)
                     var length: Int
                     while (inputStream.read(buffer).also { length = it } > 0) {
                         outputStream.write(buffer, 0, length)
                     }
                     outputStream.flush()
                 }
+            }
+            if (tempFile.exists() && tempFile.length() > 100_000) {
+                if (dbFile.exists()) dbFile.delete()
+                tempFile.renameTo(dbFile)
             }
         }
     }

@@ -32,6 +32,27 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Compute version information
+        id: versioning
+        run: |
+          RUN_NUM="${{ github.run_number }}"
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          REF_NAME="${{ github.head_ref || github.ref_name }}"
+          CLEAN_REF=$(echo "$REF_NAME" | sed 's#[^a-zA-Z0-9.-]#-#g' | cut -c1-20)
+
+          if [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ github.event_name }}" = "push" ]; then
+            VERSION_NAME="1.0.${RUN_NUM}"
+            IS_RELEASE="true"
+          else
+            VERSION_NAME="1.0.${RUN_NUM}-${CLEAN_REF}.${SHORT_SHA}"
+            IS_RELEASE="false"
+          fi
+
+          echo "VERSION_CODE=${RUN_NUM}" >> $GITHUB_ENV
+          echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
+          echo "IS_RELEASE=${IS_RELEASE}" >> $GITHUB_ENV
+          echo "Bumping version: $VERSION_NAME (code: $RUN_NUM, is_release: $IS_RELEASE)"
+
       - name: Prepare build environment
         run: |
           chmod +x gradlew
@@ -44,6 +65,17 @@ jobs:
             else
               echo "Generating new debug.keystore with keytool..."
               keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+            fi
+          fi
+
+          # Configuration du keystore de signature pour la release si nécessaire
+          if [ ! -f my-upload-key.jks ]; then
+            if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+              echo "Restoring my-upload-key.jks from secrets.KEYSTORE_BASE64..."
+              echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
+            elif [ -f debug.keystore ]; then
+              echo "Fallback: creating my-upload-key.jks from debug.keystore for CI builds..."
+              cp debug.keystore my-upload-key.jks
             fi
           fi
 
@@ -81,15 +113,41 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-      - name: Build Debug APK
+      # Construction de l'APK Debug sur les branches (PR)
+      - name: Build Debug APK (Feature Branch)
+        if: ${{ github.event_name == 'pull_request' || (github.ref != 'refs/heads/main' && github.event_name != 'push') }}
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          VERSION_CODE: ${{ env.VERSION_CODE }}
+          VERSION_NAME: ${{ env.VERSION_NAME }}
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload Debug APK Artifact
+        if: ${{ github.event_name == 'pull_request' || (github.ref != 'refs/heads/main' && github.event_name != 'push') }}
         uses: actions/upload-artifact@v4
         with:
-          name: info-operateur-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: info-operateur-debug-v${{ env.VERSION_NAME }}
+          path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
+
+      # Construction de l'APK Release sur la branche main
+      - name: Build Release APK (Main Branch)
+        if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'android' }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android' }}
+          KEYSTORE_PATH: my-upload-key.jks
+          VERSION_CODE: ${{ env.VERSION_CODE }}
+          VERSION_NAME: ${{ env.VERSION_NAME }}
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Upload Release APK Artifact
+        if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: info-operateur-release-v${{ env.VERSION_NAME }}
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 30
