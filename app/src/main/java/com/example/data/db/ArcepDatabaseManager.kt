@@ -37,10 +37,6 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
     private val dbName = "arcep_data.db"
     private var db: SQLiteDatabase? = null
 
-    init {
-        ensureDatabaseCopied()
-    }
-
     private fun ensureDatabaseCopied() {
         val dbFile = context.getDatabasePath(dbName)
         if (!dbFile.exists() || dbFile.length() < 100_000) {
@@ -58,10 +54,11 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
         }
     }
 
+    @Synchronized
     private fun getReadableDb(): SQLiteDatabase {
         if (db == null || !db!!.isOpen) {
             val dbFile = context.getDatabasePath(dbName)
-            if (!dbFile.exists()) {
+            if (!dbFile.exists() || dbFile.length() < 100_000) {
                 ensureDatabaseCopied()
             }
             db = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
