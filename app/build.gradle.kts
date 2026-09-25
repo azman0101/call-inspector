@@ -1,4 +1,5 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.io.File
 
 plugins {
   alias(libs.plugins.android.application)
@@ -106,6 +107,8 @@ dependencyCheck {
   formats = listOf("HTML", "SARIF")
   scanConfigurations = listOf("debugRuntimeClasspath", "releaseRuntimeClasspath")
   suppressionFiles = listOf("$rootDir/config/dependency-check-suppressions.xml")
+  // Keep the NVD H2 database in Gradle User Home so CI can cache it between runs.
+  data.directory.set(File(gradle.gradleUserHomeDir, "dependency-check-data").absolutePath)
   nvd.apiKey.set(providers.environmentVariable("NVD_API_KEY_RAW").orElse(""))
 }
 
