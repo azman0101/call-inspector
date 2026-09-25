@@ -253,6 +253,12 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
         val cleanQuery = query.trim()
         if (cleanQuery.isBlank()) return@withContext emptyList()
 
+        // Sanitize LIKE wildcard characters ('\', '%', '_') to prevent wildcard injection
+        val sanitizedQuery = cleanQuery
+            .replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
+
         val database = getReadableDb()
         val results = mutableListOf<ArcepLookupResult>()
 
@@ -262,11 +268,11 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
                    o.siret, o.rcs, o.address, o.declaration_date
             FROM number_ranges r
             LEFT JOIN operators o ON r.operator_code = o.code
-            WHERE r.ezabpqm LIKE ? OR r.operator_name LIKE ? OR r.operator_code LIKE ?
+            WHERE r.ezabpqm LIKE ? ESCAPE '\' OR r.operator_name LIKE ? ESCAPE '\' OR r.operator_code LIKE ? ESCAPE '\'
             ORDER BY r.ezabpqm ASC
             LIMIT 40
             """.trimIndent(),
-            arrayOf("$cleanQuery%", "%$cleanQuery%", "$cleanQuery%")
+            arrayOf("$sanitizedQuery%", "%$sanitizedQuery%", "$sanitizedQuery%")
         )
 
         cursor.use {
