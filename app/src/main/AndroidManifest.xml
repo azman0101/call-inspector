@@ -17,6 +17,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
 
+        <!-- Désactive l'auto-initialisation par le ContentProvider sans DSN -->
+        <meta-data android:name="io.sentry.auto-init.enable" android:value="false" />
+
+        <!-- DSN Sentry par défaut -->
+        <meta-data android:name="io.sentry.dsn" android:value="https://32fcd96b74ca3fe4ac168c459b53f0c7@o4511450241302528.ingest.de.sentry.io/4512142920384592" />
+
         <!-- Active la capture des logs Sentry (SDK >= 8.12.0) -->
         <meta-data android:name="io.sentry.logs.enabled" android:value="true" />
 

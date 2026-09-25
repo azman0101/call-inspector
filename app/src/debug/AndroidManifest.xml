@@ -1,9 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
-        <!-- Active Sentry pour permettre les tests et la télémétrie en debug -->
+        <!-- Désactive l'auto-initialisation du ContentProvider pour laisser Application.onCreate() initialiser Sentry -->
+        <meta-data
+            android:name="io.sentry.auto-init.enable"
+            android:value="false" />
         <meta-data
             android:name="io.sentry.enabled"
             android:value="true" />
+        <meta-data
+            android:name="io.sentry.dsn"
+            android:value="https://32fcd96b74ca3fe4ac168c459b53f0c7@o4511450241302528.ingest.de.sentry.io/4512142920384592" />
     </application>
 </manifest>

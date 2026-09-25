@@ -17,18 +17,19 @@ class OperatorInfoApp : Application() {
     }
 
     private fun setupSentry() {
-        val dsn = com.example.util.SentryHelper.getResolvedDsn(this)
+        try {
+            val dsn = com.example.util.SentryHelper.getResolvedDsn(this)
 
-        if (dsn.isBlank()) {
-            return
-        }
+            if (dsn.isBlank()) {
+                return
+            }
 
-        SentryAndroid.init(this) { options ->
-            options.dsn = dsn
-            options.isDebug = true
-            options.logs.isEnabled = true
-            options.tracesSampleRate = 1.0
-            options.isSendDefaultPii = false
+            SentryAndroid.init(this) { options ->
+                options.dsn = dsn
+                options.isDebug = true
+                options.logs.isEnabled = true
+                options.tracesSampleRate = 1.0
+                options.isSendDefaultPii = false
 
             // Filtre de confidentialité strict via beforeSend :
             // Aucune donnée d'appel (numéro, email, note, contenu) ne doit être transmise
@@ -67,12 +68,15 @@ class OperatorInfoApp : Application() {
             }
         }
 
-        // Journalisation de démarrage de l'application
-        try {
-            Sentry.logger().info("Info Opérateur initialisé avec succès (Android SDK)")
-            Sentry.flush(2000)
+            // Journalisation de démarrage de l'application
+            try {
+                Sentry.logger().info("Info Opérateur initialisé avec succès (Android SDK)")
+                Sentry.flush(2000)
+            } catch (_: Throwable) {
+                // Ignoré si le logger n'est pas actif
+            }
         } catch (_: Throwable) {
-            // Ignoré si le logger n'est pas actif
+            // Empêche tout crash au démarrage si Sentry ne peut s'initialiser
         }
     }
 
