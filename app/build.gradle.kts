@@ -58,18 +58,15 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
-  val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-  val keystoreFile = file(keystorePath)
-  val hasReleaseKeystore = keystoreFile.exists()
+  // Relative KEYSTORE_PATH is resolved from the repo root (where CI writes it), not from app/.
+  val releaseKeystore = rootProject.file(System.getenv("KEYSTORE_PATH") ?: "my-upload-key.jks")
 
   signingConfigs {
-    if (hasReleaseKeystore) {
-      create("release") {
-        storeFile = keystoreFile
-        storePassword = System.getenv("STORE_PASSWORD")
-        keyAlias = "upload"
-        keyPassword = System.getenv("KEY_PASSWORD")
-      }
+    create("release") {
+      storeFile = releaseKeystore
+      storePassword = System.getenv("STORE_PASSWORD")
+      keyAlias = "upload"
+      keyPassword = System.getenv("KEY_PASSWORD")
     }
     val customDebugKeystore = file("${rootDir}/debug.keystore")
     if (customDebugKeystore.exists()) {
@@ -91,9 +88,7 @@ android {
       isMinifyEnabled = true
       isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      if (hasReleaseKeystore) {
-        signingConfig = signingConfigs.getByName("release")
-      }
+      signingConfig = signingConfigs.getByName("release")
     }
     debug {
       val customDebugKeystore = file("${rootDir}/debug.keystore")
