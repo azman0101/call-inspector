@@ -17,23 +17,17 @@ class OperatorInfoApp : Application() {
     }
 
     private fun setupSentry() {
-        // Le DSN n'est JAMAIS stocké en dur : il provient de BuildConfig (injecté via .env)
-        // ou d'une variable d'environnement système.
-        val dsn = try {
-            val configDsn = BuildConfig.SENTRY_DSN
-            if (configDsn.isNotBlank()) configDsn else (System.getenv("SENTRY_DSN") ?: "")
-        } catch (_: Throwable) {
-            System.getenv("SENTRY_DSN") ?: ""
-        }
+        val dsn = com.example.util.SentryHelper.getResolvedDsn(this)
 
         if (dsn.isBlank()) {
-            // Aucun DSN fourni : Sentry reste inactif (mode local, tests, CI)
             return
         }
 
         SentryAndroid.init(this) { options ->
             options.dsn = dsn
-            // Désactiver l'envoi automatique de données d'identification personnelle (PII)
+            options.isDebug = true
+            options.logs.isEnabled = true
+            options.tracesSampleRate = 1.0
             options.isSendDefaultPii = false
 
             // Filtre de confidentialité strict via beforeSend :
@@ -73,10 +67,10 @@ class OperatorInfoApp : Application() {
             }
         }
 
-        // Vérification et émission d'un log de test au démarrage
+        // Journalisation de démarrage de l'application
         try {
-            Sentry.logger().info("A simple log message")
-            Sentry.logger().error("A %s log message", "formatted")
+            Sentry.logger().info("Info Opérateur initialisé avec succès (Android SDK)")
+            Sentry.flush(2000)
         } catch (_: Throwable) {
             // Ignoré si le logger n'est pas actif
         }
