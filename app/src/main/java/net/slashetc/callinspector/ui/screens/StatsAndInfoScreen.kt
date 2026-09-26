@@ -40,13 +40,12 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -61,6 +60,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import net.slashetc.callinspector.ui.components.LegalTermsDialog
+import net.slashetc.callinspector.util.LegalTerms
 import net.slashetc.callinspector.util.SentryHelper
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -234,7 +235,7 @@ fun StatsAndInfoScreen(
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
-                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                     Spacer(modifier = Modifier.height(8.dp))
 
                     // Traçabilité de la version
@@ -907,21 +908,21 @@ fun StatsAndInfoScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Surface(
-                                    color = if (isTelemetryEnabled) Color(0xFFE8F5E9) else Color(0xFFF1F5F9),
+                                    color = if (isTelemetryEnabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                                     shape = RoundedCornerShape(4.dp)
                                 ) {
                                     Text(
-                                        text = if (isTelemetryEnabled) "Opt-in actif" else "Désactivé par défaut",
+                                        text = if (isTelemetryEnabled) "Activé" else "Désactivé",
                                         fontSize = 9.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (isTelemetryEnabled) SuccessGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = if (isTelemetryEnabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                                     )
                                 }
                             }
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Désactivé par défaut (Opt-In). Si activé, transmet uniquement des rapports d'erreurs anonymisés pour corriger les plantages. Aucun numéro de téléphone, contact, note ou identifiant persistant d'appareil n'est transmis.",
+                                text = "Désactivés par défaut. Si vous les activez, l'application envoie des données techniques (erreurs, performances, stabilité) liées à un identifiant d'installation aléatoire, sans numéro, contact, note, nom ni email.",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 15.sp
@@ -939,7 +940,7 @@ fun StatsAndInfoScreen(
                                     Toast.LENGTH_SHORT
                                 ).show()
                             },
-                            modifier = Modifier.testTag("telemetry_opt_out_switch")
+                            modifier = Modifier.testTag("telemetry_opt_in_switch")
                         )
                     }
 
@@ -1024,99 +1025,11 @@ fun StatsAndInfoScreen(
     }
 
     if (showCguDialog) {
-        AlertDialog(
-            onDismissRequest = { showCguDialog = false },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Gavel,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "Conditions Générales d'Utilisation",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .verticalScroll(rememberScrollState())
-                        .padding(vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text(
-                        text = "1. Absence totale de garantie",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = "L'application est fournie gratuitement, « en l'état » (AS IS), sans aucune garantie d'aucune sorte. Les informations d'attribution de numéros sont issues des publications ouvertes de l'ARCEP et reflètent l'opérateur attributaire de la tranche initiale. En cas de portabilité de la ligne, l'opérateur final peut différer. Le développeur décline toute responsabilité pour tout préjudice direct ou indirect résultant de l'utilisation de l'application.",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        lineHeight = 16.sp
-                    )
-
-                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-
-                    Text(
-                        text = "2. Aucune collecte de données d'identification (Zero PII)",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = "Vos appels, contacts, numéros saisis et notes personnelles sont traités exclusivement en local sur votre terminal. Aucune donnée d'identification personnelle (nom, email, numéro de téléphone, identifiant d'appareil) n'est collectée, enregistrée ou transmise.",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        lineHeight = 16.sp
-                    )
-
-                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-
-                    Text(
-                        text = "3. Aucun serveur tiers appartenant au développeur",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = "L'application n'effectue aucune connexion vers un serveur tiers appartenant au développeur. Les seuls flux réseau autorisés sont le téléchargement direct des fichiers officiels de l'ARCEP (extranet.arcep.fr, sécurisé par TLS pinning) et le service de diagnostic technique en cas d'anomalie.",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        lineHeight = 16.sp
-                    )
-
-                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-
-                    Text(
-                        text = "4. Diagnostic d'anomalies strictement Opt-In",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = "La transmission de rapports d'erreurs techniques est désactivée par défaut (Opt-In). Vous pouvez l'activer volontairement ou la révoquer à tout moment dans la section « Confidentialité & Données ».",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        lineHeight = 16.sp
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = { showCguDialog = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = ArcepBlue)
-                ) {
-                    Text("J'ai compris")
-                }
-            },
-            shape = RoundedCornerShape(16.dp)
+        LegalTermsDialog(
+            markdown = remember { LegalTerms.load(context) },
+            requireAcceptance = false,
+            onAccept = {},
+            onDismiss = { showCguDialog = false }
         )
     }
 }

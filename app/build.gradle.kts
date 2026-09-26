@@ -107,6 +107,8 @@ android {
     compose = true
     buildConfig = true
   }
+  // legal/CGU.md at the repository root is the single source of the terms shown in the app.
+  sourceSets { getByName("main") { assets.srcDir("../legal") } }
   testOptions { unitTests { isIncludeAndroidResources = true } }
   dependenciesInfo {
     includeInApk = false
