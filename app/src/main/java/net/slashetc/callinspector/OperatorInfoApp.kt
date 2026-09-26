@@ -31,14 +31,26 @@ class OperatorInfoApp : Application() {
                 options.tracesSampleRate = 1.0
                 options.isSendDefaultPii = false
 
-            // Filtre de confidentialité strict via beforeSend :
-            // Aucune donnée d'appel (numéro, email, note, contenu) ne doit être transmise
-            options.beforeSend = SentryOptions.BeforeSendCallback { event, _ ->
-                // 1. Suppression stricte de tout objet utilisateur
-                event.user = null
+                // Options globales de confidentialité : pas de capture d'interactions UI ni réseau
+                options.isEnableUserInteractionBreadcrumbs = false
+                options.isEnableNetworkEventBreadcrumbs = false
 
-                // 2. Nettoyage des breadcrumbs
-                event.breadcrumbs?.forEach { breadcrumb ->
+                // Hook beforeBreadcrumb : abandonne tout breadcrumb sensible et assainit le texte
+                options.beforeBreadcrumb = SentryOptions.BeforeBreadcrumbCallback { breadcrumb, _ ->
+                    // Si l'utilisateur a désactivé les rapports de diagnostic/télémétrie
+                    if (!net.slashetc.callinspector.util.SentryHelper.isTelemetryEnabled(this)) {
+                        return@BeforeBreadcrumbCallback null
+                    }
+                    if (breadcrumb.category == "ui.click") {
+                        val viewId = breadcrumb.data["view.id"] as? String
+                        if (viewId != null && (viewId.contains("phone", ignoreCase = true) ||
+                                viewId.contains("number", ignoreCase = true) ||
+                                viewId.contains("note", ignoreCase = true) ||
+                                viewId.contains("search", ignoreCase = true))
+                        ) {
+                            return@BeforeBreadcrumbCallback null
+                        }
+                    }
                     breadcrumb.message = sanitizeSensitiveText(breadcrumb.message)
                     breadcrumb.data?.let { dataMap ->
                         val sensitiveKeys = dataMap.keys.filter { key ->
@@ -52,21 +64,58 @@ class OperatorInfoApp : Application() {
                         }
                         sensitiveKeys.forEach { dataMap.remove(it) }
                     }
+                    breadcrumb
                 }
 
-                // 3. Nettoyage des messages d'exceptions
-                event.exceptions?.forEach { sentryException ->
-                    sentryException.value = sanitizeSensitiveText(sentryException.value)
-                }
+                // Filtre de confidentialité strict via beforeSend :
+                // 1. Si télémétrie désactivée par l'utilisateur -> abandon complet (null)
+                // 2. Aucune donnée d'appel ni identifiant persistant d'appareil ne quitte le terminal
+                options.beforeSend = SentryOptions.BeforeSendCallback { event, _ ->
+                    if (!net.slashetc.callinspector.util.SentryHelper.isTelemetryEnabled(this)) {
+                        return@BeforeSendCallback null
+                    }
 
-                // 4. Nettoyage du message principal de l'événement
-                event.message?.let { message ->
-                    message.formatted = sanitizeSensitiveText(message.formatted)
-                }
+                    // 1. Suppression stricte de tout objet utilisateur
+                    event.user = null
 
-                event
+                    // 2. Nettoyage du contexte matériel (Device / App)
+                    val device = event.contexts.device
+                    if (device != null) {
+                        device.id = null          // Supprimer l'identifiant persistant de l'appareil
+                        device.bootTime = null    // Supprimer l'horodatage de démarrage discriminatoire
+                    }
+                    event.contexts.app?.appStartTime = null // Supprimer l'heure exacte de démarrage
+
+                    // 3. Nettoyage des breadcrumbs
+                    event.breadcrumbs?.forEach { breadcrumb ->
+                        breadcrumb.message = sanitizeSensitiveText(breadcrumb.message)
+                        breadcrumb.data?.let { dataMap ->
+                            val sensitiveKeys = dataMap.keys.filter { key ->
+                                key.contains("phone", ignoreCase = true) ||
+                                key.contains("number", ignoreCase = true) ||
+                                key.contains("call", ignoreCase = true) ||
+                                key.contains("contact", ignoreCase = true) ||
+                                key.contains("email", ignoreCase = true) ||
+                                key.contains("note", ignoreCase = true) ||
+                                key.contains("query", ignoreCase = true)
+                            }
+                            sensitiveKeys.forEach { dataMap.remove(it) }
+                        }
+                    }
+
+                    // 4. Nettoyage des messages d'exceptions
+                    event.exceptions?.forEach { sentryException ->
+                        sentryException.value = sanitizeSensitiveText(sentryException.value)
+                    }
+
+                    // 5. Nettoyage du message principal de l'événement
+                    event.message?.let { message ->
+                        message.formatted = sanitizeSensitiveText(message.formatted)
+                    }
+
+                    event
+                }
             }
-        }
 
             // Journalisation de démarrage de l'application
             try {

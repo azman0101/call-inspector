@@ -17,11 +17,24 @@ import io.sentry.protocol.SentryId
 object SentryHelper {
     private const val PREFS_NAME = "sentry_dev_prefs"
     private const val KEY_DEV_MODE = "dev_mode_enabled"
+    private const val KEY_TELEMETRY_ENABLED = "telemetry_enabled"
     private const val KEY_TOAST_ENABLED = "toast_enabled"
     private const val KEY_CUSTOM_DSN = "custom_dsn"
 
     // DSN par défaut configuré pour le projet
     const val FALLBACK_DSN = "https://32fcd96b74ca3fe4ac168c459b53f0c7@o4511450241302528.ingest.de.sentry.io/4512142920384592"
+
+    fun isTelemetryEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_TELEMETRY_ENABLED, true)
+    }
+
+    fun setTelemetryEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_TELEMETRY_ENABLED, enabled)
+            .apply()
+    }
 
     fun isDevModeEnabled(context: Context): Boolean {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -147,6 +160,7 @@ object SentryHelper {
      * Le numéro complet est STRICTEMENT masqué pour respecter la vie privée (RGPD).
      */
     fun logLookupEvent(context: Context, prefix: String, operatorName: String) {
+        if (!isTelemetryEnabled(context)) return
         try {
             val params = SentryLogParameters.create(
                 SentryAttributes.of(

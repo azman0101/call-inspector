@@ -92,6 +92,7 @@ fun StatsAndInfoScreen(
     var devModeEnabled by remember { mutableStateOf(SentryHelper.isDevModeEnabled(context)) }
     var tapCount by remember { mutableIntStateOf(0) }
     var isToastEnabled by remember { mutableStateOf(SentryHelper.isToastEnabled(context)) }
+    var isTelemetryEnabled by remember { mutableStateOf(SentryHelper.isTelemetryEnabled(context)) }
 
     val totalCalls = calls.size
     val demarchageCalls = calls.count { it.isSpamFlagged || it.lookupResult.numberType.isDemarchage }
@@ -638,7 +639,7 @@ fun StatsAndInfoScreen(
                 }
             }
 
-            // Menu Développeur & Diagnostics Sentry
+            // Menu Développeur & Diagnostics
             if (devModeEnabled) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -646,7 +647,7 @@ fun StatsAndInfoScreen(
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("sentry_dev_menu_card")
+                        .testTag("dev_diagnostic_menu_card")
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(
@@ -663,7 +664,7 @@ fun StatsAndInfoScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Options Développeur & Sentry",
+                                    text = "Options Développeur & Diagnostics",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -683,7 +684,7 @@ fun StatsAndInfoScreen(
 
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Console de validation et télémétrie Sentry (SDK 8.58.0)",
+                            text = "Console de validation et télémétrie de crash",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -701,15 +702,21 @@ fun StatsAndInfoScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Text("Statut Sentry :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text("Actif (Logs + Erreurs)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = SuccessGreen)
+                                    Text("Statut du collecteur :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    val isTelemetryActive = isTelemetryEnabled
+                                    Text(
+                                        if (isTelemetryActive) "Actif (Logs + Erreurs)" else "Désactivé (Opt-out)",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isTelemetryActive) SuccessGreen else DangerRed
+                                    )
                                 }
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Text("DSN configuré :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("Point d'ingestion configuré :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     val dsn = SentryHelper.getResolvedDsn(context)
                                     val masked = if (dsn.length > 25) "${dsn.take(16)}...${dsn.takeLast(10)}" else dsn
                                     Text(masked, fontSize = 11.sp, fontWeight = FontWeight.Medium)
@@ -730,12 +737,12 @@ fun StatsAndInfoScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Toaster d'événements Sentry",
+                                    text = "Toaster d'événements de diagnostic",
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 13.sp
                                 )
                                 Text(
-                                    text = "Affiche une bulle Toast dès qu'un log ou une erreur est transmis à Sentry",
+                                    text = "Affiche une bulle Toast dès qu'un log ou une erreur de test est émis",
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -763,7 +770,7 @@ fun StatsAndInfoScreen(
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .testTag("send_sentry_dummy_error_button")
+                                .testTag("send_dummy_error_button")
                         ) {
                             Icon(Icons.Default.BugReport, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(8.dp))
@@ -781,7 +788,7 @@ fun StatsAndInfoScreen(
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .testTag("send_sentry_dummy_logs_button")
+                                .testTag("send_dummy_logs_button")
                         ) {
                             Icon(Icons.Default.Article, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(8.dp))
@@ -798,11 +805,11 @@ fun StatsAndInfoScreen(
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .testTag("send_sentry_dummy_message_button")
+                                .testTag("send_dummy_message_button")
                         ) {
                             Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Envoyer un message Sentry (captureMessage)")
+                            Text("Envoyer un message de test")
                         }
                     }
                 }
@@ -825,10 +832,96 @@ fun StatsAndInfoScreen(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Astuce : appuyez 7 fois sur la « Version de l'application » ci-dessus pour déverrouiller le Mode Développeur et tester Sentry.",
+                            text = "Astuce : appuyez 7 fois sur la « Version de l'application » ci-dessus pour déverrouiller le Mode Développeur et accéder aux outils de diagnostic.",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 15.sp
+                        )
+                    }
+                }
+            }
+
+            // Section Confidentialité & Télémétrie anonyme (Sans mention Sentry)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("privacy_telemetry_card")
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFE8F5E9)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Security,
+                                contentDescription = null,
+                                tint = SuccessGreen,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Confidentialité & Données",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Protection de la vie privée & diagnostic",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                RoundedCornerShape(10.dp)
+                            )
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Rapports techniques d'anomalies",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Transmet des rapports anonymisés en cas de plantage pour corriger les bugs. Aucun numéro de téléphone, contact ou identifiant d'appareil n'est transmis (nettoyage local strict).",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 15.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Switch(
+                            checked = isTelemetryEnabled,
+                            onCheckedChange = { enabled ->
+                                isTelemetryEnabled = enabled
+                                SentryHelper.setTelemetryEnabled(context, enabled)
+                                Toast.makeText(
+                                    context,
+                                    if (enabled) "Rapports d'anomalies activés" else "Rapports d'anomalies désactivés",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            modifier = Modifier.testTag("telemetry_opt_out_switch")
                         )
                     }
                 }
