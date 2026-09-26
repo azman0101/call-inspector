@@ -1,6 +1,7 @@
 package net.slashetc.callinspector.util
 
 import net.slashetc.callinspector.data.model.ArcepLookupResult
+import net.slashetc.callinspector.data.model.ArcepOperator
 import net.slashetc.callinspector.data.model.CallLogEntry
 import net.slashetc.callinspector.data.model.CallType
 import net.slashetc.callinspector.data.model.PhoneNumberType
@@ -28,12 +29,14 @@ class SignalConsoReportTest {
         number: String = "0162000000",
         type: CallType = CallType.MISSED,
         note: String? = null,
+        cachedName: String? = null,
+        operator: ArcepOperator? = null,
     ) = CallLogEntry(
         id = id,
         rawNumber = number,
         normalizedNumber = number,
         formattedNumber = PhoneNumberFormatter.format(number),
-        cachedName = null,
+        cachedName = cachedName,
         timestamp = timestamp,
         durationSeconds = 0L,
         callType = type,
@@ -41,10 +44,10 @@ class SignalConsoReportTest {
             queryNumber = number,
             normalizedNumber = number,
             formattedNumber = PhoneNumberFormatter.format(number),
-            operator = null,
+            operator = operator,
             range = null,
             numberType = PhoneNumberType.classify(number),
-            isFound = false
+            isFound = operator != null
         ),
         userNote = note
     )
@@ -143,5 +146,33 @@ class SignalConsoReportTest {
         assertTrue(plan.description, plan.description.startsWith("Appel de démarchage reçu le 26/09/2026 à 09h05 depuis le 01 62 00 00 00."))
         assertTrue(plan.description.contains("samedi, un dimanche ou un jour férié"))
         assertTrue(plan.description.endsWith("Ma note : Isolation à 1 euro"))
+    }
+
+    @Test
+    fun `operator holding the number is reported by SIRET when the caller is unknown`() {
+        val operator = ArcepOperator(code = "VOIP", name = "Voip Telecom", siret = "833 508 617 00010")
+        val plan = SignalConsoReport.buildPlan(call(1, at(2026, 9, 22, 11), operator = operator), emptyList(), now, paris)
+        assertEquals(ReportedCompany(ReportedCompany.Source.OPERATOR, "Voip Telecom", "83350861700010"), plan.company)
+        assertTrue(plan.description, plan.description.contains("je signale l'opérateur qui lui fournit ce numéro"))
+    }
+
+    @Test
+    fun `operator without a valid SIRET is searched by name`() {
+        val operator = ArcepOperator(code = "VOIP", name = "Voip Telecom", siret = "RCS Paris")
+        val company = SignalConsoReport.reportedCompany(call(1, now, operator = operator))
+        assertEquals(ReportedCompany(ReportedCompany.Source.OPERATOR, "Voip Telecom", null), company)
+    }
+
+    @Test
+    fun `caller name from the call log wins over the operator`() {
+        val operator = ArcepOperator(code = "VOIP", name = "Voip Telecom", siret = "83350861700010")
+        val plan = SignalConsoReport.buildPlan(call(1, now, cachedName = " Isolation Machin ", operator = operator), emptyList(), now, paris)
+        assertEquals(ReportedCompany(ReportedCompany.Source.CALLER_NAME, "Isolation Machin", null), plan.company)
+        assertFalse(plan.description.contains("je signale l'opérateur"))
+    }
+
+    @Test
+    fun `no company when neither the caller nor the operator is known`() {
+        assertNull(SignalConsoReport.reportedCompany(call(1, now)))
     }
 }

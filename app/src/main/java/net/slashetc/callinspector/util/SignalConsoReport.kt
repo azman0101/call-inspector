@@ -15,11 +15,21 @@ enum class DemarchageCase(val label: String) {
     MOBILE_NUMBER("Je suis démarché par un opérateur utilisant un numéro commençant par 06 ou 07"),
 }
 
+/** The company named in the report: the caller when known, otherwise the operator holding the number. */
+data class ReportedCompany(
+    val source: Source,
+    val name: String,
+    val siret: String?,
+) {
+    enum class Source { CALLER_NAME, OPERATOR }
+}
+
 /** What the prefill script selects and fills; the user reviews and submits every step. */
 data class SignalConsoPlan(
     val subcategory: String?,
     val phone: String?,
     val dates: List<String>,
+    val company: ReportedCompany?,
     val description: String,
 )
 
@@ -69,16 +79,40 @@ object SignalConsoReport {
         } else {
             listOf(isoDate.format(call.timestamp))
         }
+        val company = reportedCompany(call)
         return SignalConsoPlan(
             subcategory = cases.firstOrNull()?.label,
             // The form only accepts French numbers: an international number is left for the user to type.
             phone = call.normalizedNumber.takeIf { it.length == 10 && it.startsWith("0") && it.all(Char::isDigit) },
             dates = dates,
-            description = buildDescription(call, cases, recent.size, timeZone),
+            company = company,
+            description = buildDescription(call, cases, recent.size, company, timeZone),
         )
     }
 
-    private fun buildDescription(call: CallLogEntry, cases: List<DemarchageCase>, recentCount: Int, timeZone: TimeZone): String {
+    /**
+     * The caller's name when the call log has one; otherwise the operator the ARCEP assigned the number to,
+     * which rents it to the caller and is reported in its place.
+     */
+    fun reportedCompany(call: CallLogEntry): ReportedCompany? {
+        call.cachedName?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            return ReportedCompany(ReportedCompany.Source.CALLER_NAME, it, siret = null)
+        }
+        val lookup = call.lookupResult
+        if (!lookup.isFound) return null
+        val name = (lookup.operator?.name ?: lookup.range?.operatorName)?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        // SignalConso searches by SIRET (14 digits) or SIREN (9 digits).
+        val siret = lookup.operator?.siret?.filter { !it.isWhitespace() }?.takeIf { id -> (id.length == 14 || id.length == 9) && id.all(Char::isDigit) }
+        return ReportedCompany(ReportedCompany.Source.OPERATOR, name, siret)
+    }
+
+    private fun buildDescription(
+        call: CallLogEntry,
+        cases: List<DemarchageCase>,
+        recentCount: Int,
+        company: ReportedCompany?,
+        timeZone: TimeZone,
+    ): String {
         val dateTime = SimpleDateFormat("dd/MM/yyyy 'à' HH'h'mm", Locale.FRANCE).apply { this.timeZone = timeZone }
         return buildString {
             append("Appel de démarchage reçu le ${dateTime.format(call.timestamp)} depuis le ${call.formattedNumber}.")
@@ -88,6 +122,9 @@ object SignalConsoReport {
             if (DemarchageCase.MOBILE_NUMBER in cases) append("\nLe démarcheur utilise un numéro mobile (06/07).")
             val lookup = call.lookupResult
             if (lookup.isFound) append("\nNuméro attribué par l'ARCEP à l'opérateur ${lookup.operatorDisplayName}.")
+            if (company?.source == ReportedCompany.Source.OPERATOR) {
+                append("\nL'entreprise à l'origine de l'appel n'ayant pas pu être identifiée, je signale l'opérateur qui lui fournit ce numéro.")
+            }
             call.userNote?.takeIf { it.isNotBlank() }?.let { append("\nMa note : ${it.trim()}") }
         }
     }

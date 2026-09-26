@@ -12,11 +12,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import net.slashetc.callinspector.data.model.CallLogEntry
 import net.slashetc.callinspector.ui.theme.MyApplicationTheme
+import net.slashetc.callinspector.util.ReportedCompany
 import net.slashetc.callinspector.util.SignalConsoPlan
 import net.slashetc.callinspector.util.SignalConsoReport
 import org.json.JSONArray
@@ -56,6 +60,12 @@ class SignalConsoActivity : ComponentActivity() {
             put("subcategory", subcategory ?: JSONObject.NULL)
             put("phone", phone ?: JSONObject.NULL)
             put("dates", JSONArray(dates))
+            put("company", company?.let {
+                JSONObject()
+                    .put("source", it.source.name)
+                    .put("name", it.name)
+                    .put("siret", it.siret ?: JSONObject.NULL)
+            } ?: JSONObject.NULL)
             put("description", description)
         }
     }
@@ -67,6 +77,9 @@ class SignalConsoActivity : ComponentActivity() {
         val prefillScript = assets.open("signalconso_prefill.js").bufferedReader().use { it.readText() }
         // JSONObject.toString() yields a valid JS object literal, so the plan can't break out of the script.
         val injection = "window.__icPlan = $planJson;\n$prefillScript"
+        val operatorName = JSONObject(planJson).optJSONObject("company")
+            ?.takeIf { it.optString("source") == ReportedCompany.Source.OPERATOR.name }
+            ?.optString("name")
 
         setContent {
             MyApplicationTheme {
@@ -95,6 +108,26 @@ class SignalConsoActivity : ComponentActivity() {
                                 lineHeight = 16.sp,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
+                        }
+                        if (operatorName != null) {
+                            Surface(color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
+                                Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                    Icon(
+                                        Icons.Outlined.Info,
+                                        contentDescription = null,
+                                        modifier = Modifier.padding(end = 8.dp).size(18.dp)
+                                    )
+                                    Text(
+                                        text = "Entreprise préremplie : $operatorName, l'opérateur auquel l'ARCEP a attribué ce numéro. " +
+                                            "L'entreprise qui vous a appelé n'est pas identifiable depuis le numéro : elle utilise un numéro " +
+                                            "fourni par cet opérateur (directement ou via un revendeur), qui est tenu de veiller à l'usage " +
+                                            "qu'en font ses clients. Si vous connaissez le nom de " +
+                                            "l'appelant, choisissez plutôt « Par son nom ».",
+                                        fontSize = 12.sp,
+                                        lineHeight = 16.sp
+                                    )
+                                }
+                            }
                         }
                         AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
                     }

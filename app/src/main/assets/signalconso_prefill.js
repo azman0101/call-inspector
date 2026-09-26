@@ -1,6 +1,7 @@
 // Prefills the SignalConso "Démarchage abusif" wizard from window.__icPlan. It only selects options and
 // fills empty fields, each at most once, and never clicks "Suivant", "Continuer" or the final submit:
-// the user reviews every step and moves on.
+// the user reviews every step and moves on. The only button it presses is the company search
+// "Rechercher", which looks the company up without submitting anything.
 (function () {
   if (window.__icPrefillInstalled) return;
   window.__icPrefillInstalled = true;
@@ -47,12 +48,32 @@
     return null;
   }
 
+  // Step 2 company identification: pick "by SIRET" or "by name", fill the field it reveals and run the
+  // search once, so the user only has to pick the matching result.
+  function searchCompany(radioTitle, fieldName, value) {
+    pickRadio(radioTitle);
+    if (!done['radio:' + radioTitle] || done['company']) return;
+    var input = document.querySelector('input[name="' + fieldName + '"]');
+    if (!input) return;
+    fillOnce('company', input, value);
+    setTimeout(function () {
+      for (var node = input.parentElement; node; node = node.parentElement) {
+        var buttons = node.querySelectorAll('button');
+        for (var i = 0; i < buttons.length; i++) {
+          if (norm(buttons[i].innerText) === 'rechercher') { buttons[i].click(); return; }
+        }
+      }
+    }, 300);
+  }
+
   function run() {
     var plan = window.__icPlan;
     if (!plan) return;
     pickRadio(plan.problem);
     pickRadio(plan.subcategory);
     fillOnce('phone', callerPhoneInput(), plan.phone);
+    if (plan.company && plan.company.siret) searchCompany('Par son numéro SIRET', 'identity', plan.company.siret);
+    else if (plan.company) searchCompany('Par son nom', 'name', plan.company.name);
     var dates = document.querySelectorAll('input[type="date"]');
     for (var i = 0; i < dates.length && plan.dates && i < plan.dates.length; i++) {
       fillOnce('date:' + i, dates[i], plan.dates[i]);

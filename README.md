@@ -40,7 +40,8 @@ Application Android Kotlin / Jetpack Compose qui analyse l'historique d'appels d
 - **Signalement assisté sur SignalConso** :
   - Depuis la fiche d'un appel reçu, le bouton « Signaler ce démarchage (SignalConso) » ouvre le formulaire officiel de la DGCCRF (« Démarchage abusif ») dans l'application.
   - Préremplissage à partir du journal d'appels : motif (au moins 5 appels en 30 jours, week-end ou jour férié, hors horaires autorisés, numéro 06/07), numéro appelant, dates des appels et description.
-  - L'utilisateur vérifie chaque étape et valide lui-même l'envoi ; l'identité de l'entreprise et ses coordonnées restent à saisir.
+  - Entreprise signalée : le nom de l'appelant s'il figure dans le journal d'appels, sinon l'opérateur auquel l'ARCEP a attribué le numéro (recherche par SIRET, ou par nom à défaut). Un bandeau explique ce choix et l'utilisateur peut le changer.
+  - L'utilisateur vérifie chaque étape, choisit l'entreprise dans les résultats, saisit ses coordonnées et valide lui-même l'envoi.
 - **Gestion des annotations locales** :
   - Marquage de numéros en favoris ou comme indésirables / démarchage.
   - Ajout de notes personnelles locales associées aux numéros.
