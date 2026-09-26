@@ -2,9 +2,12 @@ package net.slashetc.callinspector.util
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import io.sentry.Sentry
+import net.slashetc.callinspector.OperatorInfoApp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -66,5 +69,19 @@ class SentryHelperTest {
         SentryHelper.setTelemetryEnabled(context, false)
         SentryHelper.logLookupEvent(context, "0162", "Manifone")
         // Should return early and not throw any exception
+    }
+
+    @Test
+    fun `opting out stops the Sentry SDK immediately`() {
+        SentryHelper.setTelemetryEnabled(context, false)
+        assertFalse(Sentry.isEnabled())
+    }
+
+    @Test
+    fun `opting back in restarts the Sentry SDK`() {
+        assumeTrue(context is OperatorInfoApp)
+        SentryHelper.setTelemetryEnabled(context, false)
+        SentryHelper.setTelemetryEnabled(context, true)
+        assertTrue(Sentry.isEnabled())
     }
 }
