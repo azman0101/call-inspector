@@ -1,10 +1,12 @@
 package net.slashetc.callinspector.data.repository
 
+import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteStatement
 import android.util.Log
 import net.slashetc.callinspector.data.db.ArcepDatabaseManager
+import net.slashetc.callinspector.data.db.CallNote
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -41,6 +43,30 @@ class ArcepUpdateManager(private val context: Context) {
         .build()
 
     private val dbManager = ArcepDatabaseManager.getInstance(context)
+
+    private fun copyPendingCallNotes(notes: List<CallNote>, tempDb: SQLiteDatabase) {
+        if (notes.isEmpty()) return
+        tempDb.execSQL(
+            "CREATE TABLE call_notes (phone_number TEXT PRIMARY KEY, is_favorite INTEGER DEFAULT 0, " +
+                "is_spam INTEGER DEFAULT 0, user_tag TEXT, user_note TEXT, updated_at INTEGER)"
+        )
+        tempDb.beginTransaction()
+        try {
+            notes.forEach { note ->
+                tempDb.insertOrThrow("call_notes", null, ContentValues().apply {
+                    put("phone_number", note.phoneNumber)
+                    put("is_favorite", if (note.isFavorite) 1 else 0)
+                    put("is_spam", if (note.isSpam) 1 else 0)
+                    put("user_tag", note.userTag)
+                    put("user_note", note.userNote)
+                    put("updated_at", note.updatedAt)
+                })
+            }
+            tempDb.setTransactionSuccessful()
+        } finally {
+            tempDb.endTransaction()
+        }
+    }
 
     companion object {
         private const val TAG = "ArcepUpdateManager"
@@ -187,17 +213,6 @@ class ArcepUpdateManager(private val context: Context) {
             """.trimIndent())
 
             tempDb.execSQL("""
-                CREATE TABLE call_notes (
-                    phone_number TEXT PRIMARY KEY,
-                    is_favorite INTEGER DEFAULT 0,
-                    is_spam INTEGER DEFAULT 0,
-                    user_tag TEXT,
-                    user_note TEXT,
-                    updated_at INTEGER
-                );
-            """.trimIndent())
-
-            tempDb.execSQL("""
                 CREATE TABLE arcep_metadata (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL
@@ -309,8 +324,9 @@ class ArcepUpdateManager(private val context: Context) {
                 return@withContext false
             }
 
-            // 5. Restore user call notes from current database
-            dbManager.backupUserNotesTo(tempDb)
+            // 5. User notes live encrypted in CallNotesStore. Notes it hasn't migrated yet (it does so on
+            // first use) are still in the current database: carry them over so the swap can't lose them.
+            copyPendingCallNotes(dbManager.read(), tempDb)
 
             // 6. Write metadata
             val nowStr = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRENCH).format(Date())

@@ -7,7 +7,6 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
 /**
  * The user's own details, as SignalConso asks for them in step 4 ("Vos coordonnées").
@@ -168,18 +167,9 @@ class ReporterProfileStore internal constructor(
             context: Context,
             factory: SupportSQLiteOpenHelper.Factory,
             callback: SupportSQLiteOpenHelper.Callback,
-        ): SupportSQLiteDatabase = factory.create(
-            SupportSQLiteOpenHelper.Configuration.builder(context).name(DB_NAME).callback(callback).build()
-        ).writableDatabase
+        ): SupportSQLiteDatabase = EncryptedDatabases.open(context, factory, DB_NAME, callback)
 
-        private fun openEncrypted(context: Context, callback: SupportSQLiteOpenHelper.Callback): SupportSQLiteDatabase {
-            System.loadLibrary("sqlcipher")
-            val passphrase = DatabaseKeyStore(context, KEY_ALIAS, WRAPPED_PASSPHRASE_FILE, DB_NAME).getDatabasePassphrase()
-            try {
-                return open(context, SupportOpenHelperFactory(passphrase), callback)
-            } finally {
-                passphrase.fill(0)
-            }
-        }
+        private fun openEncrypted(context: Context, callback: SupportSQLiteOpenHelper.Callback): SupportSQLiteDatabase =
+            EncryptedDatabases.openEncrypted(context, DB_NAME, KEY_ALIAS, WRAPPED_PASSPHRASE_FILE, callback)
     }
 }

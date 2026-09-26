@@ -6,6 +6,8 @@ import android.provider.CallLog
 import android.util.Log
 import androidx.core.content.ContextCompat
 import net.slashetc.callinspector.data.db.ArcepDatabaseManager
+import net.slashetc.callinspector.data.db.CallNote
+import net.slashetc.callinspector.data.db.CallNotesStore
 import net.slashetc.callinspector.data.db.ReportStats
 import net.slashetc.callinspector.data.db.ReporterProfileStore
 import net.slashetc.callinspector.data.model.CallLogEntry
@@ -18,6 +20,13 @@ class CallLogRepository(private val context: Context) {
 
     private val dbManager = ArcepDatabaseManager.getInstance(context)
     private val reportStore = ReporterProfileStore.getInstance(context)
+    private val notesStore = CallNotesStore.getInstance(context)
+
+    // Same for the encrypted notes: without them, calls just show no note, favorite or spam flag.
+    private suspend fun loadNotes(): Map<String, CallNote> =
+        runCatching { notesStore.all() }
+            .onFailure { Log.e(TAG, "Failed to read the call notes", it) }
+            .getOrDefault(emptyMap())
 
     // The call list must not depend on the encrypted report log: without it, calls just show no reports.
     private suspend fun loadReportStats(): Map<String, ReportStats> =
@@ -39,6 +48,7 @@ class CallLogRepository(private val context: Context) {
 
         val entries = mutableListOf<CallLogEntry>()
         val reports = loadReportStats()
+        val notes = loadNotes()
         val projection = arrayOf(
             CallLog.Calls._ID,
             CallLog.Calls.NUMBER,
@@ -84,7 +94,7 @@ class CallLogRepository(private val context: Context) {
                     }
 
                     val lookup = dbManager.lookupNumber(rawNum)
-                    val note = dbManager.getCallNote(rawNum)
+                    val note = notes[lookup.normalizedNumber]
 
                     entries.add(
                         CallLogEntry(
@@ -134,10 +144,11 @@ class CallLogRepository(private val context: Context) {
 
         val results = mutableListOf<CallLogEntry>()
         val reports = loadReportStats()
+        val notes = loadNotes()
         for ((idx, item) in sampleNumbers.withIndex()) {
             val (rawNum, callType, timestamp) = item
             val lookup = dbManager.lookupNumber(rawNum)
-            val note = dbManager.getCallNote(rawNum)
+            val note = notes[lookup.normalizedNumber]
 
             val cachedName = when (rawNum) {
                 "0612345678" -> "Sophie Martin"
@@ -175,8 +186,8 @@ class CallLogRepository(private val context: Context) {
     }
 
     suspend fun toggleSpamFlag(phoneNumber: String, currentFlag: Boolean) {
-        val note = dbManager.getCallNote(phoneNumber)
-        dbManager.saveCallNote(
+        val note = notesStore.get(phoneNumber)
+        notesStore.save(
             phoneNumber = phoneNumber,
             isFavorite = note?.isFavorite ?: false,
             isSpam = !currentFlag,
@@ -186,8 +197,8 @@ class CallLogRepository(private val context: Context) {
     }
 
     suspend fun toggleFavorite(phoneNumber: String, currentFavorite: Boolean) {
-        val note = dbManager.getCallNote(phoneNumber)
-        dbManager.saveCallNote(
+        val note = notesStore.get(phoneNumber)
+        notesStore.save(
             phoneNumber = phoneNumber,
             isFavorite = !currentFavorite,
             isSpam = note?.isSpam ?: false,
@@ -197,8 +208,8 @@ class CallLogRepository(private val context: Context) {
     }
 
     suspend fun saveNote(phoneNumber: String, noteText: String?) {
-        val note = dbManager.getCallNote(phoneNumber)
-        dbManager.saveCallNote(
+        val note = notesStore.get(phoneNumber)
+        notesStore.save(
             phoneNumber = phoneNumber,
             isFavorite = note?.isFavorite ?: false,
             isSpam = note?.isSpam ?: false,

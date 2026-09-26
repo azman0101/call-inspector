@@ -1,6 +1,5 @@
 package net.slashetc.callinspector.data.db
 
-import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import net.slashetc.callinspector.data.model.ArcepLookupResult
@@ -25,15 +24,7 @@ data class DatabaseStats(
     val ceChecksum: String? = null
 )
 
-data class CallNote(
-    val phoneNumber: String,
-    val isFavorite: Boolean,
-    val isSpam: Boolean,
-    val userTag: String?,
-    val userNote: String?
-)
-
-class ArcepDatabaseManager private constructor(private val context: Context) {
+class ArcepDatabaseManager private constructor(private val context: Context) : LegacyCallNotes {
 
     private val dbName = "arcep_data.db"
     private var db: SQLiteDatabase? = null
@@ -68,19 +59,6 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
                 ensureDatabaseCopied()
             }
             db = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
-            // Ensure call_notes table exists
-            db?.execSQL(
-                """
-                CREATE TABLE IF NOT EXISTS call_notes (
-                    phone_number TEXT PRIMARY KEY,
-                    is_favorite INTEGER DEFAULT 0,
-                    is_spam INTEGER DEFAULT 0,
-                    user_tag TEXT,
-                    user_note TEXT,
-                    updated_at INTEGER
-                )
-                """.trimIndent()
-            )
         }
         return db!!
     }
@@ -208,46 +186,6 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
             numberType = phoneType,
             isFound = (range != null)
         )
-    }
-
-    suspend fun getCallNote(phoneNumber: String): CallNote? = withContext(Dispatchers.IO) {
-        val database = getReadableDb()
-        val normalized = PhoneNumberFormatter.normalize(phoneNumber)
-        val cursor = database.rawQuery(
-            "SELECT is_favorite, is_spam, user_tag, user_note FROM call_notes WHERE phone_number = ? LIMIT 1",
-            arrayOf(normalized)
-        )
-        cursor.use {
-            if (it.moveToFirst()) {
-                CallNote(
-                    phoneNumber = normalized,
-                    isFavorite = it.getInt(0) == 1,
-                    isSpam = it.getInt(1) == 1,
-                    userTag = it.getString(2),
-                    userNote = it.getString(3)
-                )
-            } else null
-        }
-    }
-
-    suspend fun saveCallNote(
-        phoneNumber: String,
-        isFavorite: Boolean,
-        isSpam: Boolean,
-        userTag: String?,
-        userNote: String?
-    ) = withContext(Dispatchers.IO) {
-        val database = getReadableDb()
-        val normalized = PhoneNumberFormatter.normalize(phoneNumber)
-        val values = ContentValues().apply {
-            put("phone_number", normalized)
-            put("is_favorite", if (isFavorite) 1 else 0)
-            put("is_spam", if (isSpam) 1 else 0)
-            put("user_tag", userTag)
-            put("user_note", userNote)
-            put("updated_at", System.currentTimeMillis())
-        }
-        database.insertWithOnConflict("call_notes", null, values, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
     suspend fun searchPrefixesOrOperators(query: String): List<ArcepLookupResult> = withContext(Dispatchers.IO) {
@@ -384,34 +322,12 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
         )
     }
 
-    /**
-     * Copie toutes les notes, drapeaux spam et favoris dans la nouvelle base cible
-     */
-    fun backupUserNotesTo(targetDb: SQLiteDatabase) {
-        val currentDb = getReadableDb()
-        try {
-            currentDb.rawQuery("SELECT phone_number, is_favorite, is_spam, user_tag, user_note, updated_at FROM call_notes", null).use { cursor ->
-                val stmt = targetDb.compileStatement(
-                    "INSERT OR REPLACE INTO call_notes (phone_number, is_favorite, is_spam, user_tag, user_note, updated_at) VALUES (?, ?, ?, ?, ?, ?);"
-                )
-                targetDb.beginTransaction()
-                while (cursor.moveToNext()) {
-                    stmt.bindString(1, cursor.getString(0))
-                    stmt.bindLong(2, cursor.getLong(1))
-                    stmt.bindLong(3, cursor.getLong(2))
-                    if (cursor.isNull(3)) stmt.bindNull(4) else stmt.bindString(4, cursor.getString(3))
-                    if (cursor.isNull(4)) stmt.bindNull(5) else stmt.bindString(5, cursor.getString(4))
-                    stmt.bindLong(6, cursor.getLong(5))
-                    stmt.executeInsert()
-                }
-                targetDb.setTransactionSuccessful()
-                targetDb.endTransaction()
-                stmt.close()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
+    /** Notes kept in cleartext here before [CallNotesStore]; they are moved to it on first use. */
+    @Synchronized
+    override fun read(): List<CallNote> = readLegacyCallNotes(getReadableDb())
+
+    @Synchronized
+    override fun erase() = eraseLegacyCallNotes(getReadableDb())
 
     /**
      * Remplacement atomique de la base active par un nouveau fichier SQLite compilé
@@ -453,4 +369,37 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
             }
         }
     }
+}
+
+private fun hasCallNotesTable(database: SQLiteDatabase): Boolean =
+    database.rawQuery("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'call_notes'", null)
+        .use { it.moveToFirst() }
+
+internal fun readLegacyCallNotes(database: SQLiteDatabase): List<CallNote> {
+    if (!hasCallNotesTable(database)) return emptyList()
+    return database.rawQuery(
+        "SELECT phone_number, is_favorite, is_spam, user_tag, user_note, updated_at FROM call_notes", null
+    ).use { cursor ->
+        buildList {
+            while (cursor.moveToNext()) {
+                add(
+                    CallNote(
+                        phoneNumber = cursor.getString(0),
+                        isFavorite = cursor.getInt(1) == 1,
+                        isSpam = cursor.getInt(2) == 1,
+                        userTag = if (cursor.isNull(3)) null else cursor.getString(3),
+                        userNote = if (cursor.isNull(4)) null else cursor.getString(4),
+                        updatedAt = if (cursor.isNull(5)) null else cursor.getLong(5),
+                    )
+                )
+            }
+        }
+    }
+}
+
+/** Drops the cleartext notes table and rewrites the file (VACUUM) so no free page keeps the old notes. */
+internal fun eraseLegacyCallNotes(database: SQLiteDatabase) {
+    if (!hasCallNotesTable(database)) return
+    database.execSQL("DROP TABLE call_notes")
+    database.execSQL("VACUUM")
 }

@@ -51,7 +51,7 @@ Application Android Kotlin / Jetpack Compose qui analyse l'historique d'appels d
   - Signalements envoyés comptabilisés par numéro, quand SignalConso affiche son accusé de réception : l'historique indique le nombre de signalements et la date du dernier, rappelés sous le bouton de signalement. Ils sont stockés dans la même base chiffrée.
 - **Gestion des annotations locales** :
   - Marquage de numéros en favoris ou comme indésirables / démarchage.
-  - Ajout de notes personnelles locales associées aux numéros.
+  - Ajout de notes personnelles locales associées aux numéros, chiffrées sur le téléphone (SQLCipher, clé Android Keystore).
 - **Observatoire et statistiques** :
   - Métriques globales de la base ARCEP (20 655 tranches répertoriées, 1 592 opérateurs déclarés).
   - Répartition des appels de l'utilisateur par opérateur et volume d'appels de téléprospection.
@@ -137,7 +137,7 @@ Le fichier `app/src/main/assets/arcep_data.db` est copié au premier démarrage 
 | --- | --- |
 | `number_ranges` | Contient les 20 655 tranches de numérotation attribuées par l'ARCEP (colonnes `ezabpqm`, `tranche_debut`, `tranche_fin`, `operator_code`, `operator_name`, `territory`, `attribution_date`). Indexée sur `(tranche_debut, tranche_fin)` et `ezabpqm`. |
 | `operators` | Contient les 1 592 opérateurs déclarés avec leurs identifiants légaux (`code`, `name`, `siret`, `rcs`, `address`, `declaration_date`). |
-| `call_notes` | Table locale gérée par l'application pour stocker les drapeaux utilisateur (favori, numéro signalé comme spam, note textuelle personnalisée). |
+| `call_notes` | Ancienne table des notes, favoris et drapeaux spam, désormais dans la base chiffrée `user_notes_secure.db` : les notes existantes y sont migrées au premier lancement, puis effacées d'`arcep_data.db`. |
 
 ### Algorithme de résolution d'un numéro
 1. **Normalisation** : Suppression des espaces, tirets et conversion des formats internationaux (`+33` ou `0033` $\to$ `0`).
@@ -267,7 +267,7 @@ La question de la fraîcheur des données de l'ARCEP a été résolue par la mis
 
 2. **Au niveau de l'application installée (Mise à jour Over-The-Air / OTA)** :
    - L'utilisateur n'a pas besoin d'attendre une mise à jour d'APK sur le Play Store pour bénéficier des dernières attributions de numéros.
-   - Le composant `ArcepUpdateManager.kt` télécharge les flux ARCEP directement dans l'application, reconstruit une base SQLite locale sans blocage de l'interface, préserve les notes et favoris utilisateur, puis bascule de manière atomique sur la nouvelle base.
+   - Le composant `ArcepUpdateManager.kt` télécharge les flux ARCEP directement dans l'application, reconstruit une base SQLite locale sans blocage de l'interface, puis bascule de manière atomique sur la nouvelle base.
    - Un bouton interactif et une jauge de progression sont disponibles dans l'onglet **Observatoire**.
 
 ### Pistes d'évolution futures (Roadmap)
@@ -291,13 +291,13 @@ python3 tools/update_arcep_db.py --output app/src/main/assets/arcep_data.db
   - [`MAJNUM.csv`](https://extranet.arcep.fr/uploads/MAJNUM.csv) (ressources de numérotation).
   - [`identifiants_CE.csv`](https://extranet.arcep.fr/uploads/identifiants_CE.csv) (identifiants et adresses des opérateurs).
 - **Contrôle d'intégrité et empreinte SHA-256** calculée pour chaque fichier source.
-- **Préservation des données utilisateur** : les notes, favoris et statuts de spam locaux sont automatiquement sauvegardés et réinjectés.
+- **Préservation des données utilisateur** : les notes, favoris et statuts de spam vivent dans leur propre base chiffrée, que les mises à jour ARCEP ne touchent pas.
 - **Indexation B-Tree optimisée** (`idx_tranche`, `idx_ezabpqm`, `idx_op_code`) et compression SQLite (`VACUUM`).
 - **Workflow GitHub Actions** (`.github/workflows/update_arcep.yml`) planifié le 1er et le 15 de chaque mois à 04:00 UTC pour mettre à jour la base embarquée du dépôt automatiquement.
 
 ### 2. Mise à jour dynamique Over-The-Air (OTA) dans l'application (`ArcepUpdateManager.kt`)
 L'utilisateur peut actualiser sa base ARCEP directement depuis son smartphone, sans attendre une mise à jour d'APK :
-- **Moteur de mise à jour local** (`ArcepUpdateManager.kt`) : télécharge les flux CSV officiels, compile la base dans un fichier SQLite temporaire, préserve les notes personnelles de l'utilisateur (`backupUserNotesTo`), et permute atomiquement la base active (`replaceDatabaseFile`).
+- **Moteur de mise à jour local** (`ArcepUpdateManager.kt`) : télécharge les flux CSV officiels, compile la base dans un fichier SQLite temporaire, et permute atomiquement la base active (`replaceDatabaseFile`).
 - **Interface utilisateur dédiée dans l'Observatoire** (`StatsAndInfoScreen.kt`) :
   - Affiche l'état de la mise à jour (progression en pourcentage, étapes en temps réel).
   - Bouton interactif *« Vérifier et actualiser la base ARCEP »*.
