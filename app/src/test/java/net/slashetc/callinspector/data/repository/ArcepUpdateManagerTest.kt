@@ -1,8 +1,14 @@
 package net.slashetc.callinspector.data.repository
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.IOException
+import java.security.cert.CertificateException
+import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLPeerUnverifiedException
 
 class ArcepUpdateManagerTest {
 
@@ -42,5 +48,27 @@ class ArcepUpdateManagerTest {
         val raw = " \"OPERATOR_NAME_VERY_LONG_1234567890\" "
         val result = ArcepUpdateManager.sanitizeNonNullableToken(raw, 15)
         assertEquals("OPERATOR_NAME_V", result)
+    }
+
+    @Test
+    fun `hasTlsPinningFailure detects network security config pin failure`() {
+        val handshake = SSLHandshakeException("handshake failed").apply {
+            initCause(CertificateException("Pin verification failed"))
+        }
+        assertTrue(IOException("download failed", handshake).hasTlsPinningFailure())
+    }
+
+    @Test
+    fun `hasTlsPinningFailure detects OkHttp certificate pinner failure`() {
+        assertTrue(SSLPeerUnverifiedException("Certificate pinning failure!").hasTlsPinningFailure())
+    }
+
+    @Test
+    fun `hasTlsPinningFailure ignores other TLS and network errors`() {
+        val untrusted = SSLHandshakeException("handshake failed").apply {
+            initCause(CertificateException("Trust anchor for certification path not found."))
+        }
+        assertFalse(untrusted.hasTlsPinningFailure())
+        assertFalse(IOException("timeout").hasTlsPinningFailure())
     }
 }
