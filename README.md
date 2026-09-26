@@ -21,7 +21,7 @@ Application Android Kotlin / Jetpack Compose qui analyse l'historique d'appels d
 ## Fonctionnalités
 
 - **Journal d'appels enrichi (Call History)** :
-  - Lecture des appels entrants, sortants, manqués et rejetés avec date, heure et durée.
+  - Lecture des appels reçus (entrants, manqués, rejetés et bloqués) avec date, heure et durée ; les appels sortants sont ignorés.
   - Résolution instantanée de l'opérateur attributaire (Orange, SFR, Free, Bouygues Telecom, Manifone, OVH, BJT Partners, etc.).
   - Filtres rapides : *Tous*, *⚠️ Démarchage / Spam*, *Manqués*, *Entrants*, *Favoris*.
   - Recherche en texte intégral par numéro, nom de contact ou nom d'opérateur.
