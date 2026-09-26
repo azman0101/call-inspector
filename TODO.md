@@ -1,32 +1,20 @@
 # TODO
 
 Follow-ups collected from the descriptions of PRs #11 to #30 and from direct commits to `main`
-(up to `cacff1f`). Checked on 2026-09-26.
+(up to `d7019c0`). Checked on 2026-09-26.
 
 ## Open
 
-### Regressions on `main`
+### Terms of use (from #29)
 
-- [ ] **Restore the executable bit on `gradlew` and `tools/generate-debug-keystore.sh`** (fixed in #29,
-  still open).
-  `9d56dcf` (direct push: CGU, telemetry opt-in) changed both from `100755` to `100644` again,
-  undoing the fix from #26 (the same change had come with `4a3e621`). CI still passes because it runs
-  `chmod +x gradlew`, but a fresh clone can't run `./gradlew` or `./tools/generate-debug-keystore.sh`.
-  The editor or tool used for direct commits drops the mode: `git update-index --chmod=+x` on both
-  files fixes it, and checking `core.fileMode` in that environment should stop it from recurring.
-
-### Terms of use (from #29, open)
-
-- [ ] **Merge #29**: `legal/CGU.md` becomes the single source of the terms, bundled as an asset
-  (`assets.srcDir("../legal")`) and rendered by a small in-house Markdown renderer. The text is aligned
-  with what the app does (SignalConso flows, encrypted local data, opt-in pseudonymous diagnostics).
 - [ ] **Check #29 on a device**:
-  - on first launch, the terms block the app until "J'accepte"; "Quitter l'application" closes it;
-    no prompt on the next launch;
-  - Observatoire > CGU shows the same text, formatted (headings, lists, bold, `code`);
+  - Observatoire > CGU shows the same text as `legal/CGU.md`, formatted (headings, lists, bold, `code`);
   - the telemetry badge ("Activé" / "Désactivé") is readable in light and dark themes.
 - [ ] **Change the "Dernière mise à jour" date on every change to `legal/CGU.md`.** It is the version the
   app compares with the accepted one: without a new date, users aren't asked to accept the new text.
+- [ ] **Keep the executable bit on `gradlew` and `tools/generate-debug-keystore.sh`.** #29 restored it
+  (`100755`) after `9d56dcf` dropped it, as `4a3e621` had before #26. The editor or tool used for direct
+  commits loses the mode: check `core.fileMode` there, or fix it with `git update-index --chmod=+x`.
 
 ### Package / app identity (from #16)
 
@@ -70,9 +58,6 @@ Follow-ups collected from the descriptions of PRs #11 to #30 and from direct com
 - [ ] **Run `CallNotesEncryptionTest` on a device** (from #30):
   `./gradlew connectedDebugAndroidTest --tests '*CallNotesEncryptionTest'`. It checks that notes never
   appear in cleartext in `user_notes_secure.db` and are gone from `arcep_data.db`.
-- [ ] **Delete the `security/phase-2-encrypted-storage` branch.** #30 supersedes it: only the user's data
-  (notes, favorites, spam flags) is encrypted, with the same Keystore scheme, and `arcep_data.db` keeps
-  only public ARCEP data.
 - [ ] **(Idea) Export / import notes.** Since #30, notes no longer follow a device-to-device transfer: their
   database is excluded because its Keystore key never leaves the phone. An explicit export (already in the
   README roadmap) would let users move them to a new phone.
@@ -127,9 +112,15 @@ Follow-ups collected from the descriptions of PRs #11 to #30 and from direct com
 - [x] ARCEP TLS pinning (#22) and update hardening (#23), including the `GlobalSign Root CA - R3`
   backup pin, confirmed from the Debian CA bundle, and backup pins for Root R6, R46 and E46.
 - [x] Call history search by number without spaces, and manual lookup by operator name (#25).
+- [x] Terms of use single-sourced (#29): `legal/CGU.md` is bundled as an asset and rendered in the app;
+  the text matches what the app does. On a device, the terms block the app on first launch until
+  "J'accepte", "Quitter l'application" closes it, and they aren't asked again on the next launch.
 - [x] Call notes, favorites and spam flags encrypted (M2, #30): moved from the cleartext `call_notes` table
   of `arcep_data.db` to `user_notes_secure.db` (SQLCipher, own Android Keystore key), excluded from backups
   and device transfers. Upgrading over a version with existing notes kept them (checked on a device).
+- [x] `security/phase-2-encrypted-storage` branch deleted (superseded by #30, which encrypts only the user's
+  data). Its tip was `ad7f7de` ("ci: run build checks only for pull requests"); to restore it:
+  `git push origin ad7f7de6e06090a642bc4a9ede67e2d5970cded7:refs/heads/security/phase-2-encrypted-storage`.
 - [x] Telemetry scope decided (after #26): diagnostics stay opt-in and off by default, so nothing is sent.
   Once enabled, error reports, performance traces and session data are sent with a random installation id,
   i.e. pseudonymous data without personal information; `legal/CGU.md` (article 6, #29) says so.
