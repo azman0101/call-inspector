@@ -3,6 +3,7 @@ package net.slashetc.callinspector.util
 import android.content.Context
 import android.widget.Toast
 import net.slashetc.callinspector.BuildConfig
+import net.slashetc.callinspector.OperatorInfoApp
 import io.sentry.Sentry
 import io.sentry.SentryAttribute
 import io.sentry.SentryAttributes
@@ -34,6 +35,12 @@ object SentryHelper {
             .edit()
             .putBoolean(KEY_TELEMETRY_ENABLED, enabled)
             .apply()
+        // Apply now rather than at next launch: stop the SDK on opt-out, start it again on opt-in.
+        if (!enabled) {
+            Sentry.close()
+        } else if (!Sentry.isEnabled()) {
+            (context.applicationContext as? OperatorInfoApp)?.setupSentry()
+        }
     }
 
     fun isDevModeEnabled(context: Context): Boolean {

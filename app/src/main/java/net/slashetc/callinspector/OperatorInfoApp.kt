@@ -16,7 +16,10 @@ class OperatorInfoApp : Application() {
         setupSentry()
     }
 
-    private fun setupSentry() {
+    fun setupSentry() {
+        // Opted out: don't start the SDK at all, so sessions, performance transactions and
+        // native crash reports (none of which go through beforeSend) are never sent either.
+        if (!net.slashetc.callinspector.util.SentryHelper.isTelemetryEnabled(this)) return
         try {
             val dsn = net.slashetc.callinspector.util.SentryHelper.getResolvedDsn(this)
 
@@ -114,6 +117,20 @@ class OperatorInfoApp : Application() {
                     }
 
                     event
+                }
+
+                // Transactions (tracesSampleRate) bypass beforeSend: same opt-out and device scrubbing.
+                options.beforeSendTransaction = SentryOptions.BeforeSendTransactionCallback { transaction, _ ->
+                    if (!net.slashetc.callinspector.util.SentryHelper.isTelemetryEnabled(this)) {
+                        return@BeforeSendTransactionCallback null
+                    }
+                    transaction.user = null
+                    transaction.contexts.device?.let { device ->
+                        device.id = null
+                        device.bootTime = null
+                    }
+                    transaction.contexts.app?.appStartTime = null
+                    transaction
                 }
             }
 
