@@ -39,11 +39,12 @@ class CallLogRepository(private val context: Context) {
         )
 
         try {
+            // Only calls received: the app inspects who called the user, not the numbers the user dialed.
             val cursor = context.contentResolver.query(
                 CallLog.Calls.CONTENT_URI,
                 projection,
-                null,
-                null,
+                "${CallLog.Calls.TYPE} != ?",
+                arrayOf(CallLog.Calls.OUTGOING_TYPE.toString()),
                 "${CallLog.Calls.DATE} DESC"
             )
 
@@ -110,11 +111,11 @@ class CallLogRepository(private val context: Context) {
             Triple("0162001122", CallType.MISSED, now - 15 * 60 * 1000L), // 15 mins ago
             Triple("0612345678", CallType.INCOMING, now - 2 * 3600 * 1000L), // 2 hrs ago
             Triple("0270334455", CallType.MISSED, now - 5 * 3600 * 1000L), // 5 hrs ago
-            Triple("0142680000", CallType.OUTGOING, now - 22 * 3600 * 1000L), // yesterday
+            Triple("0142680000", CallType.INCOMING, now - 22 * 3600 * 1000L), // yesterday
             Triple("0781234567", CallType.INCOMING, now - 28 * 3600 * 1000L),
             Triple("0948123456", CallType.REJECTED, now - 48 * 3600 * 1000L),
             Triple("0491002233", CallType.INCOMING, now - 72 * 3600 * 1000L),
-            Triple("0892353535", CallType.OUTGOING, now - 96 * 3600 * 1000L),
+            Triple("0892353535", CallType.MISSED, now - 96 * 3600 * 1000L),
             Triple("0556000000", CallType.INCOMING, now - 120 * 3600 * 1000L),
             Triple("0590203040", CallType.MISSED, now - 150 * 3600 * 1000L)
         )
