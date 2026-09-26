@@ -64,17 +64,17 @@ class ReporterProfileStoreTest {
     }
 
     @Test
-    fun `reference number, share choice and Bloctel registration are stored`() = runBlocking {
-        store.save(ReporterProfile("Camille", "Test", "camille@example.invalid", "", " ZYX987654321 ", false, true))
+    fun `reference number and share choice are stored`() = runBlocking {
+        store.save(ReporterProfile("Camille", "Test", "camille@example.invalid", "", " ZYX987654321 ", false))
         assertEquals(
-            ReporterProfile("Camille", "Test", "camille@example.invalid", "", "ZYX987654321", false, true),
+            ReporterProfile("Camille", "Test", "camille@example.invalid", "", "ZYX987654321", false),
             store.load()
         )
         store.save(ReporterProfile(firstName = "Camille", shareContact = true))
         assertEquals(true, store.load()?.shareContact)
         store.save(ReporterProfile(firstName = "Camille"))
         assertNull(store.load()?.shareContact)
-        assertFalse(ReporterProfile(bloctelRegistered = true).isEmpty())
+        assertFalse(ReporterProfile(shareContact = false).isEmpty())
     }
 
     @Test

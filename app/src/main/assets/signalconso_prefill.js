@@ -133,8 +133,6 @@
     if (!plan) return;
     pickRadio(plan.problem);
     pickRadio(plan.subcategory);
-    // No reason shows in the call itself: the user's Bloctel registration decides (SignalConso then points to Bloctel).
-    if (!plan.subcategory && window.__icContact && window.__icContact.bloctelRegistered) pickRadio(plan.bloctelSubcategory);
     fillOnce('phone', callerPhoneInput(), plan.phone);
     if (plan.company && plan.company.siret) {
       searchCompany('Par son numéro SIRET', 'identity', plan.company.siret);

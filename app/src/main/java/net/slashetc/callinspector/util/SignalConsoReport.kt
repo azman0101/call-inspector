@@ -18,9 +18,6 @@ enum class DemarchageCase(val label: String) {
     OUTSIDE_WEEKDAY_HOURS("J'ai reçu un appel commercial pendant la semaine en dehors des heures autorisées"),
     REFUSED_WITHIN_60_DAYS("J'ai reçu un appel d'une entreprise à qui j'avais demandé de ne pas être démarché moins de 60 jours après mon refus"),
     MOBILE_NUMBER("Je suis démarché par un opérateur utilisant un numéro commençant par 06 ou 07"),
-
-    /** Not a SignalConso report: the form only points to bloctel.gouv.fr. Last resort, see [SignalConsoPlan]. */
-    BLOCTEL("Je reçois des appels indésirables alors que je suis inscrit sur Bloctel (ces appels ne concernent ni la rénovation énergétique ni le CPF)"),
 }
 
 /** The company named in the report: the caller when known, otherwise the operator holding the number. */
@@ -32,14 +29,9 @@ data class ReportedCompany(
     enum class Source { CALLER_NAME, OPERATOR }
 }
 
-/**
- * What the prefill script selects and fills; the user reviews and submits every step. When no case applies,
- * [bloctelSubcategory] is selected instead if the user said they are registered on Bloctel (a setting
- * of their locally stored profile, which the plan is built without).
- */
+/** What the prefill script selects and fills; the user reviews and submits every step. */
 data class SignalConsoPlan(
     val subcategory: String?,
-    val bloctelSubcategory: String?,
     val phone: String?,
     val dates: List<String>,
     val company: ReportedCompany?,
@@ -128,7 +120,6 @@ object SignalConsoReport {
         val company = reportedCompany(call)
         return SignalConsoPlan(
             subcategory = cases.firstOrNull()?.label,
-            bloctelSubcategory = DemarchageCase.BLOCTEL.label.takeIf { cases.isEmpty() },
             // The form only accepts French numbers: an international number is left for the user to type.
             phone = call.normalizedNumber.takeIf { it.length == 10 && it.startsWith("0") && it.all(Char::isDigit) },
             dates = dates,

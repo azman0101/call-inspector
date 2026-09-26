@@ -61,8 +61,6 @@ class SignalConsoReportTest {
         assertTrue(SignalConsoReport.applicableCases(c, emptyList(), now, paris).isEmpty())
         val plan = SignalConsoReport.buildPlan(c, emptyList(), now, paris)
         assertNull(plan.subcategory)
-        // Nothing in the call itself: Bloctel is offered for users registered there.
-        assertEquals(DemarchageCase.BLOCTEL.label, plan.bloctelSubcategory)
         assertEquals(listOf("2026-09-22"), plan.dates)
         assertEquals("0162000000", plan.phone)
     }
@@ -189,10 +187,9 @@ class SignalConsoReportTest {
     }
 
     @Test
-    fun `subject comes before time based cases and disables the Bloctel fallback`() {
+    fun `subject comes before time based cases`() {
         val plan = SignalConsoReport.buildPlan(call(1, at(2026, 9, 26, 9, 5), note = "Panneaux solaires"), emptyList(), now, paris)
         assertEquals(DemarchageCase.RENOVATION.label, plan.subcategory)
-        assertNull(plan.bloctelSubcategory)
         assertTrue(plan.description, plan.description.contains("travaux ou de la rénovation énergétique"))
         assertEquals(
             listOf(DemarchageCase.RENOVATION, DemarchageCase.WEEKEND_OR_HOLIDAY),

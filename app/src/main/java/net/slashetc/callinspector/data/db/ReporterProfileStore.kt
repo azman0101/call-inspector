@@ -10,8 +10,7 @@ import kotlinx.coroutines.withContext
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
 /**
- * The user's own details, as SignalConso asks for them in step 4 ("Vos coordonnées"), plus whether they are
- * registered on Bloctel, which decides the report's reason when the call itself shows none.
+ * The user's own details, as SignalConso asks for them in step 4 ("Vos coordonnées").
  * [shareContact] answers "Souhaitez-vous partager vos coordonnées avec l'entreprise ?"; null leaves it unanswered.
  */
 data class ReporterProfile(
@@ -21,10 +20,9 @@ data class ReporterProfile(
     val phone: String = "",
     val referenceNumber: String = "",
     val shareContact: Boolean? = null,
-    val bloctelRegistered: Boolean = false,
 ) {
     fun isEmpty() = firstName.isBlank() && lastName.isBlank() && email.isBlank() && phone.isBlank() &&
-        referenceNumber.isBlank() && shareContact == null && !bloctelRegistered
+        referenceNumber.isBlank() && shareContact == null
 }
 
 /**
@@ -65,14 +63,13 @@ class ReporterProfileStore internal constructor(
             if (oldVersion < 2) {
                 db.execSQL("ALTER TABLE reporter_profile ADD COLUMN reference_number TEXT NOT NULL DEFAULT ''")
                 db.execSQL("ALTER TABLE reporter_profile ADD COLUMN share_contact INTEGER")
-                db.execSQL("ALTER TABLE reporter_profile ADD COLUMN bloctel_registered INTEGER NOT NULL DEFAULT 0")
             }
         }
     }
 
     suspend fun load(): ReporterProfile? = withContext(Dispatchers.IO) {
         database.query(
-            "SELECT first_name, last_name, email, phone, reference_number, share_contact, bloctel_registered " +
+            "SELECT first_name, last_name, email, phone, reference_number, share_contact " +
                 "FROM reporter_profile WHERE id = 1",
             emptyArray()
         ).use {
@@ -84,7 +81,6 @@ class ReporterProfileStore internal constructor(
                 phone = it.getString(3),
                 referenceNumber = it.getString(4),
                 shareContact = if (it.isNull(5)) null else it.getInt(5) != 0,
-                bloctelRegistered = it.getInt(6) != 0,
             )
         }
     }
@@ -98,7 +94,6 @@ class ReporterProfileStore internal constructor(
             put("phone", profile.phone.trim())
             put("reference_number", profile.referenceNumber.trim())
             if (profile.shareContact == null) putNull("share_contact") else put("share_contact", if (profile.shareContact) 1 else 0)
-            put("bloctel_registered", if (profile.bloctelRegistered) 1 else 0)
         }
         database.insert("reporter_profile", SQLiteDatabase.CONFLICT_REPLACE, values)
         Unit

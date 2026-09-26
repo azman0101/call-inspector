@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -28,7 +27,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -82,7 +80,6 @@ class SignalConsoActivity : ComponentActivity() {
         private fun SignalConsoPlan.toJson() = JSONObject().apply {
             put("problem", SignalConsoReport.PROBLEM)
             put("subcategory", subcategory ?: JSONObject.NULL)
-            put("bloctelSubcategory", bloctelSubcategory ?: JSONObject.NULL)
             put("phone", phone ?: JSONObject.NULL)
             put("dates", JSONArray(dates))
             put("company", company?.let {
@@ -102,7 +99,6 @@ class SignalConsoActivity : ComponentActivity() {
                 .put("phone", it.phone)
                 .put("referenceNumber", it.referenceNumber)
                 .put("shareContact", it.shareContact ?: JSONObject.NULL)
-                .put("bloctelRegistered", it.bloctelRegistered)
                 .toString()
         } ?: "null"
     }
@@ -195,12 +191,12 @@ class SignalConsoActivity : ComponentActivity() {
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
                         }
-                        if (!hasReason && profile?.bloctelRegistered != true) {
+                        if (!hasReason) {
                             Surface(color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
                                 Text(
                                     text = "Aucun motif ne ressort de l'appel (en semaine, aux heures autorisées). Choisissez-le à " +
                                         "l'étape 1, ou ajoutez une note à l'appel (ex. « isolation », « CPF », « se fait passer " +
-                                        "pour la CAF ») pour qu'il soit détecté. Inscrit sur Bloctel ? Indiquez-le dans « Mes coordonnées ».",
+                                        "pour la CAF ») pour qu'il soit détecté.",
                                     fontSize = 12.sp,
                                     lineHeight = 16.sp,
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -242,7 +238,7 @@ class SignalConsoActivity : ComponentActivity() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val host = request.url.host ?: return true
                 if (host == SignalConsoReport.HOST) return false
-                // Anything else (annuaire des entreprises, Bloctel…) opens in the user's browser.
+                // Anything else (annuaire des entreprises…) opens in the user's browser.
                 runCatching { startActivity(Intent(Intent.ACTION_VIEW, request.url)) }
                 return true
             }
@@ -269,7 +265,6 @@ private fun ReporterProfileDialog(
     var phone by remember { mutableStateOf(initial.phone) }
     var referenceNumber by remember { mutableStateOf(initial.referenceNumber) }
     var shareContact by remember { mutableStateOf(initial.shareContact) }
-    var bloctelRegistered by remember { mutableStateOf(initial.bloctelRegistered) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Mes coordonnées") },
@@ -310,25 +305,12 @@ private fun ReporterProfileDialog(
                         Text(text, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp))
                     }
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .toggleable(value = bloctelRegistered, onValueChange = { bloctelRegistered = it }, role = Role.Checkbox)
-                ) {
-                    Checkbox(checked = bloctelRegistered, onCheckedChange = null)
-                    Text(
-                        "Je suis inscrit sur Bloctel (motif choisi quand l'appel n'en montre aucun)",
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
-                }
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
-                    onSave(ReporterProfile(firstName, lastName, email, phone, referenceNumber, shareContact, bloctelRegistered))
+                    onSave(ReporterProfile(firstName, lastName, email, phone, referenceNumber, shareContact))
                 }
             ) { Text("Enregistrer") }
         },
