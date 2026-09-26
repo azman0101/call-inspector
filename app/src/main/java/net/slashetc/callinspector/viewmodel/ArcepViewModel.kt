@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import net.slashetc.callinspector.util.SearchQueries
 
 enum class CallFilter {
     TOUS,
@@ -154,7 +155,6 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun applyFilter(calls: List<CallLogEntry>, filter: CallFilter, query: String): List<CallLogEntry> {
-        val q = query.trim().lowercase()
         return calls.filter { call ->
             val matchesFilter = when (filter) {
                 CallFilter.TOUS -> true
@@ -164,15 +164,7 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
                 CallFilter.FAVORIS -> call.isFavorite
             }
 
-            val matchesQuery = if (q.isEmpty()) true else {
-                call.formattedNumber.lowercase().contains(q) ||
-                call.rawNumber.contains(q) ||
-                (call.cachedName?.lowercase()?.contains(q) == true) ||
-                call.lookupResult.operatorDisplayName.lowercase().contains(q) ||
-                call.lookupResult.operatorCode.lowercase().contains(q)
-            }
-
-            matchesFilter && matchesQuery
+            matchesFilter && SearchQueries.matchesCall(call, query)
         }
     }
 
@@ -248,11 +240,9 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
                 val opName = lookup.operatorDisplayName
                 net.slashetc.callinspector.util.SentryHelper.logLookupEvent(getApplication(), prefix, opName)
             }
-            val prefixList = if (input.length in 2..6) {
-                dbManager.searchPrefixesOrOperators(input)
-            } else {
-                emptyList()
-            }
+            val prefixList = SearchQueries.prefixSearchQuery(input)
+                ?.let { dbManager.searchPrefixesOrOperators(it) }
+                ?: emptyList()
 
             _uiState.update {
                 it.copy(

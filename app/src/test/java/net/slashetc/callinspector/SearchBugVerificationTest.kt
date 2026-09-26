@@ -2,106 +2,85 @@ package net.slashetc.callinspector
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
-import net.slashetc.callinspector.data.db.ArcepDatabaseManager
-import net.slashetc.callinspector.viewmodel.ArcepViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import org.junit.After
+import net.slashetc.callinspector.data.db.ArcepDatabaseManager
+import net.slashetc.callinspector.data.model.ArcepLookupResult
+import net.slashetc.callinspector.data.model.CallLogEntry
+import net.slashetc.callinspector.data.model.CallType
+import net.slashetc.callinspector.data.model.PhoneNumberType
+import net.slashetc.callinspector.util.SearchQueries
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class SearchBugVerificationTest {
 
-    private val testDispatcher = StandardTestDispatcher()
-    private lateinit var application: Application
-    private lateinit var viewModel: ArcepViewModel
-    private lateinit var dbManager: ArcepDatabaseManager
+    // The Android call log stores numbers in international format.
+    private val callFrom0270 = CallLogEntry(
+        id = 1L,
+        rawNumber = "+33270334455",
+        normalizedNumber = "0270334455",
+        formattedNumber = "02 70 33 44 55",
+        cachedName = null,
+        timestamp = 0L,
+        durationSeconds = 0L,
+        callType = CallType.MISSED,
+        lookupResult = ArcepLookupResult(
+            queryNumber = "+33270334455",
+            normalizedNumber = "0270334455",
+            formattedNumber = "02 70 33 44 55",
+            operator = null,
+            range = null,
+            numberType = PhoneNumberType.DEMARCHAGE_COMMERCIAL,
+            isFound = false
+        )
+    )
 
-    @Before
-    fun setUp() {
-        Dispatchers.setMain(testDispatcher)
-        application = ApplicationProvider.getApplicationContext()
-        viewModel = ArcepViewModel(application)
-        dbManager = ArcepDatabaseManager.getInstance(application)
-    }
-
-    @After
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
-    /**
-     * Test confirming Bug #1:
-     * When a call from 0270 (formatted as "02 70 33 44 55") exists in call history,
-     * searching "0270" without spaces in the search query should return the call.
-     * This test currently FAILS because applyFilter in ArcepViewModel does not normalize numbers when filtering.
-     */
+    // Bug 1: typing "0270" without a space didn't find "02 70 33 44 55".
     @Test
-    fun `searching call history by number without spaces should return matching call`() = runTest {
-        viewModel.forceLoadSampleCalls()
-        advanceUntilIdle()
-
-        // Sample calls contain "0270334455" which formats as "02 70 33 44 55"
-        val sampleCalls = viewModel.uiState.value.calls
-        assertTrue("Sample calls should contain number 0270334455", sampleCalls.any { it.rawNumber == "0270334455" })
-
-        // Search for "0270" without space
-        viewModel.setCallSearchQuery("0270")
-        advanceUntilIdle()
-
-        val filteredCalls = viewModel.uiState.value.filteredCalls
-        assertFalse(
-            "Searching '0270' without space should return call '02 70 33 44 55', but filteredCalls was empty",
-            filteredCalls.isEmpty()
-        )
-        assertTrue(
-            "Filtered calls should contain '0270334455'",
-            filteredCalls.any { it.rawNumber == "0270334455" || it.normalizedNumber == "0270334455" }
-        )
+    fun `searching call history by number without spaces should return matching call`() {
+        assertTrue(SearchQueries.matchesCall(callFrom0270, "0270"))
+        assertTrue(SearchQueries.matchesCall(callFrom0270, "0270334455"))
+        assertTrue(SearchQueries.matchesCall(callFrom0270, "+33270"))
     }
 
-    /**
-     * Test confirming Bug #2:
-     * When searching by operator name (e.g. "Bouygues Telecom" or "Free Mobile"),
-     * manual search in ArcepViewModel should return matching operator results.
-     * This test currently FAILS because onManualSearchInput restricts prefixSearchResults to query lengths between 2 and 6.
-     */
     @Test
-    fun `searching manual lookup by operator name should return matching operator results`() = runTest {
-        // Search by full operator name (> 6 characters)
-        viewModel.onManualSearchInput("Bouygues Telecom")
-        advanceUntilIdle()
-
-        val results = viewModel.uiState.value.prefixSearchResults
-        assertFalse(
-            "Searching by operator name 'Bouygues Telecom' should return operator prefix results, but prefixSearchResults was empty",
-            results.isEmpty()
-        )
+    fun `call history search keeps matching spaced numbers and rejects other numbers`() {
+        assertTrue(SearchQueries.matchesCall(callFrom0270, "02 70"))
+        assertTrue(SearchQueries.matchesCall(callFrom0270, ""))
+        assertFalse(SearchQueries.matchesCall(callFrom0270, "0612"))
     }
 
-    /**
-     * Test confirming Bug #2 (Database level):
-     * Searching prefixes or operators by name in ArcepDatabaseManager should return operator entries.
-     */
+    // Bug 2: operator names (longer than 6 characters) never reached the database search.
+    @Test
+    fun `searching manual lookup by operator name should query operators`() {
+        assertEquals("Bouygues Telecom", SearchQueries.prefixSearchQuery("Bouygues Telecom"))
+        assertEquals("Orange", SearchQueries.prefixSearchQuery("  Orange "))
+    }
+
+    @Test
+    fun `manual prefix search ignores spaces in numbers`() {
+        assertEquals("0270", SearchQueries.prefixSearchQuery("02 70"))
+        assertEquals("0270", SearchQueries.prefixSearchQuery("0270"))
+    }
+
+    @Test
+    fun `manual prefix search skips full numbers and single characters`() {
+        assertNull(SearchQueries.prefixSearchQuery("0270334455"))
+        assertNull(SearchQueries.prefixSearchQuery("0"))
+        assertNull(SearchQueries.prefixSearchQuery("B"))
+    }
+
     @Test
     fun `searching database by operator name should return operator entries`() = runTest {
-        val results = dbManager.searchPrefixesOrOperators("Bouygues Telecom")
-        assertFalse(
-            "dbManager.searchPrefixesOrOperators('Bouygues Telecom') should return matching entries",
-            results.isEmpty()
-        )
+        val dbManager = ArcepDatabaseManager.getInstance(ApplicationProvider.getApplicationContext<Application>())
+        assertFalse(dbManager.searchPrefixesOrOperators("Bouygues Telecom").isEmpty())
     }
 }
