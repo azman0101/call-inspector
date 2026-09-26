@@ -1,6 +1,7 @@
 package net.slashetc.callinspector.data.db
 
 import android.content.Context
+import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -21,7 +22,11 @@ class ReporterProfileStoreTest {
 
     @Before
     fun setUp() = runBlocking {
-        store = ReporterProfileStore.getInstance(ApplicationProvider.getApplicationContext<Context>())
+        // SQLCipher's native library and the Android Keystore don't exist on the JVM: the storage logic is
+        // tested on plain SQLite here, the encryption in androidTest (ReporterProfileEncryptionTest).
+        store = ReporterProfileStore(ApplicationProvider.getApplicationContext<Context>()) { context, callback ->
+            ReporterProfileStore.open(context, FrameworkSQLiteOpenHelperFactory(), callback)
+        }
         store.clear()
     }
 
