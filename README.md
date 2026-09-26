@@ -165,6 +165,19 @@ Un workflow GitHub Actions dédié (`.github/workflows/build_apk.yml`) est confi
   - L'APK de test signé avec la clé de debug (`app-debug.apk`) est automatiquement téléchargeable sous le nom **`info-operateur-debug-apk`** dans la section *Artifacts* de l'exécution GitHub Actions (durée de rétention : 14 jours).
   - Cet APK peut être installé directement sur n'importe quel smartphone Android de test sans certificat de production.
 
+### Vérifier la signature d'un APK de release
+Les APK de release construits sur `main` sont signés avec la clé d'upload stable du projet (secret `KEYSTORE_BASE64`). Pour vérifier qu'un APK téléchargé provient bien de cette clé (par ex. sous Termux, `pkg install apksigner`) :
+```sh
+apksigner verify --print-certs app-release.apk
+```
+Résultat attendu :
+```text
+Signer #1 certificate DN: CN=slashetc.net, O=slashetc, C=FR
+Signer #1 certificate SHA-256 digest: 1f45c660f2385aee7bdd9aa05eaa562d8b4caf7fcfcb32c386a2f2fdd8ed793a
+```
+- Si l'empreinte SHA-256 diffère, l'APK n'a pas été signé avec la clé du projet (secret absent ou modifié) : il ne pourra pas mettre à jour une installation existante.
+- `keytool -printcert -jarfile` n'affiche rien pour cet APK : avec `minSdk` 24, seuls les schémas de signature v2+ sont utilisés, que `keytool` ne sait pas lire.
+
 ### Environnement spécifique Termux (Android ARM64)
 Le fichier `setup.sh` à la racine automatise la préparation d'un environnement autonome sous Termux ARM64 :
 ```sh
@@ -182,7 +195,7 @@ bash setup.sh
 │   │   ├── AndroidManifest.xml          # Déclaration des permissions READ_CALL_LOG, INTERNET
 │   │   ├── assets/
 │   │   │   └── arcep_data.db            # Base SQLite officielle ARCEP pré-indexée (2.95 Mo)
-│   │   ├── java/com/example/
+│   │   ├── java/net/slashetc/callinspector/
 │   │   │   ├── MainActivity.kt          # Point d'entrée, initialisation ViewModel & cycle de vie
 │   │   │   ├── data/
 │   │   │   │   ├── db/
