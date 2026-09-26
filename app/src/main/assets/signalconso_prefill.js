@@ -1,7 +1,8 @@
 // Prefills the SignalConso "Démarchage abusif" wizard from window.__icPlan. It only selects options and
 // fills empty fields, each at most once, and never clicks "Suivant", "Continuer" or the final submit:
 // the user reviews every step and moves on. The only button it presses is the company search
-// "Rechercher", which looks the company up without submitting anything.
+// "Rechercher", which looks the company up without submitting anything; a SIRET search returning
+// exactly that company gets it selected.
 (function () {
   if (window.__icPrefillInstalled) return;
   window.__icPrefillInstalled = true;
@@ -66,13 +67,29 @@
     }, 300);
   }
 
+  // A SIRET/SIREN search returns the matching establishment(s): select it only when there is a single
+  // one carrying that number. A name search is left to the user, its results are too loose.
+  function selectSiretResult(siret) {
+    if (done['companyResult']) return;
+    var radios = document.querySelectorAll('#CompanySearchResult input[type="radio"]');
+    if (!radios.length) return;
+    done['companyResult'] = true;
+    if (radios.length !== 1) return;
+    var label = radios[0].id && document.querySelector('label[for="' + radios[0].id + '"]');
+    var digits = label ? label.innerText.replace(/\s+/g, '') : '';
+    if (digits.indexOf('SIRET' + siret) !== -1 && !radios[0].checked) label.click();
+  }
+
   function run() {
     var plan = window.__icPlan;
     if (!plan) return;
     pickRadio(plan.problem);
     pickRadio(plan.subcategory);
     fillOnce('phone', callerPhoneInput(), plan.phone);
-    if (plan.company && plan.company.siret) searchCompany('Par son numéro SIRET', 'identity', plan.company.siret);
+    if (plan.company && plan.company.siret) {
+      searchCompany('Par son numéro SIRET', 'identity', plan.company.siret);
+      selectSiretResult(plan.company.siret);
+    }
     else if (plan.company) searchCompany('Par son nom', 'name', plan.company.name);
     var dates = document.querySelectorAll('input[type="date"]');
     for (var i = 0; i < dates.length && plan.dates && i < plan.dates.length; i++) {
