@@ -61,6 +61,8 @@ class SignalConsoReportTest {
         assertTrue(SignalConsoReport.applicableCases(c, emptyList(), now, paris).isEmpty())
         val plan = SignalConsoReport.buildPlan(c, emptyList(), now, paris)
         assertNull(plan.subcategory)
+        // Nothing in the call itself: Bloctel is offered for users registered there.
+        assertEquals(DemarchageCase.BLOCTEL.label, plan.bloctelSubcategory)
         assertEquals(listOf("2026-09-22"), plan.dates)
         assertEquals("0162000000", plan.phone)
     }
@@ -174,5 +176,27 @@ class SignalConsoReportTest {
     @Test
     fun `no company when neither the caller nor the operator is known`() {
         assertNull(SignalConsoReport.reportedCompany(call(1, now)))
+    }
+
+    @Test
+    fun `subject of the call is detected from the user's note`() {
+        fun casesFor(note: String) = SignalConsoReport.applicableCases(call(1, at(2026, 9, 22, 11), note = note), emptyList(), now, paris)
+        assertEquals(listOf(DemarchageCase.RENOVATION), casesFor("Isolation à 1 euro, pompe à chaleur"))
+        assertEquals(listOf(DemarchageCase.CPF), casesFor("Formation financée par mon CPF"))
+        assertEquals(listOf(DemarchageCase.ADMINISTRATION), casesFor("Se fait passer pour la CAF"))
+        assertEquals(listOf(DemarchageCase.REFUSED_WITHIN_60_DAYS), casesFor("J'ai déjà refusé le mois dernier"))
+        assertTrue(casesFor("Café offert, voix enregistrée").isEmpty())
+    }
+
+    @Test
+    fun `subject comes before time based cases and disables the Bloctel fallback`() {
+        val plan = SignalConsoReport.buildPlan(call(1, at(2026, 9, 26, 9, 5), note = "Panneaux solaires"), emptyList(), now, paris)
+        assertEquals(DemarchageCase.RENOVATION.label, plan.subcategory)
+        assertNull(plan.bloctelSubcategory)
+        assertTrue(plan.description, plan.description.contains("travaux ou de la rénovation énergétique"))
+        assertEquals(
+            listOf(DemarchageCase.RENOVATION, DemarchageCase.WEEKEND_OR_HOLIDAY),
+            SignalConsoReport.applicableCases(call(1, at(2026, 9, 26, 9, 5), note = "Panneaux solaires"), emptyList(), now, paris)
+        )
     }
 }

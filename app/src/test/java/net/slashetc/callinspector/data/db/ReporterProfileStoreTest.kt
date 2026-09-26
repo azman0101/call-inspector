@@ -1,6 +1,8 @@
 package net.slashetc.callinspector.data.db
 
 import android.content.Context
+import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.runBlocking
@@ -59,5 +61,42 @@ class ReporterProfileStoreTest {
     fun `blank profile is empty`() {
         assertTrue(ReporterProfile(" ", "", "", "").isEmpty())
         assertFalse(ReporterProfile(email = "camille@example.invalid").isEmpty())
+    }
+
+    @Test
+    fun `reference number, share choice and Bloctel registration are stored`() = runBlocking {
+        store.save(ReporterProfile("Camille", "Test", "camille@example.invalid", "", " ZYX987654321 ", false, true))
+        assertEquals(
+            ReporterProfile("Camille", "Test", "camille@example.invalid", "", "ZYX987654321", false, true),
+            store.load()
+        )
+        store.save(ReporterProfile(firstName = "Camille", shareContact = true))
+        assertEquals(true, store.load()?.shareContact)
+        store.save(ReporterProfile(firstName = "Camille"))
+        assertNull(store.load()?.shareContact)
+        assertFalse(ReporterProfile(bloctelRegistered = true).isEmpty())
+    }
+
+    @Test
+    fun `a version 1 profile is migrated with defaults`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.deleteDatabase(ReporterProfileStore.DB_NAME)
+        val v1 = object : SupportSQLiteOpenHelper.Callback(1) {
+            override fun onCreate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE reporter_profile (id INTEGER PRIMARY KEY CHECK (id = 1), first_name TEXT NOT NULL, " +
+                        "last_name TEXT NOT NULL, email TEXT NOT NULL, phone TEXT NOT NULL)"
+                )
+                db.execSQL("INSERT INTO reporter_profile VALUES (1, 'Camille', 'Test', 'camille@example.invalid', '')")
+            }
+
+            override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        }
+        ReporterProfileStore.open(context, FrameworkSQLiteOpenHelperFactory(), v1).close()
+
+        val migrated = ReporterProfileStore(context) { ctx, callback ->
+            ReporterProfileStore.open(ctx, FrameworkSQLiteOpenHelperFactory(), callback)
+        }
+        assertEquals(ReporterProfile("Camille", "Test", "camille@example.invalid", ""), migrated.load())
     }
 }

@@ -9,14 +9,22 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
-/** The user's own contact details, as SignalConso asks for them in step 4 ("Vos coordonnées"). */
+/**
+ * The user's own details, as SignalConso asks for them in step 4 ("Vos coordonnées"), plus whether they are
+ * registered on Bloctel, which decides the report's reason when the call itself shows none.
+ * [shareContact] answers "Souhaitez-vous partager vos coordonnées avec l'entreprise ?"; null leaves it unanswered.
+ */
 data class ReporterProfile(
     val firstName: String = "",
     val lastName: String = "",
     val email: String = "",
     val phone: String = "",
+    val referenceNumber: String = "",
+    val shareContact: Boolean? = null,
+    val bloctelRegistered: Boolean = false,
 ) {
-    fun isEmpty() = firstName.isBlank() && lastName.isBlank() && email.isBlank() && phone.isBlank()
+    fun isEmpty() = firstName.isBlank() && lastName.isBlank() && email.isBlank() && phone.isBlank() &&
+        referenceNumber.isBlank() && shareContact == null && !bloctelRegistered
 }
 
 /**
@@ -37,7 +45,7 @@ class ReporterProfileStore internal constructor(
         openDatabase(appContext, Schema)
     }
 
-    private object Schema : SupportSQLiteOpenHelper.Callback(1) {
+    internal object Schema : SupportSQLiteOpenHelper.Callback(2) {
         override fun onCreate(db: SupportSQLiteDatabase) {
             db.execSQL(
                 """
@@ -50,14 +58,34 @@ class ReporterProfileStore internal constructor(
                 )
                 """.trimIndent()
             )
+            onUpgrade(db, 1, version)
         }
 
-        override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {
+            if (oldVersion < 2) {
+                db.execSQL("ALTER TABLE reporter_profile ADD COLUMN reference_number TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE reporter_profile ADD COLUMN share_contact INTEGER")
+                db.execSQL("ALTER TABLE reporter_profile ADD COLUMN bloctel_registered INTEGER NOT NULL DEFAULT 0")
+            }
+        }
     }
 
     suspend fun load(): ReporterProfile? = withContext(Dispatchers.IO) {
-        database.query("SELECT first_name, last_name, email, phone FROM reporter_profile WHERE id = 1", emptyArray()).use {
-            if (it.moveToFirst()) ReporterProfile(it.getString(0), it.getString(1), it.getString(2), it.getString(3)) else null
+        database.query(
+            "SELECT first_name, last_name, email, phone, reference_number, share_contact, bloctel_registered " +
+                "FROM reporter_profile WHERE id = 1",
+            emptyArray()
+        ).use {
+            if (!it.moveToFirst()) return@use null
+            ReporterProfile(
+                firstName = it.getString(0),
+                lastName = it.getString(1),
+                email = it.getString(2),
+                phone = it.getString(3),
+                referenceNumber = it.getString(4),
+                shareContact = if (it.isNull(5)) null else it.getInt(5) != 0,
+                bloctelRegistered = it.getInt(6) != 0,
+            )
         }
     }
 
@@ -68,6 +96,9 @@ class ReporterProfileStore internal constructor(
             put("last_name", profile.lastName.trim())
             put("email", profile.email.trim())
             put("phone", profile.phone.trim())
+            put("reference_number", profile.referenceNumber.trim())
+            if (profile.shareContact == null) putNull("share_contact") else put("share_contact", if (profile.shareContact) 1 else 0)
+            put("bloctel_registered", if (profile.bloctelRegistered) 1 else 0)
         }
         database.insert("reporter_profile", SQLiteDatabase.CONFLICT_REPLACE, values)
         Unit

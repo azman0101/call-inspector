@@ -85,13 +85,33 @@
       firstName: document.querySelector('input[name="firstName"]'),
       lastName: document.querySelector('input[name="lastName"]'),
       email: document.querySelector('input[name="email"]'),
-      phone: contactPhoneInput()
+      phone: contactPhoneInput(),
+      referenceNumber: document.querySelector('input[name="referenceNumber"]')
     };
     for (var key in fields) {
       var el = fields[key], value = contact[key];
       if (!el || !value || el.value || el.__icContactFilled === value) continue;
       el.__icContactFilled = value;
       setValue(el, value);
+    }
+    if (contact.shareContact === true || contact.shareContact === false) {
+      pickShareChoice(contact.shareContact ? 'Je partage mes coordonnées' : 'Je ne partage pas mes coordonnées');
+    }
+  }
+
+  // "Souhaitez-vous partager vos coordonnées avec l'entreprise ?": answered only while neither option is
+  // checked, so a choice the user makes is kept (and a step 4 rebuilt empty gets it again).
+  function pickShareChoice(title) {
+    var labels = document.querySelectorAll('label');
+    for (var i = 0; i < labels.length; i++) {
+      if (norm(labels[i].innerText).indexOf(norm(title)) !== 0) continue;
+      var input = labels[i].htmlFor ? document.getElementById(labels[i].htmlFor) : labels[i].querySelector('input');
+      if (!input || input.__icContactFilled) return;
+      var group = input.name ? document.querySelectorAll('input[type="radio"][name="' + input.name + '"]') : [input];
+      for (var j = 0; j < group.length; j++) if (group[j].checked) return;
+      input.__icContactFilled = true;
+      labels[i].click();
+      return;
     }
   }
 
@@ -113,6 +133,8 @@
     if (!plan) return;
     pickRadio(plan.problem);
     pickRadio(plan.subcategory);
+    // No reason shows in the call itself: the user's Bloctel registration decides (SignalConso then points to Bloctel).
+    if (!plan.subcategory && window.__icContact && window.__icContact.bloctelRegistered) pickRadio(plan.bloctelSubcategory);
     fillOnce('phone', callerPhoneInput(), plan.phone);
     if (plan.company && plan.company.siret) {
       searchCompany('Par son numéro SIRET', 'identity', plan.company.siret);

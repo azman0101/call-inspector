@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -26,11 +28,13 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -43,7 +47,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -76,6 +82,7 @@ class SignalConsoActivity : ComponentActivity() {
         private fun SignalConsoPlan.toJson() = JSONObject().apply {
             put("problem", SignalConsoReport.PROBLEM)
             put("subcategory", subcategory ?: JSONObject.NULL)
+            put("bloctelSubcategory", bloctelSubcategory ?: JSONObject.NULL)
             put("phone", phone ?: JSONObject.NULL)
             put("dates", JSONArray(dates))
             put("company", company?.let {
@@ -93,6 +100,9 @@ class SignalConsoActivity : ComponentActivity() {
                 .put("lastName", it.lastName)
                 .put("email", it.email)
                 .put("phone", it.phone)
+                .put("referenceNumber", it.referenceNumber)
+                .put("shareContact", it.shareContact ?: JSONObject.NULL)
+                .put("bloctelRegistered", it.bloctelRegistered)
                 .toString()
         } ?: "null"
     }
@@ -111,6 +121,7 @@ class SignalConsoActivity : ComponentActivity() {
         val operatorName = JSONObject(planJson).optJSONObject("company")
             ?.takeIf { it.optString("source") == ReportedCompany.Source.OPERATOR.name }
             ?.optString("name")
+        val hasReason = !JSONObject(planJson).isNull("subcategory")
 
         setContent {
             MyApplicationTheme {
@@ -184,6 +195,18 @@ class SignalConsoActivity : ComponentActivity() {
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
                         }
+                        if (!hasReason && profile?.bloctelRegistered != true) {
+                            Surface(color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    text = "Aucun motif ne ressort de l'appel (en semaine, aux heures autorisées). Choisissez-le à " +
+                                        "l'étape 1, ou ajoutez une note à l'appel (ex. « isolation », « CPF », « se fait passer " +
+                                        "pour la CAF ») pour qu'il soit détecté. Inscrit sur Bloctel ? Indiquez-le dans « Mes coordonnées ».",
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                )
+                            }
+                        }
                         if (operatorName != null) {
                             Surface(color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
                                 Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -244,6 +267,9 @@ private fun ReporterProfileDialog(
     var lastName by remember { mutableStateOf(initial.lastName) }
     var email by remember { mutableStateOf(initial.email) }
     var phone by remember { mutableStateOf(initial.phone) }
+    var referenceNumber by remember { mutableStateOf(initial.referenceNumber) }
+    var shareContact by remember { mutableStateOf(initial.shareContact) }
+    var bloctelRegistered by remember { mutableStateOf(initial.bloctelRegistered) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Mes coordonnées") },
@@ -253,7 +279,7 @@ private fun ReporterProfileDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "Préremplies à l'étape 4 de SignalConso. Elles sont enregistrées uniquement sur ce téléphone " +
+                    text = "Préremplies dans SignalConso. Elles sont enregistrées uniquement sur ce téléphone " +
                         "(ni sauvegarde, ni transfert) et n'en sortent que dans un signalement que vous validez.",
                     fontSize = 12.sp,
                     lineHeight = 16.sp
@@ -268,10 +294,43 @@ private fun ReporterProfileDialog(
                     phone, { phone = it }, label = { Text("Téléphone (facultatif)") }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
                 )
+                OutlinedTextField(
+                    referenceNumber, { referenceNumber = it }, label = { Text("Numéro de référence (facultatif)") },
+                    placeholder = { Text("ex : ZYX987654321") }, singleLine = true
+                )
+                Text("Partager vos coordonnées avec l'entreprise ?", fontSize = 13.sp)
+                listOf(null to "Ne pas préremplir", true to "Je partage", false to "Je ne partage pas").forEach { (value, text) ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(selected = shareContact == value, onClick = { shareContact = value }, role = Role.RadioButton)
+                    ) {
+                        RadioButton(selected = shareContact == value, onClick = null)
+                        Text(text, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .toggleable(value = bloctelRegistered, onValueChange = { bloctelRegistered = it }, role = Role.Checkbox)
+                ) {
+                    Checkbox(checked = bloctelRegistered, onCheckedChange = null)
+                    Text(
+                        "Je suis inscrit sur Bloctel (motif choisi quand l'appel n'en montre aucun)",
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(ReporterProfile(firstName, lastName, email, phone)) }) { Text("Enregistrer") }
+            TextButton(
+                onClick = {
+                    onSave(ReporterProfile(firstName, lastName, email, phone, referenceNumber, shareContact, bloctelRegistered))
+                }
+            ) { Text("Enregistrer") }
         },
         dismissButton = {
             Row {

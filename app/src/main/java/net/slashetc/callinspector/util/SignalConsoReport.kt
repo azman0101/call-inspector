@@ -2,6 +2,7 @@ package net.slashetc.callinspector.util
 
 import net.slashetc.callinspector.data.model.CallLogEntry
 import net.slashetc.callinspector.data.model.CallType
+import java.text.Normalizer
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -9,10 +10,17 @@ import java.util.TimeZone
 
 /** SignalConso "Démarchage abusif > Problème de démarchage téléphonique" sub-options, by their exact label. */
 enum class DemarchageCase(val label: String) {
+    ADMINISTRATION("Je suis démarché par un opérateur se faisant passer pour l'administration"),
+    RENOVATION("Je reçois des appels pour effectuer des travaux ou de la rénovation énergétique"),
+    CPF("Je reçois des appels pour effectuer des formations en utilisant mon CPF"),
     REPEATED_CALLS("J'ai reçu au moins 5 appels de la même entreprise sur les 30 derniers jours"),
     WEEKEND_OR_HOLIDAY("J'ai reçu un appel commercial pendant un week-end ou un jour férié ?"),
     OUTSIDE_WEEKDAY_HOURS("J'ai reçu un appel commercial pendant la semaine en dehors des heures autorisées"),
+    REFUSED_WITHIN_60_DAYS("J'ai reçu un appel d'une entreprise à qui j'avais demandé de ne pas être démarché moins de 60 jours après mon refus"),
     MOBILE_NUMBER("Je suis démarché par un opérateur utilisant un numéro commençant par 06 ou 07"),
+
+    /** Not a SignalConso report: the form only points to bloctel.gouv.fr. Last resort, see [SignalConsoPlan]. */
+    BLOCTEL("Je reçois des appels indésirables alors que je suis inscrit sur Bloctel (ces appels ne concernent ni la rénovation énergétique ni le CPF)"),
 }
 
 /** The company named in the report: the caller when known, otherwise the operator holding the number. */
@@ -24,9 +32,14 @@ data class ReportedCompany(
     enum class Source { CALLER_NAME, OPERATOR }
 }
 
-/** What the prefill script selects and fills; the user reviews and submits every step. */
+/**
+ * What the prefill script selects and fills; the user reviews and submits every step. When no case applies,
+ * [bloctelSubcategory] is selected instead if the user said they are registered on Bloctel (a setting
+ * of their locally stored profile, which the plan is built without).
+ */
 data class SignalConsoPlan(
     val subcategory: String?,
+    val bloctelSubcategory: String?,
     val phone: String?,
     val dates: List<String>,
     val company: ReportedCompany?,
@@ -54,7 +67,35 @@ object SignalConsoReport {
             }
             .sortedBy { it.timestamp }
 
-    /** Applicable SignalConso cases for [call], most useful first. */
+    // Subjects of the call, as the user describes them in their note or contact name (accents and case ignored).
+    private val topicKeywords = listOf(
+        DemarchageCase.ADMINISTRATION to Regex(
+            "\\b(administration|gouvernement|ministere|caf|impots?|urssaf|ameli|cpam|prefecture|mairie|service public|" +
+                "france travail|pole emploi|se fai(t|sant) passer)\\b"
+        ),
+        DemarchageCase.RENOVATION to Regex(
+            "\\b(renovation|isolation|isoler|pompes? a chaleur|pac|panneaux? solaires?|photovoltaique|travaux|fenetres?|" +
+                "chaudieres?|combles|maprimerenov|anah|france renov|dpe|audit energetique|bilan energetique|vmc)\\b"
+        ),
+        DemarchageCase.CPF to Regex("\\b(cpf|compte personnel de formation|formations?)\\b"),
+        DemarchageCase.REFUSED_WITHIN_60_DAYS to Regex(
+            "\\b(refus|refuse|deja dit non|ne plus m'appeler|ne plus appeler|opposition)\\b"
+        ),
+    )
+
+    internal fun topicCases(text: String?): Set<DemarchageCase> {
+        if (text.isNullOrBlank()) return emptySet()
+        val normalized = Normalizer.normalize(text, Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "")
+            .replace('’', '\'')
+            .lowercase(Locale.FRANCE)
+        return topicKeywords.filter { (_, regex) -> regex.containsMatchIn(normalized) }.map { it.first }.toSet()
+    }
+
+    /**
+     * Applicable SignalConso cases for [call], most useful first: what the call was about (from the user's
+     * note or the caller's name), then what its date, time, number and history show.
+     */
     fun applicableCases(
         call: CallLogEntry,
         history: List<CallLogEntry>,
@@ -62,10 +103,15 @@ object SignalConsoReport {
         timeZone: TimeZone,
     ): List<DemarchageCase> {
         val cal = Calendar.getInstance(timeZone).apply { timeInMillis = call.timestamp }
+        val topics = topicCases(call.userNote) + topicCases(call.cachedName)
         return buildList {
+            if (DemarchageCase.ADMINISTRATION in topics) add(DemarchageCase.ADMINISTRATION)
+            if (DemarchageCase.RENOVATION in topics) add(DemarchageCase.RENOVATION)
+            if (DemarchageCase.CPF in topics) add(DemarchageCase.CPF)
             if (recentCallsFromSameNumber(call, history, now).size >= REPEATED_CALLS_THRESHOLD) add(DemarchageCase.REPEATED_CALLS)
             if (isWeekendOrHoliday(cal)) add(DemarchageCase.WEEKEND_OR_HOLIDAY)
             else if (isOutsideWeekdayHours(cal)) add(DemarchageCase.OUTSIDE_WEEKDAY_HOURS)
+            if (DemarchageCase.REFUSED_WITHIN_60_DAYS in topics) add(DemarchageCase.REFUSED_WITHIN_60_DAYS)
             if (call.normalizedNumber.startsWith("06") || call.normalizedNumber.startsWith("07")) add(DemarchageCase.MOBILE_NUMBER)
         }
     }
@@ -82,6 +128,7 @@ object SignalConsoReport {
         val company = reportedCompany(call)
         return SignalConsoPlan(
             subcategory = cases.firstOrNull()?.label,
+            bloctelSubcategory = DemarchageCase.BLOCTEL.label.takeIf { cases.isEmpty() },
             // The form only accepts French numbers: an international number is left for the user to type.
             phone = call.normalizedNumber.takeIf { it.length == 10 && it.startsWith("0") && it.all(Char::isDigit) },
             dates = dates,
@@ -116,8 +163,12 @@ object SignalConsoReport {
         val dateTime = SimpleDateFormat("dd/MM/yyyy 'à' HH'h'mm", Locale.FRANCE).apply { this.timeZone = timeZone }
         return buildString {
             append("Appel de démarchage reçu le ${dateTime.format(call.timestamp)} depuis le ${call.formattedNumber}.")
+            if (DemarchageCase.ADMINISTRATION in cases) append("\nL'appelant se faisait passer pour l'administration.")
+            if (DemarchageCase.RENOVATION in cases) append("\nL'appel portait sur des travaux ou de la rénovation énergétique.")
+            if (DemarchageCase.CPF in cases) append("\nL'appel portait sur des formations financées par le CPF.")
             if (DemarchageCase.WEEKEND_OR_HOLIDAY in cases) append("\nL'appel a eu lieu un samedi, un dimanche ou un jour férié.")
             if (DemarchageCase.OUTSIDE_WEEKDAY_HOURS in cases) append("\nL'appel a eu lieu en dehors des horaires autorisés (10h-13h et 14h-20h en semaine).")
+            if (DemarchageCase.REFUSED_WITHIN_60_DAYS in cases) append("\nJ'avais déjà refusé d'être démarché par cette entreprise.")
             if (recentCount > 1) append("\n$recentCount appels reçus de ce numéro sur les 30 derniers jours.")
             if (DemarchageCase.MOBILE_NUMBER in cases) append("\nLe démarcheur utilise un numéro mobile (06/07).")
             val lookup = call.lookupResult
