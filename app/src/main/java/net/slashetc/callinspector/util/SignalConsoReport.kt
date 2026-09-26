@@ -29,9 +29,13 @@ data class ReportedCompany(
     enum class Source { CALLER_NAME, OPERATOR }
 }
 
-/** What the prefill script selects and fills; the user reviews and submits every step. */
+/**
+ * What the prefill script selects and fills; the user reviews and submits every step.
+ * [isDefaultReason]: nothing in the call showed a reason, so [subcategory] is [SignalConsoReport.DEFAULT_CASE].
+ */
 data class SignalConsoPlan(
-    val subcategory: String?,
+    val subcategory: String,
+    val isDefaultReason: Boolean,
     val phone: String?,
     val dates: List<String>,
     val company: ReportedCompany?,
@@ -42,6 +46,13 @@ object SignalConsoReport {
     const val URL = "https://signal.conso.gouv.fr/fr/demarchage-abusif/faire-un-signalement"
     const val PROBLEM = "Problème de démarchage téléphonique"
     const val HOST = "signal.conso.gouv.fr"
+
+    /**
+     * Reason selected when the call itself shows none: reporting the call means the user holds it unlawful,
+     * and without prior consent a commercial call is one the user never agreed to. Not stated in the
+     * description, which only reports what the call shows; the banner asks the user to check it.
+     */
+    val DEFAULT_CASE = DemarchageCase.REFUSED_WITHIN_60_DAYS
 
     private const val REPEATED_CALLS_THRESHOLD = 5
     private const val THIRTY_DAYS_MS = 30L * 24 * 60 * 60 * 1000
@@ -119,7 +130,8 @@ object SignalConsoReport {
         }
         val company = reportedCompany(call)
         return SignalConsoPlan(
-            subcategory = cases.firstOrNull()?.label,
+            subcategory = (cases.firstOrNull() ?: DEFAULT_CASE).label,
+            isDefaultReason = cases.isEmpty(),
             // The form only accepts French numbers: an international number is left for the user to type.
             phone = call.normalizedNumber.takeIf { it.length == 10 && it.startsWith("0") && it.all(Char::isDigit) },
             dates = dates,

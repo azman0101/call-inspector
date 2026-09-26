@@ -60,7 +60,10 @@ class SignalConsoReportTest {
         val c = call(1, at(2026, 9, 22, 11))
         assertTrue(SignalConsoReport.applicableCases(c, emptyList(), now, paris).isEmpty())
         val plan = SignalConsoReport.buildPlan(c, emptyList(), now, paris)
-        assertNull(plan.subcategory)
+        // Nothing in the call itself: default reason, not claimed in the description.
+        assertEquals(DemarchageCase.REFUSED_WITHIN_60_DAYS.label, plan.subcategory)
+        assertTrue(plan.isDefaultReason)
+        assertFalse(plan.description.contains("refusé"))
         assertEquals(listOf("2026-09-22"), plan.dates)
         assertEquals("0162000000", plan.phone)
     }

@@ -79,7 +79,8 @@ class SignalConsoActivity : ComponentActivity() {
 
         private fun SignalConsoPlan.toJson() = JSONObject().apply {
             put("problem", SignalConsoReport.PROBLEM)
-            put("subcategory", subcategory ?: JSONObject.NULL)
+            put("subcategory", subcategory)
+            put("isDefaultReason", isDefaultReason)
             put("phone", phone ?: JSONObject.NULL)
             put("dates", JSONArray(dates))
             put("company", company?.let {
@@ -117,7 +118,7 @@ class SignalConsoActivity : ComponentActivity() {
         val operatorName = JSONObject(planJson).optJSONObject("company")
             ?.takeIf { it.optString("source") == ReportedCompany.Source.OPERATOR.name }
             ?.optString("name")
-        val hasReason = !JSONObject(planJson).isNull("subcategory")
+        val isDefaultReason = JSONObject(planJson).optBoolean("isDefaultReason")
 
         setContent {
             MyApplicationTheme {
@@ -191,12 +192,13 @@ class SignalConsoActivity : ComponentActivity() {
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
                         }
-                        if (!hasReason) {
+                        if (isDefaultReason) {
                             Surface(color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
                                 Text(
-                                    text = "Aucun motif ne ressort de l'appel (en semaine, aux heures autorisées). Choisissez-le à " +
-                                        "l'étape 1, ou ajoutez une note à l'appel (ex. « isolation », « CPF », « se fait passer " +
-                                        "pour la CAF ») pour qu'il soit détecté.",
+                                    text = "Aucun motif ne ressort de l'appel (en semaine, aux heures autorisées) : motif par défaut " +
+                                        "« demandé à ne pas être démarché, moins de 60 jours après mon refus ». Vérifiez qu'il " +
+                                        "correspond à votre situation, sinon choisissez-en un autre à l'étape 1 ou ajoutez une note " +
+                                        "à l'appel (ex. « isolation », « CPF », « se fait passer pour la CAF »).",
                                     fontSize = 12.sp,
                                     lineHeight = 16.sp,
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
