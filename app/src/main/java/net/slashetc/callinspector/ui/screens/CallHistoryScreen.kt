@@ -1,6 +1,7 @@
 package net.slashetc.callinspector.ui.screens
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -92,6 +93,12 @@ fun CallHistoryScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         viewModel.onPermissionResult(isGranted)
+    }
+    // A report sent from the form updates the number's report count in the list and the open sheet.
+    val reportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) viewModel.loadCalls()
     }
 
     Column(
@@ -398,7 +405,7 @@ fun CallHistoryScreen(
             onToggleSpam = { viewModel.toggleSpamFlag(it) },
             onToggleFavorite = { viewModel.toggleFavorite(it) },
             onSaveNote = { phone, note -> viewModel.saveCallNote(phone, note) },
-            onReport = { reported -> SignalConsoActivity.start(context, reported, uiState.calls) }
+            onReport = { reported -> reportLauncher.launch(SignalConsoActivity.intent(context, reported, uiState.calls)) }
         )
     }
 

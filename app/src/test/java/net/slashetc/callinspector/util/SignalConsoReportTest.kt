@@ -199,4 +199,11 @@ class SignalConsoReportTest {
             SignalConsoReport.applicableCases(call(1, at(2026, 9, 26, 9, 5), note = "Panneaux solaires"), emptyList(), now, paris)
         )
     }
+
+    @Test
+    fun `report summary shows the count and the last report date`() {
+        assertNull(SignalConsoReport.reportSummary(0, null, paris))
+        assertEquals("Signalé 1 fois · dernier le 26/09/2026", SignalConsoReport.reportSummary(1, at(2026, 9, 26, 23, 30), paris))
+        assertEquals("Signalé 3 fois · dernier le 22/09/2026", SignalConsoReport.reportSummary(3, at(2026, 9, 22, 11), paris))
+    }
 }

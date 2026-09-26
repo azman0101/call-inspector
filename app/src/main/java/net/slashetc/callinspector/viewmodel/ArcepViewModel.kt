@@ -115,6 +115,8 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
                 state.copy(
                     calls = entries,
                     filteredCalls = filtered,
+                    // An open detail sheet follows the reloaded call (e.g. its report count after a report).
+                    selectedCallDetail = state.selectedCallDetail?.let { open -> entries.find { it.id == open.id } ?: open },
                     hasPermission = hasPerm,
                     isUsingSampleData = isSample,
                     isLoading = false

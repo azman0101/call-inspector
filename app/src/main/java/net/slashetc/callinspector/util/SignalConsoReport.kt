@@ -59,6 +59,13 @@ object SignalConsoReport {
 
     fun isReportable(call: CallLogEntry): Boolean = call.callType != CallType.OUTGOING
 
+    /** "Signalé 2 fois · dernier le 26/09/2026", or null when the number was never reported from the app. */
+    fun reportSummary(reportCount: Int, lastReportedAt: Long?, timeZone: TimeZone = TimeZone.getDefault()): String? {
+        if (reportCount <= 0 || lastReportedAt == null) return null
+        val date = SimpleDateFormat("dd/MM/yyyy", Locale.FRANCE).apply { this.timeZone = timeZone }.format(lastReportedAt)
+        return "Signalé $reportCount fois · dernier le $date"
+    }
+
     /** Calls received from the same number in the 30 days before [now], oldest first. */
     fun recentCallsFromSameNumber(call: CallLogEntry, history: List<CallLogEntry>, now: Long): List<CallLogEntry> =
         (history + call)

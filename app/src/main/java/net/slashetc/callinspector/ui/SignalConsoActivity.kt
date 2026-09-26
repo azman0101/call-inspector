@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -52,6 +53,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.slashetc.callinspector.data.db.ReporterProfile
 import net.slashetc.callinspector.data.db.ReporterProfileStore
@@ -69,12 +71,15 @@ class SignalConsoActivity : ComponentActivity() {
 
     companion object {
         private const val EXTRA_PLAN_JSON = "plan_json"
+        private const val EXTRA_REPORTED_NUMBER = "reported_number"
+        private const val REPORT_SENT_POLL_MS = 1500L
 
-        fun start(context: Context, call: CallLogEntry, history: List<CallLogEntry>) {
+        /** Opens the form for [call]; the activity result is RESULT_OK once a report was sent and counted. */
+        fun intent(context: Context, call: CallLogEntry, history: List<CallLogEntry>): Intent {
             val plan = SignalConsoReport.buildPlan(call, history, System.currentTimeMillis(), TimeZone.getDefault())
-            context.startActivity(
-                Intent(context, SignalConsoActivity::class.java).putExtra(EXTRA_PLAN_JSON, plan.toJson().toString())
-            )
+            return Intent(context, SignalConsoActivity::class.java)
+                .putExtra(EXTRA_PLAN_JSON, plan.toJson().toString())
+                .putExtra(EXTRA_REPORTED_NUMBER, call.normalizedNumber)
         }
 
         private fun SignalConsoPlan.toJson() = JSONObject().apply {
@@ -107,6 +112,9 @@ class SignalConsoActivity : ComponentActivity() {
     // The saved contact details, as a JS literal, injected with the plan on every page load.
     private var contactJson = "null"
 
+    // A form opened from the app counts as one report at most.
+    private var reportRecorded = false
+
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -119,6 +127,7 @@ class SignalConsoActivity : ComponentActivity() {
             ?.takeIf { it.optString("source") == ReportedCompany.Source.OPERATOR.name }
             ?.optString("name")
         val isDefaultReason = JSONObject(planJson).optBoolean("isDefaultReason")
+        val reportedNumber = intent.getStringExtra(EXTRA_REPORTED_NUMBER)
 
         setContent {
             MyApplicationTheme {
@@ -136,6 +145,24 @@ class SignalConsoActivity : ComponentActivity() {
                     }
                 }
                 LaunchedEffect(Unit) { useProfile(profileStore.load()) }
+                // No JS bridge: the prefill script flags SignalConso's acknowledgment page and the app reads the flag.
+                LaunchedEffect(Unit) {
+                    while (!reportRecorded && reportedNumber != null) {
+                        delay(REPORT_SENT_POLL_MS)
+                        if (Uri.parse(webView.url ?: "").host != SignalConsoReport.HOST) continue
+                        webView.evaluateJavascript("!!window.__icReportSent") { sent ->
+                            if (sent != "true" || reportRecorded) return@evaluateJavascript
+                            reportRecorded = true
+                            scope.launch {
+                                runCatching { profileStore.recordReport(reportedNumber, System.currentTimeMillis()) }
+                                    .onSuccess {
+                                        setResult(RESULT_OK)
+                                        Toast.makeText(this@SignalConsoActivity, "Signalement comptabilisé pour ce numéro", Toast.LENGTH_SHORT).show()
+                                    }
+                            }
+                        }
+                    }
+                }
                 if (editingProfile) {
                     ReporterProfileDialog(
                         initial = profile ?: ReporterProfile(),

@@ -25,8 +25,11 @@ data class ReporterProfile(
         referenceNumber.isBlank() && shareContact == null
 }
 
+/** SignalConso reports the user sent for one number. */
+data class ReportStats(val count: Int, val lastReportedAt: Long)
+
 /**
- * Keeps [ReporterProfile] in its own app-private database, separate from arcep_data.db (which is replaced
+ * Keeps [ReporterProfile], and the SignalConso reports sent from the app, in its own app-private database, separate from arcep_data.db (which is replaced
  * on every ARCEP update), encrypted with SQLCipher under a passphrase wrapped by an Android Keystore key
  * ([DatabaseKeyStore]). It is excluded from backups and device transfers (data_extraction_rules.xml):
  * it only ever leaves the phone when the user submits a SignalConso report.
@@ -43,7 +46,7 @@ class ReporterProfileStore internal constructor(
         openDatabase(appContext, Schema)
     }
 
-    internal object Schema : SupportSQLiteOpenHelper.Callback(2) {
+    internal object Schema : SupportSQLiteOpenHelper.Callback(3) {
         override fun onCreate(db: SupportSQLiteDatabase) {
             db.execSQL(
                 """
@@ -63,6 +66,18 @@ class ReporterProfileStore internal constructor(
             if (oldVersion < 2) {
                 db.execSQL("ALTER TABLE reporter_profile ADD COLUMN reference_number TEXT NOT NULL DEFAULT ''")
                 db.execSQL("ALTER TABLE reporter_profile ADD COLUMN share_contact INTEGER")
+            }
+            if (oldVersion < 3) {
+                db.execSQL(
+                    """
+                    CREATE TABLE signalconso_reports (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        phone_number TEXT NOT NULL,
+                        reported_at INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX signalconso_reports_phone ON signalconso_reports (phone_number)")
             }
         }
     }
@@ -99,8 +114,39 @@ class ReporterProfileStore internal constructor(
         Unit
     }
 
+    /** Clears the profile only: the reports sent stay counted. */
     suspend fun clear() = withContext(Dispatchers.IO) {
         database.delete("reporter_profile", null, null)
+        Unit
+    }
+
+    /** Records a report the user sent on SignalConso for [phoneNumber] (normalized). */
+    suspend fun recordReport(phoneNumber: String, reportedAt: Long) = withContext(Dispatchers.IO) {
+        database.insert(
+            "signalconso_reports",
+            SQLiteDatabase.CONFLICT_ABORT,
+            ContentValues().apply {
+                put("phone_number", phoneNumber)
+                put("reported_at", reportedAt)
+            }
+        )
+        Unit
+    }
+
+    /** Reports sent, per normalized phone number. */
+    suspend fun reportStats(): Map<String, ReportStats> = withContext(Dispatchers.IO) {
+        database.query(
+            "SELECT phone_number, COUNT(*), MAX(reported_at) FROM signalconso_reports GROUP BY phone_number",
+            emptyArray()
+        ).use {
+            buildMap {
+                while (it.moveToNext()) put(it.getString(0), ReportStats(it.getInt(1), it.getLong(2)))
+            }
+        }
+    }
+
+    internal suspend fun clearReports() = withContext(Dispatchers.IO) {
+        database.delete("signalconso_reports", null, null)
         Unit
     }
 

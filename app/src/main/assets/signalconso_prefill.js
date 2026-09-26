@@ -128,7 +128,21 @@
     if (digits.indexOf('SIRET' + siret) !== -1 && !radios[0].checked) label.click();
   }
 
+  // SignalConso's acknowledgment once a report is sent. The app polls window.__icReportSent to count it.
+  var SENT = ['votre signalement a été envoyé', 'votre signalement ne sera pas transmis à cette entreprise'];
+
+  function detectReportSent() {
+    // The page content only: body.textContent would include Next.js's inline script payloads.
+    var main = document.querySelector('main');
+    if (window.__icReportSent || !main) return;
+    var text = norm(main.textContent);
+    for (var i = 0; i < SENT.length; i++) {
+      if (text.indexOf(SENT[i]) !== -1) { window.__icReportSent = true; return; }
+    }
+  }
+
   function run() {
+    detectReportSent();
     var plan = window.__icPlan;
     if (!plan) return;
     pickRadio(plan.problem);

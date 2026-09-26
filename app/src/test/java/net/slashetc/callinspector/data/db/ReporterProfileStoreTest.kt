@@ -30,6 +30,7 @@ class ReporterProfileStoreTest {
             ReporterProfileStore.open(context, FrameworkSQLiteOpenHelperFactory(), callback)
         }
         store.clear()
+        store.clearReports()
     }
 
     @Test
@@ -98,5 +99,19 @@ class ReporterProfileStoreTest {
             ReporterProfileStore.open(ctx, FrameworkSQLiteOpenHelperFactory(), callback)
         }
         assertEquals(ReporterProfile("Camille", "Test", "camille@example.invalid", ""), migrated.load())
+    }
+
+    @Test
+    fun `reports are counted per number and survive clearing the profile`() = runBlocking {
+        assertTrue(store.reportStats().isEmpty())
+        store.save(ReporterProfile(firstName = "Camille"))
+        store.recordReport("0162000000", 1_000L)
+        store.recordReport("0162000000", 3_000L)
+        store.recordReport("0270000000", 2_000L)
+        store.clear()
+        assertEquals(
+            mapOf("0162000000" to ReportStats(2, 3_000L), "0270000000" to ReportStats(1, 2_000L)),
+            store.reportStats()
+        )
     }
 }

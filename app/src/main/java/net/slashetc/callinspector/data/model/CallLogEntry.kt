@@ -51,5 +51,8 @@ data class CallLogEntry(
     val lookupResult: ArcepLookupResult,
     val isSpamFlagged: Boolean = false,
     val isFavorite: Boolean = false,
-    val userNote: String? = null
+    val userNote: String? = null,
+    /** SignalConso reports the user sent from the app for this number. */
+    val reportCount: Int = 0,
+    val lastReportedAt: Long? = null
 )

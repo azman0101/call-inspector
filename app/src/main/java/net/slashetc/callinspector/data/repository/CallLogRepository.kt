@@ -6,6 +6,8 @@ import android.provider.CallLog
 import android.util.Log
 import androidx.core.content.ContextCompat
 import net.slashetc.callinspector.data.db.ArcepDatabaseManager
+import net.slashetc.callinspector.data.db.ReportStats
+import net.slashetc.callinspector.data.db.ReporterProfileStore
 import net.slashetc.callinspector.data.model.CallLogEntry
 import net.slashetc.callinspector.data.model.CallType
 import net.slashetc.callinspector.util.PhoneNumberFormatter
@@ -15,6 +17,13 @@ import kotlinx.coroutines.withContext
 class CallLogRepository(private val context: Context) {
 
     private val dbManager = ArcepDatabaseManager.getInstance(context)
+    private val reportStore = ReporterProfileStore.getInstance(context)
+
+    // The call list must not depend on the encrypted report log: without it, calls just show no reports.
+    private suspend fun loadReportStats(): Map<String, ReportStats> =
+        runCatching { reportStore.reportStats() }
+            .onFailure { Log.e(TAG, "Failed to read the SignalConso report log", it) }
+            .getOrDefault(emptyMap())
 
     fun hasPermission(): Boolean {
         return ContextCompat.checkSelfPermission(
@@ -29,6 +38,7 @@ class CallLogRepository(private val context: Context) {
         }
 
         val entries = mutableListOf<CallLogEntry>()
+        val reports = loadReportStats()
         val projection = arrayOf(
             CallLog.Calls._ID,
             CallLog.Calls.NUMBER,
@@ -89,7 +99,9 @@ class CallLogRepository(private val context: Context) {
                             lookupResult = lookup,
                             isSpamFlagged = note?.isSpam ?: lookup.numberType.isDemarchage,
                             isFavorite = note?.isFavorite ?: false,
-                            userNote = note?.userNote
+                            userNote = note?.userNote,
+                            reportCount = reports[lookup.normalizedNumber]?.count ?: 0,
+                            lastReportedAt = reports[lookup.normalizedNumber]?.lastReportedAt
                         )
                     )
                 }
@@ -121,6 +133,7 @@ class CallLogRepository(private val context: Context) {
         )
 
         val results = mutableListOf<CallLogEntry>()
+        val reports = loadReportStats()
         for ((idx, item) in sampleNumbers.withIndex()) {
             val (rawNum, callType, timestamp) = item
             val lookup = dbManager.lookupNumber(rawNum)
@@ -152,7 +165,9 @@ class CallLogRepository(private val context: Context) {
                     lookupResult = lookup,
                     isSpamFlagged = note?.isSpam ?: lookup.numberType.isDemarchage,
                     isFavorite = note?.isFavorite ?: false,
-                    userNote = note?.userNote
+                    userNote = note?.userNote,
+                    reportCount = reports[lookup.normalizedNumber]?.count ?: 0,
+                    lastReportedAt = reports[lookup.normalizedNumber]?.lastReportedAt
                 )
             )
         }

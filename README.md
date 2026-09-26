@@ -48,6 +48,7 @@ Application Android Kotlin / Jetpack Compose qui analyse l'historique d'appels d
   - Entreprise signalée : le nom de l'appelant s'il figure dans le journal d'appels, sinon l'opérateur auquel l'ARCEP a attribué le numéro (recherche par SIRET, résultat sélectionné s'il est unique ; recherche par nom à défaut). Un bandeau explique ce choix et l'utilisateur peut le changer.
   - Coordonnées (étape 4 : identité, email, téléphone, numéro de référence, choix de partage avec l'entreprise) mémorisables via « Mes coordonnées » : stockées dans une base locale dédiée (`reporter_profile_secure.db`) chiffrée par SQLCipher, avec une clé protégée par l'Android Keystore (StrongBox si disponible), exclue des sauvegardes et des transferts d'appareil ; elles ne quittent le téléphone que dans un signalement validé par l'utilisateur.
   - L'utilisateur vérifie chaque étape, choisit l'entreprise si besoin et valide lui-même l'envoi.
+  - Signalements envoyés comptabilisés par numéro, quand SignalConso affiche son accusé de réception : l'historique indique le nombre de signalements et la date du dernier, rappelés sous le bouton de signalement. Ils sont stockés dans la même base chiffrée.
 - **Gestion des annotations locales** :
   - Marquage de numéros en favoris ou comme indésirables / démarchage.
   - Ajout de notes personnelles locales associées aux numéros.
