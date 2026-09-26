@@ -11,28 +11,46 @@ import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.launch
+import net.slashetc.callinspector.data.db.ReporterProfile
+import net.slashetc.callinspector.data.db.ReporterProfileStore
 import net.slashetc.callinspector.data.model.CallLogEntry
 import net.slashetc.callinspector.ui.theme.MyApplicationTheme
 import net.slashetc.callinspector.util.ReportedCompany
@@ -68,7 +86,19 @@ class SignalConsoActivity : ComponentActivity() {
             } ?: JSONObject.NULL)
             put("description", description)
         }
+
+        private fun ReporterProfile?.toContactJson(): String = this?.takeUnless { it.isEmpty() }?.let {
+            JSONObject()
+                .put("firstName", it.firstName)
+                .put("lastName", it.lastName)
+                .put("email", it.email)
+                .put("phone", it.phone)
+                .toString()
+        } ?: "null"
     }
+
+    // The saved contact details, as a JS literal, injected with the plan on every page load.
+    private var contactJson = "null"
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,7 +106,8 @@ class SignalConsoActivity : ComponentActivity() {
         val planJson = intent.getStringExtra(EXTRA_PLAN_JSON) ?: run { finish(); return }
         val prefillScript = assets.open("signalconso_prefill.js").bufferedReader().use { it.readText() }
         // JSONObject.toString() yields a valid JS object literal, so the plan can't break out of the script.
-        val injection = "window.__icPlan = $planJson;\n$prefillScript"
+        val injection = { "window.__icPlan = $planJson;\nwindow.__icContact = $contactJson;\n$prefillScript" }
+        val profileStore = ReporterProfileStore.getInstance(this)
         val operatorName = JSONObject(planJson).optJSONObject("company")
             ?.takeIf { it.optString("source") == ReportedCompany.Source.OPERATOR.name }
             ?.optString("name")
@@ -84,6 +115,40 @@ class SignalConsoActivity : ComponentActivity() {
         setContent {
             MyApplicationTheme {
                 val webView = remember { createWebView(injection) }
+                val scope = rememberCoroutineScope()
+                var profile by remember { mutableStateOf<ReporterProfile?>(null) }
+                var editingProfile by remember { mutableStateOf(false) }
+                fun useProfile(saved: ReporterProfile?) {
+                    profile = saved
+                    contactJson = saved.toContactJson()
+                    if (Uri.parse(webView.url ?: "").host == SignalConsoReport.HOST) {
+                        webView.evaluateJavascript(
+                            "window.__icContact = $contactJson; if (window.__icPrefillRun) window.__icPrefillRun();", null
+                        )
+                    }
+                }
+                LaunchedEffect(Unit) { useProfile(profileStore.load()) }
+                if (editingProfile) {
+                    ReporterProfileDialog(
+                        initial = profile ?: ReporterProfile(),
+                        canClear = profile != null,
+                        onSave = { edited ->
+                            editingProfile = false
+                            scope.launch {
+                                if (edited.isEmpty()) profileStore.clear() else profileStore.save(edited)
+                                useProfile(profileStore.load())
+                            }
+                        },
+                        onClear = {
+                            editingProfile = false
+                            scope.launch {
+                                profileStore.clear()
+                                useProfile(null)
+                            }
+                        },
+                        onDismiss = { editingProfile = false }
+                    )
+                }
                 BackHandler {
                     if (webView.canGoBack()) webView.goBack() else finish()
                 }
@@ -95,6 +160,11 @@ class SignalConsoActivity : ComponentActivity() {
                                 IconButton(onClick = { finish() }) {
                                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Fermer")
                                 }
+                            },
+                            actions = {
+                                IconButton(onClick = { editingProfile = true }) {
+                                    Icon(Icons.Outlined.Person, contentDescription = "Mes coordonnées")
+                                }
                             }
                         )
                     }
@@ -103,7 +173,12 @@ class SignalConsoActivity : ComponentActivity() {
                         Surface(color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
                             Text(
                                 text = "Les champs connus sont préremplis depuis votre journal d'appels. " +
-                                    "Vérifiez chaque étape : rien n'est envoyé tant que vous ne validez pas le signalement.",
+                                    "Vérifiez chaque étape : rien n'est envoyé tant que vous ne validez pas le signalement." +
+                                    if (profile == null) {
+                                        " Vos coordonnées (étape 4) peuvent être mémorisées sur ce téléphone via l'icône en haut à droite."
+                                    } else {
+                                        ""
+                                    },
                                 fontSize = 12.sp,
                                 lineHeight = 16.sp,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -137,7 +212,7 @@ class SignalConsoActivity : ComponentActivity() {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun createWebView(injection: String) = WebView(this).apply {
+    private fun createWebView(injection: () -> String) = WebView(this).apply {
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         webViewClient = object : WebViewClient() {
@@ -150,9 +225,59 @@ class SignalConsoActivity : ComponentActivity() {
             }
 
             override fun onPageFinished(view: WebView, url: String) {
-                if (Uri.parse(url).host == SignalConsoReport.HOST) view.evaluateJavascript(injection, null)
+                if (Uri.parse(url).host == SignalConsoReport.HOST) view.evaluateJavascript(injection(), null)
             }
         }
         loadUrl(SignalConsoReport.URL)
     }
+}
+
+@Composable
+private fun ReporterProfileDialog(
+    initial: ReporterProfile,
+    canClear: Boolean,
+    onSave: (ReporterProfile) -> Unit,
+    onClear: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var firstName by remember { mutableStateOf(initial.firstName) }
+    var lastName by remember { mutableStateOf(initial.lastName) }
+    var email by remember { mutableStateOf(initial.email) }
+    var phone by remember { mutableStateOf(initial.phone) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Mes coordonnées") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Préremplies à l'étape 4 de SignalConso. Elles sont enregistrées uniquement sur ce téléphone " +
+                        "(ni sauvegarde, ni transfert) et n'en sortent que dans un signalement que vous validez.",
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
+                )
+                OutlinedTextField(firstName, { firstName = it }, label = { Text("Prénom") }, singleLine = true)
+                OutlinedTextField(lastName, { lastName = it }, label = { Text("Nom") }, singleLine = true)
+                OutlinedTextField(
+                    email, { email = it }, label = { Text("Email") }, singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                )
+                OutlinedTextField(
+                    phone, { phone = it }, label = { Text("Téléphone (facultatif)") }, singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(ReporterProfile(firstName, lastName, email, phone)) }) { Text("Enregistrer") }
+        },
+        dismissButton = {
+            Row {
+                if (canClear) TextButton(onClick = onClear) { Text("Effacer") }
+                TextButton(onClick = onDismiss) { Text("Annuler") }
+            }
+        }
+    )
 }

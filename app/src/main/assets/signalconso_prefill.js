@@ -1,4 +1,5 @@
-// Prefills the SignalConso "Démarchage abusif" wizard from window.__icPlan. It only selects options and
+// Prefills the SignalConso "Démarchage abusif" wizard from window.__icPlan, and step 4 ("Vos coordonnées")
+// from window.__icContact, the details the user saved on the phone. It only selects options and
 // fills empty fields, each at most once, and never clicks "Suivant", "Continuer" or the final submit:
 // the user reviews every step and moves on. The only button it presses is the company search
 // "Rechercher", which looks the company up without submitting anything; a SIRET search returning
@@ -67,6 +68,33 @@
     }, 300);
   }
 
+  // Step 4 also has input[name=phone], for the user's own number ("Téléphone (facultatif)").
+  function contactPhoneInput() {
+    var inputs = document.querySelectorAll('input[name="phone"]');
+    for (var i = 0; i < inputs.length; i++) {
+      var label = inputs[i].id && document.querySelector('label[for="' + inputs[i].id + '"]');
+      if (label && norm(label.innerText).indexOf('vous ayant contacté') === -1) return inputs[i];
+    }
+    return null;
+  }
+
+  // Saved contact details go into empty fields only, and never twice into the same field: a value the
+  // user erased stays erased. SignalConso rebuilds step 4 empty after "Précédent", which gets refilled.
+  function fillContact(contact) {
+    var fields = {
+      firstName: document.querySelector('input[name="firstName"]'),
+      lastName: document.querySelector('input[name="lastName"]'),
+      email: document.querySelector('input[name="email"]'),
+      phone: contactPhoneInput()
+    };
+    for (var key in fields) {
+      var el = fields[key], value = contact[key];
+      if (!el || !value || el.value || el.__icContactFilled === value) continue;
+      el.__icContactFilled = value;
+      setValue(el, value);
+    }
+  }
+
   // A SIRET/SIREN search returns the matching establishment(s): select it only when there is a single
   // one carrying that number. A name search is left to the user, its results are too loose.
   function selectSiretResult(siret) {
@@ -96,7 +124,10 @@
       fillOnce('date:' + i, dates[i], plan.dates[i]);
     }
     fillOnce('description', document.querySelector('textarea'), plan.description);
+    if (window.__icContact) fillContact(window.__icContact);
   }
+  // Lets the app apply contact details saved while the form is open.
+  window.__icPrefillRun = run;
 
   new MutationObserver(run).observe(document.documentElement, { childList: true, subtree: true });
   run();
