@@ -19,7 +19,7 @@ L'application n'est ni éditée, ni approuvée par l'ARCEP, la DGCCRF (SignalCon
 ## 3. Vos données restent sur votre téléphone
 
 1. Votre journal d'appels, vos notes, favoris et recherches sont traités sur votre téléphone. L'application ne les envoie nulle part, sauf dans un signalement que vous validez (article 5).
-2. Si vous les enregistrez, vos coordonnées pour SignalConso et l'historique de vos signalements sont stockés chiffrés sur le téléphone et exclus des sauvegardes.
+2. Vos notes, favoris et marquages spam, ainsi que vos coordonnées pour SignalConso et l'historique de vos signalements si vous les enregistrez, sont stockés chiffrés sur le téléphone et exclus des sauvegardes.
 3. Aucun compte, aucun identifiant publicitaire, aucun profilage.
 
 ## 4. Connexions réseau
