@@ -95,6 +95,7 @@ class SearchBugVerificationTest {
     /**
      * Test confirming Bug #2 (Database level):
      * Searching prefixes or operators by name in ArcepDatabaseManager should return operator entries.
+     * This test currently FAILS because searchPrefixesOrOperators searches r.operator_name in number_ranges instead of o.name in operators.
      */
     @Test
     fun `searching database by operator name should return operator entries`() = runTest {
