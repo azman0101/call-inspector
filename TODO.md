@@ -7,14 +7,6 @@ Only #16 and #17 contained open items.
 
 ### APK signing (from #17)
 
-- [ ] **Create a persistent upload keystore and set the CI secrets.**
-  Without `KEYSTORE_BASE64`, CI generates a throwaway keystore on every run (see the
-  `KEYSTORE_BASE64 secret is not set` warning in the build log). Each release APK then has a
-  different signature, so it cannot update the previous install. Updating means uninstalling
-  first, which deletes local call notes.
-  - Generate a keystore with a key aliased `upload` (the alias `app/build.gradle.kts` signs with).
-  - Set repository secrets `KEYSTORE_BASE64` (base64 of the `.jks`), `STORE_PASSWORD` and `KEY_PASSWORD`.
-  - Keep a backup of the keystore outside the repo: losing it means no future update can install over existing installs.
 - [ ] **Make the debug keystore persistent too.**
   `debug.keystore` is also regenerated on every CI run, because there is no
   `debug.keystore.base64` in the repo. Debug APKs from different runs therefore can't update
@@ -40,3 +32,8 @@ Only #16 and #17 contained open items.
 - [x] Release APK is signed again: on main run #63 (after #17), `validateSigningRelease`
   and `packageRelease` succeeded and the throwaway-key warning was emitted as expected.
 - [x] Package rename compiles and tests pass: CI "Build & Test Android APK" on #16 succeeded.
+- [x] Persistent upload keystore: the `KEYSTORE_BASE64`, `STORE_PASSWORD` and `KEY_PASSWORD`
+  secrets are set. On main run #67 (attempt 2), the log shows
+  `Restoring my-upload-key.jks from secrets.KEYSTORE_BASE64...`, and `validateSigningRelease` and
+  `packageRelease` succeeded. Keep a backup of the keystore outside the repo: without it, no
+  future APK can update existing installs.
