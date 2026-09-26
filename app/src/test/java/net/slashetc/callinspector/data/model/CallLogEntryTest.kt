@@ -3,6 +3,7 @@ package net.slashetc.callinspector.data.model
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CallLogEntryTest {
@@ -56,8 +57,8 @@ class CallLogEntryTest {
 
         assertEquals("John Doe", entry.cachedName)
         assertEquals(CallType.MISSED, entry.callType)
-        assertEquals(true, entry.isSpamFlagged)
-        assertEquals(true, entry.isFavorite)
+        assertTrue(entry.isSpamFlagged)
+        assertTrue(entry.isFavorite)
         assertEquals("Potential telemarketer", entry.userNote)
     }
 }
