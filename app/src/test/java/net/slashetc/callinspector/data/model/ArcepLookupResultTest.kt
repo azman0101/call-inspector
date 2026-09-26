@@ -57,6 +57,24 @@ class ArcepLookupResultTest {
     }
 
     @Test
+    fun `officialArcepUrl defaults to official ARCEP portal URL`() {
+        val lookupResult = ArcepLookupResult(
+            queryNumber = "0162000000",
+            normalizedNumber = "0162000000",
+            formattedNumber = "01 62 00 00 00",
+            operator = sampleOperator,
+            range = sampleRange,
+            numberType = PhoneNumberType.DEMARCHAGE_COMMERCIAL,
+            isFound = true
+        )
+
+        assertEquals(
+            "https://www.arcep.fr/mes-demarches-et-services/entreprises/fiches-pratiques/identifier-un-operateur-par-un-numero.html",
+            lookupResult.officialArcepUrl
+        )
+    }
+
+    @Test
     fun `operatorDisplayName returns operator name when operator is present`() {
         val lookupResult = ArcepLookupResult(
             queryNumber = "0162000000",
