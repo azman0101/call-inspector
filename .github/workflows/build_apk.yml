@@ -61,25 +61,34 @@ jobs:
           echo "Bumping version: $VERSION_NAME (code: $RUN_NUM, is_release: $IS_RELEASE)"
 
       - name: Prepare build environment
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+          # The release key is only exposed to pushes on main, the only builds that use it.
+          KEYSTORE_BASE64: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && secrets.KEYSTORE_BASE64 || '' }}
+          IS_MAIN_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         run: |
           chmod +x gradlew
 
           # Restauration ou génération du debug.keystore requis par signingConfig 'debugConfig'
+          # (alias androiddebugkey, mots de passe "android", cf. app/build.gradle.kts)
           if [ ! -f debug.keystore ]; then
-            if [ -f debug.keystore.base64 ]; then
+            if [ -n "${DEBUG_KEYSTORE_BASE64}" ]; then
+              echo "Restoring debug.keystore from secrets.DEBUG_KEYSTORE_BASE64..."
+              printf '%s' "${DEBUG_KEYSTORE_BASE64}" | base64 -d > debug.keystore
+            elif [ -f debug.keystore.base64 ]; then
               echo "Restoring debug.keystore from debug.keystore.base64..."
               base64 -d debug.keystore.base64 > debug.keystore
             else
-              echo "Generating new debug.keystore with keytool..."
+              echo "::warning::DEBUG_KEYSTORE_BASE64 secret is not set: debug APK signed with a throwaway key; it cannot update a debug APK from another run."
               keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
             fi
           fi
 
-          # Configuration du keystore de signature pour la release si nécessaire
-          if [ ! -f my-upload-key.jks ]; then
-            if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+          # Configuration du keystore de signature pour la release (push sur main uniquement)
+          if [ "${IS_MAIN_PUSH}" = "true" ] && [ ! -f my-upload-key.jks ]; then
+            if [ -n "${KEYSTORE_BASE64}" ]; then
               echo "Restoring my-upload-key.jks from secrets.KEYSTORE_BASE64..."
-              echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
+              printf '%s' "${KEYSTORE_BASE64}" | base64 -d > my-upload-key.jks
             else
               # Alias must match keyAlias "upload" in app/build.gradle.kts.
               echo "::warning::KEYSTORE_BASE64 secret is not set: signing with a throwaway key. This APK cannot update an install signed by any other build."
