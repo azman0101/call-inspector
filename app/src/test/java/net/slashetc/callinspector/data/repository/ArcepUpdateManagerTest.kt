@@ -4,7 +4,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertArrayEquals
 import org.junit.Test
+import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.security.cert.CertificateException
 import javax.net.ssl.SSLHandshakeException
@@ -70,5 +72,24 @@ class ArcepUpdateManagerTest {
         }
         assertFalse(untrusted.hasTlsPinningFailure())
         assertFalse(IOException("timeout").hasTlsPinningFailure())
+    }
+
+    @Test
+    fun `readLimited returns the full content when under the limit`() {
+        val data = ByteArray(200_000) { (it % 251).toByte() }
+        assertArrayEquals(data, ArcepUpdateManager.readLimited(ByteArrayInputStream(data), data.size))
+    }
+
+    @Test(expected = IOException::class)
+    fun `readLimited rejects content larger than the limit`() {
+        ArcepUpdateManager.readLimited(ByteArrayInputStream(ByteArray(1_001)), 1_000)
+    }
+
+    @Test
+    fun `isPlausibleArcepData rejects empty or truncated exports`() {
+        assertTrue(ArcepUpdateManager.isPlausibleArcepData(20_655, 1_592))
+        assertFalse(ArcepUpdateManager.isPlausibleArcepData(0, 0))
+        assertFalse(ArcepUpdateManager.isPlausibleArcepData(20_655, 0))
+        assertFalse(ArcepUpdateManager.isPlausibleArcepData(9_999, 1_592))
     }
 }
