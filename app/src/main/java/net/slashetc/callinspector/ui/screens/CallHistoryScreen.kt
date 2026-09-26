@@ -1,6 +1,7 @@
 package net.slashetc.callinspector.ui.screens
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -66,6 +67,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.slashetc.callinspector.data.model.CallLogEntry
+import net.slashetc.callinspector.ui.SignalConsoActivity
 import net.slashetc.callinspector.ui.components.CallDetailBottomSheet
 import net.slashetc.callinspector.ui.components.CallItemCard
 import net.slashetc.callinspector.ui.components.PermissionRationaleDialog
@@ -91,6 +93,12 @@ fun CallHistoryScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         viewModel.onPermissionResult(isGranted)
+    }
+    // A report sent from the form updates the number's report count in the list and the open sheet.
+    val reportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) viewModel.loadCalls()
     }
 
     Column(
@@ -396,7 +404,8 @@ fun CallHistoryScreen(
             onDismiss = { viewModel.selectCallDetail(null) },
             onToggleSpam = { viewModel.toggleSpamFlag(it) },
             onToggleFavorite = { viewModel.toggleFavorite(it) },
-            onSaveNote = { phone, note -> viewModel.saveCallNote(phone, note) }
+            onSaveNote = { phone, note -> viewModel.saveCallNote(phone, note) },
+            onReport = { reported -> reportLauncher.launch(SignalConsoActivity.intent(context, reported, uiState.calls)) }
         )
     }
 

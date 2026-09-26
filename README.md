@@ -37,6 +37,18 @@ Application Android Kotlin / Jetpack Compose qui analyse l'historique d'appels d
   - Saisie libre d'un numéro à 10 chiffres ou d'un préfixe (ex. `01 62`, `06 12`, `07 81`, `08 92`).
   - Bouton pour coller directement depuis le presse-papiers.
   - Exploration de toutes les tranches attribuées correspondantes.
+- **Signalement assisté sur SignalConso** :
+  - Depuis la fiche d'un appel reçu, le bouton « Signaler ce démarchage (SignalConso) » ouvre le formulaire officiel de la DGCCRF (« Démarchage abusif ») dans l'application.
+  - Préremplissage à partir du journal d'appels : numéro appelant, dates des appels, description et motif. Le motif est choisi, par ordre de priorité, d'après :
+    - le sujet de l'appel, repéré dans la note de l'utilisateur ou le nom de l'appelant : administration usurpée, rénovation énergétique, CPF ;
+    - ce que montre l'appel lui-même : au moins 5 appels en 30 jours, week-end ou jour férié, hors horaires autorisés ;
+    - un refus de démarchage datant de moins de 60 jours, s'il est mentionné dans la note ;
+    - un numéro en 06/07 ;
+    - à défaut, « refus de démarchage datant de moins de 60 jours » : signaler l'appel revient à le tenir pour illicite. Un bandeau demande de vérifier ce motif, qui n'est pas repris dans la description.
+  - Entreprise signalée : le nom de l'appelant s'il figure dans le journal d'appels, sinon l'opérateur auquel l'ARCEP a attribué le numéro (recherche par SIRET, résultat sélectionné s'il est unique ; recherche par nom à défaut). Un bandeau explique ce choix et l'utilisateur peut le changer.
+  - Coordonnées (étape 4 : identité, email, téléphone, numéro de référence, choix de partage avec l'entreprise) mémorisables via « Mes coordonnées » : stockées dans une base locale dédiée (`reporter_profile_secure.db`) chiffrée par SQLCipher, avec une clé protégée par l'Android Keystore (StrongBox si disponible), exclue des sauvegardes et des transferts d'appareil ; elles ne quittent le téléphone que dans un signalement validé par l'utilisateur.
+  - L'utilisateur vérifie chaque étape, choisit l'entreprise si besoin et valide lui-même l'envoi.
+  - Signalements envoyés comptabilisés par numéro, quand SignalConso affiche son accusé de réception : l'historique indique le nombre de signalements et la date du dernier, rappelés sous le bouton de signalement. Ils sont stockés dans la même base chiffrée.
 - **Gestion des annotations locales** :
   - Marquage de numéros en favoris ou comme indésirables / démarchage.
   - Ajout de notes personnelles locales associées aux numéros.

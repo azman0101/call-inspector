@@ -45,6 +45,7 @@ import net.slashetc.callinspector.ui.theme.SuccessGreen
 import net.slashetc.callinspector.ui.theme.SuccessGreenSoft
 import net.slashetc.callinspector.ui.theme.WarningAmber
 import net.slashetc.callinspector.util.PhoneNumberFormatter
+import net.slashetc.callinspector.util.SignalConsoReport
 
 @Composable
 fun CallItemCard(
@@ -160,6 +161,19 @@ fun CallItemCard(
                         modifier = Modifier.size(18.dp)
                     )
                 }
+            }
+
+            // SignalConso reports sent from the app for this number
+            SignalConsoReport.reportSummary(call.reportCount, call.lastReportedAt)?.let { summary ->
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = summary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = DangerRed,
+                    maxLines = 1,
+                    modifier = Modifier.testTag("call_report_summary")
+                )
             }
 
             // User Note snippet if present
