@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
    Android 12+ backup and device-to-device transfer rules. android:allowBackup="false" already turns off
-   cloud backup, but not device-to-device transfers: the user's SignalConso contact details
-   (reporter_profile_secure.db, SQLCipher-encrypted) must never leave the phone except in a report the user submits.
+   cloud backup, but not device-to-device transfers. The user's SignalConso contact details
+   (reporter_profile_secure.db) and call notes (user_notes_secure.db) are SQLCipher-encrypted under Android
+   Keystore keys that never leave the phone: they must not be copied, and a copy could not be read anyway.
    See https://developer.android.com/about/versions/12/backup-restore#xml-changes
 -->
 <data-extraction-rules>
@@ -11,11 +12,19 @@
         <exclude domain="database" path="reporter_profile_secure.db-journal" />
         <exclude domain="database" path="reporter_profile_secure.db-wal" />
         <exclude domain="database" path="reporter_profile_secure.db-shm" />
+        <exclude domain="database" path="user_notes_secure.db" />
+        <exclude domain="database" path="user_notes_secure.db-journal" />
+        <exclude domain="database" path="user_notes_secure.db-wal" />
+        <exclude domain="database" path="user_notes_secure.db-shm" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="database" path="reporter_profile_secure.db" />
         <exclude domain="database" path="reporter_profile_secure.db-journal" />
         <exclude domain="database" path="reporter_profile_secure.db-wal" />
         <exclude domain="database" path="reporter_profile_secure.db-shm" />
+        <exclude domain="database" path="user_notes_secure.db" />
+        <exclude domain="database" path="user_notes_secure.db-journal" />
+        <exclude domain="database" path="user_notes_secure.db-wal" />
+        <exclude domain="database" path="user_notes_secure.db-shm" />
     </device-transfer>
 </data-extraction-rules>
