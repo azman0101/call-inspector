@@ -93,6 +93,20 @@ Depuis le 1er janvier 2023, la législation française encadre strictement le t�
 - Interdiction formelle du démarchage à partir de numéros mobiles (06 / 07).
 - L'application met en évidence ces plages avec un badge distinctif et indique quel opérateur télécom héberge la ligne du centre d'appels.
 
+### 5. Confidentialité, Absence de serveur tiers & Diagnostics Opt-In
+- **Zero PII (Données d'identification personnelle)** :
+  - L'application traite tous les numéros de téléphone, contacts et notes en local sur le terminal.
+  - Aucune information personnelle n'est envoyée sur le réseau.
+- **Aucun serveur tiers appartenant au développeur** :
+  - L'application ne possède et n'exploite aucun serveur d'infrastructure ou d'API intermédiaire.
+  - Les seules connexions réseau se font directement avec l'extranet de l'ARCEP (`extranet.arcep.fr`) pour le téléchargement chiffré des bases ouvertes, ou avec le collecteur de crash lors de l'activation volontaire.
+- **Télémétrie et rapports d'anomalies strictement Opt-In** :
+  - Conformément au RGPD, la collecte de rapports d'erreurs techniques est **désactivée par défaut**.
+  - L'utilisateur peut l'activer volontairement et la désactiver à tout moment dans l'écran *Observatoire & Cadre Légal*.
+  - En cas d'activation, un filtrage strict côté client supprime les identifiants d'appareils, adresses email et numéros de téléphone avant tout envoi.
+- **Conditions Générales d'Utilisation** :
+  - Consultez le document complet dans [`CGU.md`](CGU.md) ou directement au sein de l'application.
+
 ---
 
 ## Corrections récentes apportées au projet

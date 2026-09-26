@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Policy
@@ -39,6 +40,7 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -93,6 +95,7 @@ fun StatsAndInfoScreen(
     var tapCount by remember { mutableIntStateOf(0) }
     var isToastEnabled by remember { mutableStateOf(SentryHelper.isToastEnabled(context)) }
     var isTelemetryEnabled by remember { mutableStateOf(SentryHelper.isTelemetryEnabled(context)) }
+    var showCguDialog by remember { mutableStateOf(false) }
 
     val totalCalls = calls.size
     val demarchageCalls = calls.count { it.isSpamFlagged || it.lookupResult.numberType.isDemarchage }
@@ -895,15 +898,30 @@ fun StatsAndInfoScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Rapports techniques d'anomalies",
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Rapports techniques d'anomalies",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    color = if (isTelemetryEnabled) Color(0xFFE8F5E9) else Color(0xFFF1F5F9),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = if (isTelemetryEnabled) "Opt-in actif" else "Désactivé par défaut",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isTelemetryEnabled) SuccessGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Transmet des rapports anonymisés en cas de plantage pour corriger les bugs. Aucun numéro de téléphone, contact ou identifiant d'appareil n'est transmis (nettoyage local strict).",
+                                text = "Désactivé par défaut (Opt-In). Si activé, transmet uniquement des rapports d'erreurs anonymisés pour corriger les plantages. Aucun numéro de téléphone, contact, note ou identifiant persistant d'appareil n'est transmis.",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 15.sp
@@ -917,11 +935,34 @@ fun StatsAndInfoScreen(
                                 SentryHelper.setTelemetryEnabled(context, enabled)
                                 Toast.makeText(
                                     context,
-                                    if (enabled) "Rapports d'anomalies activés" else "Rapports d'anomalies désactivés",
+                                    if (enabled) "Rapports d'anomalies activés (Opt-in)" else "Rapports d'anomalies désactivés",
                                     Toast.LENGTH_SHORT
                                 ).show()
                             },
                             modifier = Modifier.testTag("telemetry_opt_out_switch")
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedButton(
+                        onClick = { showCguDialog = true },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("open_cgu_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Gavel,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Conditions Générales d'Utilisation (CGU)",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
@@ -980,6 +1021,103 @@ fun StatsAndInfoScreen(
 
             Spacer(modifier = Modifier.height(40.dp))
         }
+    }
+
+    if (showCguDialog) {
+        AlertDialog(
+            onDismissRequest = { showCguDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Gavel,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Conditions Générales d'Utilisation",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "1. Absence totale de garantie",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "L'application est fournie gratuitement, « en l'état » (AS IS), sans aucune garantie d'aucune sorte. Les informations d'attribution de numéros sont issues des publications ouvertes de l'ARCEP et reflètent l'opérateur attributaire de la tranche initiale. En cas de portabilité de la ligne, l'opérateur final peut différer. Le développeur décline toute responsabilité pour tout préjudice direct ou indirect résultant de l'utilisation de l'application.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        lineHeight = 16.sp
+                    )
+
+                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
+                    Text(
+                        text = "2. Aucune collecte de données d'identification (Zero PII)",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "Vos appels, contacts, numéros saisis et notes personnelles sont traités exclusivement en local sur votre terminal. Aucune donnée d'identification personnelle (nom, email, numéro de téléphone, identifiant d'appareil) n'est collectée, enregistrée ou transmise.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        lineHeight = 16.sp
+                    )
+
+                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
+                    Text(
+                        text = "3. Aucun serveur tiers appartenant au développeur",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "L'application n'effectue aucune connexion vers un serveur tiers appartenant au développeur. Les seuls flux réseau autorisés sont le téléchargement direct des fichiers officiels de l'ARCEP (extranet.arcep.fr, sécurisé par TLS pinning) et le service de diagnostic technique en cas d'anomalie.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        lineHeight = 16.sp
+                    )
+
+                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
+                    Text(
+                        text = "4. Diagnostic d'anomalies strictement Opt-In",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "La transmission de rapports d'erreurs techniques est désactivée par défaut (Opt-In). Vous pouvez l'activer volontairement ou la révoquer à tout moment dans la section « Confidentialité & Données ».",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        lineHeight = 16.sp
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showCguDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = ArcepBlue)
+                ) {
+                    Text("J'ai compris")
+                }
+            },
+            shape = RoundedCornerShape(16.dp)
+        )
     }
 }
 

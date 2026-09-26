@@ -31,8 +31,8 @@ class SentryHelperTest {
     }
 
     @Test
-    fun `telemetry is enabled by default`() {
-        assertTrue(SentryHelper.isTelemetryEnabled(context))
+    fun `telemetry is disabled by default (opt-in)`() {
+        assertFalse(SentryHelper.isTelemetryEnabled(context))
     }
 
     @Test
