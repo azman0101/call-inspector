@@ -91,6 +91,8 @@ android {
       signingConfig = signingConfigs.getByName("release")
     }
     debug {
+      // Installs next to the release app instead of clashing with its signature and data.
+      applicationIdSuffix = ".debug"
       val customDebugKeystore = file("${rootDir}/debug.keystore")
       if (customDebugKeystore.exists()) {
         signingConfig = signingConfigs.getByName("debugConfig")
