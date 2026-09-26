@@ -66,6 +66,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.slashetc.callinspector.data.model.CallLogEntry
+import net.slashetc.callinspector.ui.SignalConsoActivity
 import net.slashetc.callinspector.ui.components.CallDetailBottomSheet
 import net.slashetc.callinspector.ui.components.CallItemCard
 import net.slashetc.callinspector.ui.components.PermissionRationaleDialog
@@ -396,7 +397,8 @@ fun CallHistoryScreen(
             onDismiss = { viewModel.selectCallDetail(null) },
             onToggleSpam = { viewModel.toggleSpamFlag(it) },
             onToggleFavorite = { viewModel.toggleFavorite(it) },
-            onSaveNote = { phone, note -> viewModel.saveCallNote(phone, note) }
+            onSaveNote = { phone, note -> viewModel.saveCallNote(phone, note) },
+            onReport = { reported -> SignalConsoActivity.start(context, reported, uiState.calls) }
         )
     }
 

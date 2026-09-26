@@ -72,6 +72,7 @@ import net.slashetc.callinspector.ui.theme.DangerRedSoft
 import net.slashetc.callinspector.ui.theme.SuccessGreen
 import net.slashetc.callinspector.ui.theme.WarningAmber
 import net.slashetc.callinspector.ui.theme.WarningAmberSoft
+import net.slashetc.callinspector.util.SignalConsoReport
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,6 +82,7 @@ fun CallDetailBottomSheet(
     onToggleSpam: (CallLogEntry) -> Unit,
     onToggleFavorite: (CallLogEntry) -> Unit,
     onSaveNote: (String, String?) -> Unit,
+    onReport: ((CallLogEntry) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -101,6 +103,7 @@ fun CallDetailBottomSheet(
             onToggleSpam = { onToggleSpam(call) },
             onToggleFavorite = { onToggleFavorite(call) },
             onSaveNote = { note -> onSaveNote(call.rawNumber, note) },
+            onReport = onReport?.takeIf { SignalConsoReport.isReportable(call) }?.let { report -> { report(call) } },
             onDismiss = onDismiss
         )
     }
@@ -116,6 +119,7 @@ fun ArcepDossierContent(
     onToggleSpam: (() -> Unit)? = null,
     onToggleFavorite: (() -> Unit)? = null,
     onSaveNote: ((String?) -> Unit)? = null,
+    onReport: (() -> Unit)? = null,
     onDismiss: (() -> Unit)? = null,
     isScrollable: Boolean = true,
     modifier: Modifier = Modifier
@@ -409,6 +413,22 @@ fun ArcepDossierContent(
                 Icon(imageVector = Icons.Default.Call, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(text = "Appeler", fontSize = 13.sp)
+            }
+        }
+
+        if (onReport != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = onReport,
+                colors = ButtonDefaults.buttonColors(containerColor = DangerRed),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("report_signalconso_button")
+            ) {
+                Icon(imageVector = Icons.Default.Warning, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = "Signaler ce démarchage (SignalConso)", fontWeight = FontWeight.SemiBold)
             }
         }
 

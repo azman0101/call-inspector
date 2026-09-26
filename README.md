@@ -37,6 +37,10 @@ Application Android Kotlin / Jetpack Compose qui analyse l'historique d'appels d
   - Saisie libre d'un numéro à 10 chiffres ou d'un préfixe (ex. `01 62`, `06 12`, `07 81`, `08 92`).
   - Bouton pour coller directement depuis le presse-papiers.
   - Exploration de toutes les tranches attribuées correspondantes.
+- **Signalement assisté sur SignalConso** :
+  - Depuis la fiche d'un appel reçu, le bouton « Signaler ce démarchage (SignalConso) » ouvre le formulaire officiel de la DGCCRF (« Démarchage abusif ») dans l'application.
+  - Préremplissage à partir du journal d'appels : motif (au moins 5 appels en 30 jours, week-end ou jour férié, hors horaires autorisés, numéro 06/07), numéro appelant, dates des appels et description.
+  - L'utilisateur vérifie chaque étape et valide lui-même l'envoi ; l'identité de l'entreprise et ses coordonnées restent à saisir.
 - **Gestion des annotations locales** :
   - Marquage de numéros en favoris ou comme indésirables / démarchage.
   - Ajout de notes personnelles locales associées aux numéros.

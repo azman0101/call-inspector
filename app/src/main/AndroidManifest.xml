@@ -32,6 +32,13 @@
         <!-- Active la capture des logs Sentry (SDK >= 8.12.0) -->
         <meta-data android:name="io.sentry.logs.enabled" android:value="true" />
 
+        <!-- configChanges: keep the WebView (and the half-filled form) across rotations. -->
+        <activity
+            android:name=".ui.SignalConsoActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@style/Theme.MyApplication" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
