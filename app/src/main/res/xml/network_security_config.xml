@@ -6,8 +6,18 @@
         <pin-set expiration="2027-09-25">
             <!-- GlobalSign RSA OV SSL CA 2018, observed in the live ARCEP chain on 2026-09-25. -->
             <pin digest="SHA-256">hETpgVvaLC0bvcGG3t0cuqiHvr4XyP2MTwCiqhgRWwU=</pin>
-            <!-- GlobalSign Root CA - R3, independently verified from the macOS trust store. -->
+            <!-- GlobalSign Root CA - R3, independently verified from the macOS trust store
+                 and from Debian ca-certificates 20240203. Expires 2029-03-18. -->
             <pin digest="SHA-256">cGuxAXyFXFkWm61cF4HPWX8S0srS9j0aSqN0k4AP+4A=</pin>
+            <!-- Backup pins: GlobalSign's newer roots, so a certificate renewal under a newer
+                 GlobalSign chain keeps working while any other CA stays rejected.
+                 Hashes from Debian ca-certificates 20240203. -->
+            <!-- GlobalSign Root CA - R6 (RSA), expires 2034-12-10. -->
+            <pin digest="SHA-256">aCdH+LpiG4fN07wpXtXKvOciocDANj0daLOJKNJ4fx4=</pin>
+            <!-- GlobalSign Root R46 (RSA), expires 2046-03-20. -->
+            <pin digest="SHA-256">rn+WLLnmp9v3uDP7GPqbcaiRdd+UnCMrap73yz3yu/w=</pin>
+            <!-- GlobalSign Root E46 (ECDSA), expires 2046-03-20. -->
+            <pin digest="SHA-256">4EoCLOMvTM8sf2BGKHuCijKpCfXnUUR/g/0scfb9gXM=</pin>
         </pin-set>
     </domain-config>
 </network-security-config>

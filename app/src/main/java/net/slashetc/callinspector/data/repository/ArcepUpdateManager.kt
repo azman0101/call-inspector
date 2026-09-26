@@ -13,7 +13,10 @@ import io.sentry.Sentry
 import javax.net.ssl.SSLPeerUnverifiedException
 import java.security.cert.CertificateException
 import java.io.BufferedReader
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
+import java.io.InputStream
 import java.io.InputStreamReader
 import java.nio.charset.Charset
 import java.text.SimpleDateFormat
@@ -54,6 +57,29 @@ class ArcepUpdateManager(private val context: Context) {
         const val MAX_NUMBER_LENGTH = 20
         const val MAX_TERRITORY_LENGTH = 100
 
+        // Both CSV files are a few MB; anything far larger is not a genuine ARCEP export.
+        const val MAX_DOWNLOAD_BYTES = 32 * 1024 * 1024
+
+        // Roughly half of the current volume (~20 600 ranges, ~1 600 operators): a renamed CSV column
+        // or a truncated download must not replace a working database with an empty one.
+        const val MIN_EXPECTED_RANGES = 10_000
+        const val MIN_EXPECTED_OPERATORS = 500
+
+        fun isPlausibleArcepData(rangeCount: Int, operatorCount: Int): Boolean =
+            rangeCount >= MIN_EXPECTED_RANGES && operatorCount >= MIN_EXPECTED_OPERATORS
+
+        fun readLimited(input: InputStream, maxBytes: Int): ByteArray {
+            val out = ByteArrayOutputStream()
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                if (out.size() + read > maxBytes) throw IOException("Réponse ARCEP trop volumineuse (> $maxBytes octets)")
+                out.write(buffer, 0, read)
+            }
+            return out.toByteArray()
+        }
+
         fun sanitizeToken(token: String?, maxLength: Int): String? {
             if (token == null) return null
             val cleaned = token.replace(Regex("[\\x00-\\x1F\\x7F]"), "").trim().trim('"').trim('\'').trim()
@@ -69,6 +95,8 @@ class ArcepUpdateManager(private val context: Context) {
     suspend fun checkAndDownloadUpdate(
         onProgress: (UpdateStatus) -> Unit
     ): Boolean = withContext(Dispatchers.IO) {
+        val tempDbFile = File(context.cacheDir, "arcep_update_temp.db")
+        var openedTempDb: SQLiteDatabase? = null
         try {
             onProgress(UpdateStatus.Checking())
 
@@ -95,12 +123,13 @@ class ArcepUpdateManager(private val context: Context) {
                 .header("User-Agent", "ArcepOperateur/1.0 (Android)")
                 .build()
 
-            val ceResponse = client.newCall(ceRequest).execute()
-            if (!ceResponse.isSuccessful) {
-                onProgress(UpdateStatus.Error("Échec du téléchargement des opérateurs : Code HTTP ${ceResponse.code}"))
-                return@withContext false
-            }
-            val ceBytes = ceResponse.body?.bytes() ?: run {
+            val ceBytes = client.newCall(ceRequest).execute().use { ceResponse ->
+                if (!ceResponse.isSuccessful) {
+                    onProgress(UpdateStatus.Error("Échec du téléchargement des opérateurs : Code HTTP ${ceResponse.code}"))
+                    return@withContext false
+                }
+                ceResponse.body?.byteStream()?.let { readLimited(it, MAX_DOWNLOAD_BYTES) }
+            } ?: run {
                 onProgress(UpdateStatus.Error("Fichier opérateurs vide"))
                 return@withContext false
             }
@@ -112,22 +141,23 @@ class ArcepUpdateManager(private val context: Context) {
                 .header("User-Agent", "ArcepOperateur/1.0 (Android)")
                 .build()
 
-            val majResponse = client.newCall(majRequest).execute()
-            if (!majResponse.isSuccessful) {
-                onProgress(UpdateStatus.Error("Échec du téléchargement de MAJNUM : Code HTTP ${majResponse.code}"))
-                return@withContext false
-            }
-            val majBytes = majResponse.body?.bytes() ?: run {
+            val majBytes = client.newCall(majRequest).execute().use { majResponse ->
+                if (!majResponse.isSuccessful) {
+                    onProgress(UpdateStatus.Error("Échec du téléchargement de MAJNUM : Code HTTP ${majResponse.code}"))
+                    return@withContext false
+                }
+                majResponse.body?.byteStream()?.let { readLimited(it, MAX_DOWNLOAD_BYTES) }
+            } ?: run {
                 onProgress(UpdateStatus.Error("Fichier MAJNUM vide"))
                 return@withContext false
             }
 
             // 4. Compile into temporary SQLite database
             onProgress(UpdateStatus.Processing("Compilation et indexation locale de la base...", 0.70f))
-            val tempDbFile = File(context.cacheDir, "arcep_update_temp.db")
-            if (tempDbFile.exists()) tempDbFile.delete()
+            SQLiteDatabase.deleteDatabase(tempDbFile)
 
             val tempDb = SQLiteDatabase.openOrCreateDatabase(tempDbFile, null)
+            openedTempDb = tempDb
             tempDb.execSQL("PRAGMA page_size = 4096;")
             tempDb.execSQL("PRAGMA synchronous = OFF;")
 
@@ -273,6 +303,12 @@ class ArcepUpdateManager(private val context: Context) {
             tempDb.endTransaction()
             insertRangeStmt.close()
 
+            if (!isPlausibleArcepData(rangeCount, opCount)) {
+                Log.w(TAG, "Rejected ARCEP update: $rangeCount ranges, $opCount operators")
+                onProgress(UpdateStatus.Error("Données ARCEP incomplètes ($rangeCount tranches, $opCount opérateurs) : la base actuelle est conservée."))
+                return@withContext false
+            }
+
             // 5. Restore user call notes from current database
             dbManager.backupUserNotesTo(tempDb)
 
@@ -328,6 +364,9 @@ class ArcepUpdateManager(private val context: Context) {
             Log.e(TAG, "Erreur lors de la mise à jour ARCEP", e)
             onProgress(UpdateStatus.Error("Erreur : ${e.localizedMessage ?: e.message}"))
             false
+        } finally {
+            openedTempDb?.takeIf { it.isOpen }?.let { db -> runCatching { db.close() } }
+            SQLiteDatabase.deleteDatabase(tempDbFile)
         }
     }
 }

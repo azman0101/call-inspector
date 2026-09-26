@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 
 data class DatabaseStats(
     val totalRanges: Int,
@@ -418,15 +419,21 @@ class ArcepDatabaseManager private constructor(private val context: Context) {
     @Synchronized
     fun replaceDatabaseFile(newDbFile: File) {
         try {
+            val activeDbFile = context.getDatabasePath(dbName)
+            // Stage next to the active file so the swap is a same-directory rename: the active
+            // database is never missing, even if the copy fails (e.g. disk full).
+            val stagedFile = File(activeDbFile.parentFile, "$dbName.new")
+            newDbFile.copyTo(stagedFile, overwrite = true)
             if (db != null && db!!.isOpen) {
                 db!!.close()
                 db = null
             }
-            val activeDbFile = context.getDatabasePath(dbName)
-            if (activeDbFile.exists()) {
-                activeDbFile.delete()
+            // Leftover journal/WAL files of the old database must not be replayed onto the new one.
+            listOf("-journal", "-wal", "-shm").forEach { File(activeDbFile.path + it).delete() }
+            if (!stagedFile.renameTo(activeDbFile)) {
+                stagedFile.delete()
+                throw IOException("Impossible de remplacer la base ARCEP active")
             }
-            newDbFile.copyTo(activeDbFile, overwrite = true)
             newDbFile.delete()
             // Re-open
             db = SQLiteDatabase.openDatabase(activeDbFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
