@@ -11,6 +11,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import io.sentry.Sentry
 import javax.net.ssl.SSLPeerUnverifiedException
+import java.security.cert.CertificateException
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
@@ -329,14 +330,17 @@ class ArcepUpdateManager(private val context: Context) {
             false
         }
     }
+}
 
-    private fun Throwable.hasTlsPinningFailure(): Boolean {
-        var current: Throwable? = this
-        val seen = mutableSetOf<Throwable>()
-        while (current != null && seen.add(current)) {
-            if (current is SSLPeerUnverifiedException) return true
-            current = current.cause
-        }
-        return false
+// Android's network_security_config pin-set fails with CertificateException("Pin verification failed")
+// wrapped in an SSLHandshakeException; SSLPeerUnverifiedException is OkHttp CertificatePinner's failure.
+internal fun Throwable.hasTlsPinningFailure(): Boolean {
+    var current: Throwable? = this
+    val seen = mutableSetOf<Throwable>()
+    while (current != null && seen.add(current)) {
+        if (current is SSLPeerUnverifiedException) return true
+        if (current is CertificateException && current.message?.contains("Pin verification failed") == true) return true
+        current = current.cause
     }
+    return false
 }
