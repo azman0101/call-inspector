@@ -57,6 +57,47 @@ class ArcepLookupResultTest {
     }
 
     @Test
+    fun `blockDisplay returns formatted range with custom tranche values`() {
+        val customRange = ArcepNumberRange(
+            id = 2L,
+            ezabpqm = "0937000",
+            trancheDebut = "0937000000",
+            trancheFin = "0937999999",
+            operatorCode = "SFR",
+            operatorName = "SFR"
+        )
+        val lookupResult = ArcepLookupResult(
+            queryNumber = "0937000000",
+            normalizedNumber = "0937000000",
+            formattedNumber = "09 37 00 00 00",
+            operator = null,
+            range = customRange,
+            numberType = PhoneNumberType.POLYVALENT_VOIP,
+            isFound = true
+        )
+
+        assertEquals("0937000000 à 0937999999", lookupResult.blockDisplay)
+    }
+
+    @Test
+    fun `officialArcepUrl defaults to official ARCEP portal URL`() {
+        val lookupResult = ArcepLookupResult(
+            queryNumber = "0162000000",
+            normalizedNumber = "0162000000",
+            formattedNumber = "01 62 00 00 00",
+            operator = sampleOperator,
+            range = sampleRange,
+            numberType = PhoneNumberType.DEMARCHAGE_COMMERCIAL,
+            isFound = true
+        )
+
+        assertEquals(
+            "https://www.arcep.fr/mes-demarches-et-services/entreprises/fiches-pratiques/identifier-un-operateur-par-un-numero.html",
+            lookupResult.officialArcepUrl
+        )
+    }
+
+    @Test
     fun `operatorDisplayName returns operator name when operator is present`() {
         val lookupResult = ArcepLookupResult(
             queryNumber = "0162000000",
