@@ -18,6 +18,10 @@ jobs:
     name: Build & Test Android APK
     runs-on: ubuntu-24.04
     environment: production
+    env:
+      # Read by app/build.gradle.kts into BuildConfig. Set for every Gradle step, not only the APK ones:
+      # a value that differs between steps invalidates the configuration cache and recompiles all Kotlin.
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
 
     steps:
       - name: Checkout repository
@@ -134,7 +138,6 @@ jobs:
       - name: Build Debug APK (Feature Branch)
         if: ${{ github.event_name == 'pull_request' || (github.ref != 'refs/heads/main' && github.event_name != 'push') }}
         env:
-          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           VERSION_CODE: ${{ env.VERSION_CODE }}
           VERSION_NAME: ${{ env.VERSION_NAME }}
         run: ./gradlew assembleDebug --stacktrace
@@ -152,7 +155,6 @@ jobs:
       - name: Build Release APK (Main Branch)
         if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
         env:
-          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'android' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android' }}
           KEYSTORE_PATH: my-upload-key.jks

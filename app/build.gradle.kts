@@ -4,7 +4,8 @@ import java.io.File
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
-  alias(libs.plugins.google.devtools.ksp)
+  // KSP had no annotation processing left to do (no Room entity, no Moshi adapter); add it back with them.
+  // alias(libs.plugins.google.devtools.ksp)
   alias(libs.plugins.secrets)
   alias(libs.plugins.google.services)
   alias(libs.plugins.sentry)
@@ -109,7 +110,18 @@ android {
   }
   // legal/CGU.md at the repository root is the single source of the terms shown in the app.
   sourceSets { getByName("main") { assets.srcDir("../legal") } }
-  testOptions { unitTests { isIncludeAndroidResources = true } }
+  testOptions {
+    unitTests {
+      isIncludeAndroidResources = true
+      // Robolectric downloads its android-all jars from Maven Central on first run: in Claude Code cloud
+      // sessions, use the same mirror as settings.gradle.kts to avoid "429 Too Many Requests".
+      val useMavenCentralMirror = providers.environmentVariable("CLAUDE_CODE_REMOTE").orNull == "true" ||
+        providers.gradleProperty("mavenCentralMirror").orNull == "true"
+      if (useMavenCentralMirror) {
+        all { it.systemProperty("robolectric.dependency.repo.url", "https://maven-central.storage-download.googleapis.com/maven2/") }
+      }
+    }
+  }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true
@@ -140,6 +152,8 @@ googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.W
 sentry {
   // Désactive l'upload des mappings pour les builds locaux / compatibilité Termux
   autoUploadProguardMapping.set(false)
+  // The plugin reports its own usage to sentry.io on every build; blocked in sandboxes, and not needed.
+  telemetry.set(false)
   tracingInstrumentation {
     enabled.set(true)
   }
@@ -171,8 +185,9 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
   // implementation(libs.androidx.navigation.compose)
-  implementation(libs.androidx.room.ktx)
-  implementation(libs.androidx.room.runtime)
+  // implementation(libs.androidx.room.ktx)
+  // implementation(libs.androidx.room.runtime)
+  implementation(libs.androidx.sqlite)
   implementation(libs.sqlcipher.android)
   implementation(libs.sentry.android)
   // implementation(libs.coil.compose)
@@ -199,6 +214,7 @@ dependencies {
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
+  testImplementation(libs.androidx.sqlite.framework)
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.robolectric)
@@ -209,6 +225,6 @@ dependencies {
   androidTestImplementation(libs.androidx.runner)
   debugImplementation(libs.androidx.compose.ui.test.manifest)
   debugImplementation(libs.androidx.compose.ui.tooling)
-  "ksp"(libs.androidx.room.compiler)
-  "ksp"(libs.moshi.kotlin.codegen)
+  // "ksp"(libs.androidx.room.compiler)
+  // "ksp"(libs.moshi.kotlin.codegen)
 }
