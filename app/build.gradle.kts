@@ -4,7 +4,8 @@ import java.io.File
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
-  alias(libs.plugins.google.devtools.ksp)
+  // KSP had no annotation processing left to do (no Room entity, no Moshi adapter); add it back with them.
+  // alias(libs.plugins.google.devtools.ksp)
   alias(libs.plugins.secrets)
   alias(libs.plugins.google.services)
   alias(libs.plugins.sentry)
@@ -147,6 +148,8 @@ googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.W
 sentry {
   // Désactive l'upload des mappings pour les builds locaux / compatibilité Termux
   autoUploadProguardMapping.set(false)
+  // The plugin reports its own usage to sentry.io on every build; blocked in sandboxes, and not needed.
+  telemetry.set(false)
   tracingInstrumentation {
     enabled.set(true)
   }
@@ -178,8 +181,9 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
   // implementation(libs.androidx.navigation.compose)
-  implementation(libs.androidx.room.ktx)
-  implementation(libs.androidx.room.runtime)
+  // implementation(libs.androidx.room.ktx)
+  // implementation(libs.androidx.room.runtime)
+  implementation(libs.androidx.sqlite)
   implementation(libs.sqlcipher.android)
   implementation(libs.sentry.android)
   // implementation(libs.coil.compose)
@@ -206,6 +210,7 @@ dependencies {
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
+  testImplementation(libs.androidx.sqlite.framework)
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.robolectric)
@@ -216,6 +221,6 @@ dependencies {
   androidTestImplementation(libs.androidx.runner)
   debugImplementation(libs.androidx.compose.ui.test.manifest)
   debugImplementation(libs.androidx.compose.ui.tooling)
-  "ksp"(libs.androidx.room.compiler)
-  "ksp"(libs.moshi.kotlin.codegen)
+  // "ksp"(libs.androidx.room.compiler)
+  // "ksp"(libs.moshi.kotlin.codegen)
 }
