@@ -9,3 +9,10 @@ updates:
     groups:
       github-actions:
         patterns: ["*"]
+    ignore:
+      # setup-gradle v6's default cache-provider ("enhanced") is the proprietary gradle-actions-caching
+      # component (Gradle Technologies Terms of Use), free for public repos but only a "Free Preview" for
+      # private ones; its open-source cache-provider: basic drops gradle-home-cache-includes (our NVD
+      # database cache) and restore keys. Stay on the MIT-licensed v5 line until that changes.
+      - dependency-name: "gradle/actions"
+        versions: [">=6.0.0"]
