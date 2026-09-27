@@ -209,7 +209,7 @@ Un workflow GitHub Actions dédié (`.github/workflows/build_apk.yml`) est confi
 
 ### Analyse VirusTotal de l'APK release
 
-À chaque build sur `main`, la CI envoie l'APK release à [VirusTotal](https://www.virustotal.com) (`tools/virustotal_scan.sh`). Le résumé du run (badge VirusTotal ci-dessus, puis le dernier run de `main`) donne l'empreinte SHA-256 de l'APK, le nombre de détections et le lien vers le rapport public `https://www.virustotal.com/gui/file/<sha256>`. L'analyse est informative : une détection, souvent un faux positif sur une app qui lit le journal d'appels, affiche un avertissement mais ne bloque jamais la release. Le secret `VIRUSTOTAL_API_KEY` active l'analyse ; sans lui, l'étape est ignorée.
+À chaque build sur `main`, la CI envoie l'APK release à [VirusTotal](https://www.virustotal.com) (`tools/virustotal_scan.sh`). Le badge VirusTotal ci-dessus pointe directement vers le rapport public de la dernière analyse : comme son lien dépend du SHA-256 de chaque APK, la CI le met à jour dans ce README à chaque build sur `main`. Le résumé du run donne les mêmes informations : empreinte SHA-256, nombre de détections, lien du rapport. L'analyse est informative : une détection, souvent un faux positif sur une app qui lit le journal d'appels, affiche un avertissement mais ne bloque jamais la release. Le secret `VIRUSTOTAL_API_KEY` active l'analyse ; sans lui, l'étape est ignorée et le badge garde son dernier lien connu.
 
 ### Vérifier la signature d'un APK de release
 Les APK de release construits sur `main` sont signés avec la clé d'upload stable du projet (secret `KEYSTORE_BASE64`). Pour vérifier qu'un APK téléchargé provient bien de cette clé (par ex. sous Termux, `pkg install apksigner`) :
