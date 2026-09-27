@@ -113,9 +113,13 @@ android {
   testOptions {
     unitTests {
       isIncludeAndroidResources = true
-      // Robolectric downloads its android-all jars from Maven Central on first run: use the same mirror
-      // as settings.gradle.kts to avoid "429 Too Many Requests".
-      all { it.systemProperty("robolectric.dependency.repo.url", "https://maven-central.storage-download.googleapis.com/maven2/") }
+      // Robolectric downloads its android-all jars from Maven Central on first run: in Claude Code cloud
+      // sessions, use the same mirror as settings.gradle.kts to avoid "429 Too Many Requests".
+      val useMavenCentralMirror = providers.environmentVariable("CLAUDE_CODE_REMOTE").orNull == "true" ||
+        providers.gradleProperty("mavenCentralMirror").orNull == "true"
+      if (useMavenCentralMirror) {
+        all { it.systemProperty("robolectric.dependency.repo.url", "https://maven-central.storage-download.googleapis.com/maven2/") }
+      }
     }
   }
   dependenciesInfo {
