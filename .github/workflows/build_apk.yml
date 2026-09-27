@@ -179,6 +179,18 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      # Informational VirusTotal scan of the release APK, on pushes to main only: detections produce a
+      # warning and the report link in the job summary, never a failure (continue-on-error, and the
+      # script itself only warns). Needs the VIRUSTOTAL_API_KEY secret, else it is skipped.
+      - name: Scan APK with VirusTotal (non-blocking)
+        id: virustotal
+        if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+        continue-on-error: true
+        timeout-minutes: 15
+        env:
+          VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+        run: tools/virustotal_scan.sh "$(ls app/build/outputs/apk/release/*.apk | head -1)"
+
       # Pull requests build the debug APK, whose D8 dexing of every library took about 7 CPU-minutes per
       # run (mergeExtDexDebug waits on it): main only built the release APK (R8), so the Gradle cache it
       # saves never held the debug dex, and no pull request could reuse it. Building the debug APK here

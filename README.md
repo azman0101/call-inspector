@@ -1,8 +1,31 @@
 # Info Opérateur
 
+[![Build](https://github.com/azman0101/call-inspector/actions/workflows/build_apk.yml/badge.svg?branch=main&event=push)](https://github.com/azman0101/call-inspector/actions/workflows/build_apk.yml?query=branch%3Amain+event%3Apush)
+[![VirusTotal](https://img.shields.io/badge/VirusTotal-rapport%20de%20l%27APK%20release-394EFF?logo=virustotal&logoColor=white)](https://github.com/azman0101/call-inspector/actions/workflows/build_apk.yml?query=branch%3Amain+event%3Apush)
+[![Licence MIT](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
+
 Application Android Kotlin / Jetpack Compose qui analyse l'historique d'appels du téléphone et identifie automatiquement l'opérateur de télécommunication et l'entreprise titulaire de chaque numéro selon les données publiques de l'**ARCEP** (Autorité de régulation des communications électroniques, des postes et de la distribution de la presse).
 
 > **Note sur le nom et la marque pour publication** : Initialement nommé « Arcep Opérateur », le projet a été renommé **« Info Opérateur »** pour respecter le droit des marques de l'ARCEP et les règles de publication du Google Play Store interdisant l'usage de marques institutionnelles comme nom d'application.
+
+> [!NOTE]
+> **Code largement produit par IA.** L'essentiel de ce dépôt (code Kotlin, tests, workflows CI, scripts et documentation) a été écrit par des assistants de programmation, sous la direction et la relecture du mainteneur :
+>
+> - le projet a démarré dans Google AI Studio (d'où l'ancien identifiant `com.aistudio.operatorlookup`) ;
+> - Claude Code (Anthropic), Google Jules et l'agent GitHub Copilot ont ensuite produit une grande partie des commits et des pull requests (les commits des agents portent leur nom ou un trailer `Co-Authored-By`).
+>
+> La plupart des changements passent par une pull request et la CI (tests unitaires et Robolectric, scan OWASP, GitGuardian), et le mainteneur décide des fusions. Le code n'a pas eu d'audit indépendant : relisez-le avant de le réutiliser.
+>
+> **Coût d'une session.** À titre indicatif, une seule session Claude Code, du 25 au 27 septembre 2026 (dont les PR #29 à #35 : chiffrement des notes, CGU, accélération de la CI, durcissement avant publication), a demandé environ 1 000 réponses du modèle :
+>
+> | Tokens | Volume |
+> |---|---:|
+> | Lus depuis le cache de prompt | 387 millions |
+> | Écrits dans le cache | 3,0 millions |
+> | Générés | 0,74 million |
+> | Entrée hors cache | ~2 000 |
+>
+> Au tarif public de l'API Anthropic, cela représente **environ 115 $**, dont deux tiers pour les lectures en cache, qui sont facturées ~20 fois moins cher qu'une entrée normale. C'est un équivalent au tarif public : le montant réellement facturé dépend du mode d'accès (abonnement ou API). Les autres sessions et agents ne sont pas comptés.
 
 ---
 
@@ -15,6 +38,7 @@ Application Android Kotlin / Jetpack Compose qui analyse l'historique d'appels d
 5. [Construire et tester l'application](#construire-et-tester-lapplication)
 6. [Structure du projet](#structure-du-projet)
 7. [TODO & Pistes d'évolution](#todo--pistes-dévolution)
+8. [Licence](#licence)
 
 ---
 
@@ -183,6 +207,10 @@ Un workflow GitHub Actions dédié (`.github/workflows/build_apk.yml`) est confi
   - L'APK de test signé avec la clé de debug (`app-debug.apk`) est automatiquement téléchargeable sous le nom **`info-operateur-debug-apk`** dans la section *Artifacts* de l'exécution GitHub Actions (durée de rétention : 14 jours).
   - Cet APK peut être installé directement sur n'importe quel smartphone Android de test sans certificat de production.
 
+### Analyse VirusTotal de l'APK release
+
+À chaque build sur `main`, la CI envoie l'APK release à [VirusTotal](https://www.virustotal.com) (`tools/virustotal_scan.sh`). Le résumé du run (badge VirusTotal ci-dessus, puis le dernier run de `main`) donne l'empreinte SHA-256 de l'APK, le nombre de détections et le lien vers le rapport public `https://www.virustotal.com/gui/file/<sha256>`. L'analyse est informative : une détection, souvent un faux positif sur une app qui lit le journal d'appels, affiche un avertissement mais ne bloque jamais la release. Le secret `VIRUSTOTAL_API_KEY` active l'analyse ; sans lui, l'étape est ignorée.
+
 ### Vérifier la signature d'un APK de release
 Les APK de release construits sur `main` sont signés avec la clé d'upload stable du projet (secret `KEYSTORE_BASE64`). Pour vérifier qu'un APK téléchargé provient bien de cette clé (par ex. sous Termux, `pkg install apksigner`) :
 ```sh
@@ -342,3 +370,11 @@ L'application manipulant le journal d'appels personnel de l'utilisateur, des rè
 Pour compiler le projet directement sous un terminal Android Termux :
 1. **AAPT2 natif** : Gradle télécharge par défaut un binaire `aapt2` compilé pour Linux x86_64, incompatible avec l'architecture ARM64 de Termux. Le fichier `settings.gradle.kts` détecte automatiquement si `/data/data/com.termux/files/usr/bin/aapt2` est présent et configure l'override `android.aapt2FromMavenOverride`. Vous pouvez aussi décommenter la ligne dédiée dans `gradle.properties`.
 2. **SDK Android & local.properties** : Sous Termux, votre fichier `local.properties` (non versionné) doit définir `sdk.dir` vers votre dossier SDK (ex: `sdk.dir=/data/data/com.termux/files/usr/share/android-sdk`). Vérifiez que `compileSdk` (36) et les build-tools correspondent aux paquets installés via `pkg`.
+
+---
+
+## Licence
+
+Le code est distribué sous licence **MIT** (voir [`LICENSE`](LICENSE)) : vous pouvez l'utiliser, le modifier et le redistribuer librement, y compris dans un projet commercial, à condition de conserver la mention de copyright et le texte de la licence.
+
+Les données de numérotation embarquées (`app/src/main/assets/arcep_data.db`) proviennent des fichiers publics de l'ARCEP (`MAJNUM.csv` et `identifiants_CE.csv`, voir `tools/update_arcep_db.py`). Elles ne sont pas couvertes par la licence MIT et restent soumises aux conditions de réutilisation de l'ARCEP ; mentionnez la source (« ARCEP ») et la date de mise à jour si vous les réutilisez.
