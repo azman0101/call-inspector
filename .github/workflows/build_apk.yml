@@ -175,7 +175,12 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # Per-task timings (Gradle --profile) of every build step above, to compare runs.
+      # Per-task timings (Gradle --profile) of every build step above, to compare runs: the slowest tasks
+      # go to the job summary and this log, the full reports to the gradle-profile artifact.
+      - name: Summarize Gradle profile
+        if: always()
+        run: tools/gradle_profile_summary.py | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Upload Gradle profile
         if: always()
         uses: actions/upload-artifact@v4
