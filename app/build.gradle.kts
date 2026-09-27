@@ -109,7 +109,14 @@ android {
   }
   // legal/CGU.md at the repository root is the single source of the terms shown in the app.
   sourceSets { getByName("main") { assets.srcDir("../legal") } }
-  testOptions { unitTests { isIncludeAndroidResources = true } }
+  testOptions {
+    unitTests {
+      isIncludeAndroidResources = true
+      // Robolectric downloads its android-all jars from Maven Central on first run: use the same mirror
+      // as settings.gradle.kts to avoid "429 Too Many Requests".
+      all { it.systemProperty("robolectric.dependency.repo.url", "https://maven-central.storage-download.googleapis.com/maven2/") }
+    }
+  }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true

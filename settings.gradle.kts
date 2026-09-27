@@ -1,4 +1,8 @@
+// Google's mirror of Maven Central, tried before Maven Central itself: Maven Central answers
+// "429 Too Many Requests" to the parallel downloads of a cold build (Claude Code cloud sessions).
+// pluginManagement is evaluated before the rest of this file, hence the URL declared twice.
 pluginManagement {
+  val mavenCentralMirror = "https://maven-central.storage-download.googleapis.com/maven2/"
   repositories {
     google {
       content {
@@ -7,6 +11,7 @@ pluginManagement {
         includeGroupByRegex("androidx.*")
       }
     }
+    maven(mavenCentralMirror) { name = "MavenCentralMirror" }
     mavenCentral()
     gradlePluginPortal()
   }
@@ -14,10 +19,13 @@ pluginManagement {
 
 plugins { id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0" }
 
+val mavenCentralMirror = "https://maven-central.storage-download.googleapis.com/maven2/"
+
 dependencyResolutionManagement {
   repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
   repositories {
     google()
+    maven(mavenCentralMirror) { name = "MavenCentralMirror" }
     mavenCentral()
   }
 }
