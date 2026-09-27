@@ -13,7 +13,8 @@
 #   --env       environment name (default: release)
 #   --branch    only branch allowed to deploy to it (default: main)
 #
-# Nothing is printed or written to disk except a temporary Java checker; the passwords go to gh through
+# It then asks for SENTRY_DSN and NVD_API_KEY if the environment lacks them: the build job of main runs
+# in it. Nothing is printed or written to disk except a temporary Java checker; values go to gh through
 # stdin, never on a command line.
 set -euo pipefail
 
@@ -31,7 +32,7 @@ while [ $# -gt 0 ]; do
     --repo) REPO="$2"; shift 2 ;;
     --env) ENVIRONMENT="$2"; shift 2 ;;
     --branch) BRANCH="$2"; shift 2 ;;
-    -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
@@ -162,6 +163,20 @@ printf '%s' "$KEYSTORE_B64" | gh secret set KEYSTORE_BASE64 --repo "$REPO" --env
 printf '%s' "$STORE_PASSWORD" | gh secret set STORE_PASSWORD --repo "$REPO" --env "$ENVIRONMENT"
 printf '%s' "$KEY_PASSWORD" | gh secret set KEY_PASSWORD --repo "$REPO" --env "$ENVIRONMENT"
 
+# The build job of main runs in this environment, so it also needs the build's other environment secrets
+# (repository secrets are visible everywhere). Environments cannot share secrets: ask for the values.
+env_secrets="$(gh secret list --repo "$REPO" --env "$ENVIRONMENT" --json name --jq '.[].name')"
+for name in SENTRY_DSN NVD_API_KEY; do
+  grep -qx "$name" <<<"$env_secrets" && continue
+  read -rsp "$name for '$ENVIRONMENT' (Enter to skip): " value; echo
+  if [ -n "$value" ]; then
+    printf '%s' "$value" | gh secret set "$name" --repo "$REPO" --env "$ENVIRONMENT"
+  else
+    echo "  Skipped: builds on $BRANCH will run without $name until it is set in '$ENVIRONMENT'."
+  fi
+done
+unset value
+
 echo
 echo "Secrets of the '$ENVIRONMENT' environment:"
 gh secret list --repo "$REPO" --env "$ENVIRONMENT"
@@ -172,11 +187,29 @@ for env in $(gh api "repos/$REPO/environments" --jq '.environments[].name'); do
   [ "$env" = "$ENVIRONMENT" ] && continue
   echo "  environment '$env':"; gh secret list --repo "$REPO" --env "$env" | sed 's/^/    /'
 done
-cat <<EOF
+# The signing secrets may also exist elsewhere, from before this environment: list the exact commands to
+# remove those copies, to run once the workflow uses this environment and a release build has passed.
+cleanup=()
+repo_secrets="$(gh secret list --repo "$REPO" --json name --jq '.[].name')"
+for name in KEYSTORE_BASE64 STORE_PASSWORD KEY_PASSWORD; do
+  if grep -qx "$name" <<<"$repo_secrets"; then
+    cleanup+=("gh secret delete $name --repo $REPO")
+  fi
+  for env in $(gh api "repos/$REPO/environments" --jq '.environments[].name'); do
+    [ "$env" = "$ENVIRONMENT" ] && continue
+    if gh secret list --repo "$REPO" --env "$env" --json name --jq '.[].name' | grep -qx "$name"; then
+      cleanup+=("gh secret delete $name --repo $REPO --env $env")
+    fi
+  done
+done
 
-Done. The workflow still reads the signing secrets from its current environment, so nothing changes until
-it uses '$ENVIRONMENT' for main. Once it does and a release build on $BRANCH passes, remove the old copies:
-  gh secret delete KEYSTORE_BASE64 --repo $REPO --env production   # or without --env, if repository-level
-  gh secret delete STORE_PASSWORD  --repo $REPO --env production
-  gh secret delete KEY_PASSWORD    --repo $REPO --env production
+echo
+echo "Done."
+if [ "${#cleanup[@]}" -gt 0 ]; then
+  cat <<EOF
+Older copies of the signing secrets are still readable outside '$ENVIRONMENT'. Repository secrets are
+readable by every workflow run of every branch of the repository. Once the workflow uses '$ENVIRONMENT'
+for $BRANCH and a release build there has passed, remove them:
 EOF
+  printf '  %s\n' "${cleanup[@]}"
+fi
