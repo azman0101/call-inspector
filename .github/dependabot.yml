@@ -14,5 +14,8 @@ updates:
       # component (Gradle Technologies Terms of Use), free for public repos but only a "Free Preview" for
       # private ones; its open-source cache-provider: basic drops gradle-home-cache-includes (our NVD
       # database cache) and restore keys. Stay on the MIT-licensed v5 line until that changes.
-      - dependency-name: "gradle/actions"
+      # The wildcard matters: Dependabot tracks this action as "gradle/actions/setup-gradle" (its path
+      # inside the gradle/actions repo), not "gradle/actions" — a bare "gradle/actions" here let #40
+      # through despite this rule.
+      - dependency-name: "gradle/actions*"
         versions: [">=6.0.0"]
