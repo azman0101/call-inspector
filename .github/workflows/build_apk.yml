@@ -17,7 +17,11 @@ jobs:
   build:
     name: Build & Test Android APK
     runs-on: ubuntu-24.04
-    environment: production
+    # Pushes to main build the signed release APK: they use the 'release' environment, restricted to main,
+    # which alone holds the signing secrets (KEYSTORE_BASE64, STORE_PASSWORD, KEY_PASSWORD). Every other
+    # run, pull requests included, uses 'production' and cannot read them. Both environments need
+    # SENTRY_DSN and NVD_API_KEY (tools/setup-release-environment.sh).
+    environment: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && 'release' || 'production' }}
     env:
       # Goes into BuildConfig. Set for every Gradle step, not only the APK ones: a value that differs
       # between steps changes BuildConfig and recompiles all Kotlin.
