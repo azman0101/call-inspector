@@ -63,102 +63,120 @@ class ArcepDatabaseManager private constructor(private val context: Context) : L
         return db!!
     }
 
-    suspend fun lookupNumber(rawNumber: String): ArcepLookupResult = withContext(Dispatchers.IO) {
-        val normalized = PhoneNumberFormatter.normalize(rawNumber)
-        val formatted = PhoneNumberFormatter.format(rawNumber)
-        val phoneType = PhoneNumberType.classify(normalized)
+    suspend fun lookupNumber(rawNumber: String): ArcepLookupResult =
+        lookupNumbers(listOf(rawNumber))[rawNumber] ?: ArcepLookupResult(
+            queryNumber = rawNumber,
+            normalizedNumber = PhoneNumberFormatter.normalize(rawNumber),
+            formattedNumber = PhoneNumberFormatter.format(rawNumber),
+            operator = null,
+            range = null,
+            numberType = PhoneNumberType.classify(PhoneNumberFormatter.normalize(rawNumber)),
+            isFound = false
+        )
 
-        if (normalized.isBlank()) {
-            return@withContext ArcepLookupResult(
-                queryNumber = rawNumber,
-                normalizedNumber = "",
-                formattedNumber = "Numéro masqué",
-                operator = null,
-                range = null,
-                numberType = PhoneNumberType.INCONNU,
-                isFound = false
-            )
+    suspend fun lookupNumbers(rawNumbers: Collection<String>): Map<String, ArcepLookupResult> = withContext(Dispatchers.IO) {
+        if (rawNumbers.isEmpty()) return@withContext emptyMap()
+
+        val uniqueNumbers = rawNumbers.distinct()
+        val parsedMap = uniqueNumbers.associateWith { rawNum ->
+            val normalized = PhoneNumberFormatter.normalize(rawNum)
+            val formatted = PhoneNumberFormatter.format(rawNum)
+            val phoneType = PhoneNumberType.classify(normalized)
+            Triple(normalized, formatted, phoneType)
         }
 
         val database = getReadableDb()
+        val rangeMap = mutableMapOf<String, ArcepNumberRange>()
 
-        // 1. Direct range lookup
-        var range: ArcepNumberRange? = null
-        if (normalized.length >= 4) {
-            val cursor = database.rawQuery(
-                """
-                SELECT r.id, r.ezabpqm, r.tranche_debut, r.tranche_fin, r.operator_code, r.operator_name, r.territory, r.attribution_date 
-                FROM number_ranges r
-                WHERE r.tranche_debut <= ? AND r.tranche_fin >= ?
-                ORDER BY LENGTH(r.ezabpqm) DESC LIMIT 1
-                """.trimIndent(),
-                arrayOf(normalized, normalized)
-            )
+        for (rawNum in uniqueNumbers) {
+            val (normalized, _, _) = parsedMap[rawNum]!!
+            if (normalized.isBlank()) continue
 
-            cursor.use {
-                if (it.moveToFirst()) {
-                    range = ArcepNumberRange(
-                        id = it.getLong(0),
-                        ezabpqm = it.getString(1),
-                        trancheDebut = it.getString(2),
-                        trancheFin = it.getString(3),
-                        operatorCode = it.getString(4),
-                        operatorName = it.getString(5),
-                        territory = it.getString(6),
-                        attributionDate = it.getString(7)
-                    )
-                }
-            }
-        }
+            var range: ArcepNumberRange? = null
 
-        // 2. Prefix fallback if not matched by full 10-digit range
-        if (range == null) {
-            for (len in listOf(7, 6, 5, 4, 3, 2)) {
-                if (normalized.length >= len) {
-                    val prefix = normalized.substring(0, len)
-                    val cursor = database.rawQuery(
-                        """
-                        SELECT r.id, r.ezabpqm, r.tranche_debut, r.tranche_fin, r.operator_code, r.operator_name, r.territory, r.attribution_date 
-                        FROM number_ranges r
-                        WHERE r.ezabpqm = ? LIMIT 1
-                        """.trimIndent(),
-                        arrayOf(prefix)
-                    )
-                    cursor.use {
-                        if (it.moveToFirst()) {
-                            range = ArcepNumberRange(
-                                id = it.getLong(0),
-                                ezabpqm = it.getString(1),
-                                trancheDebut = it.getString(2),
-                                trancheFin = it.getString(3),
-                                operatorCode = it.getString(4),
-                                operatorName = it.getString(5),
-                                territory = it.getString(6),
-                                attributionDate = it.getString(7)
-                            )
-                        }
+            // 1. Direct range lookup
+            if (normalized.length >= 4) {
+                val cursor = database.rawQuery(
+                    """
+                    SELECT r.id, r.ezabpqm, r.tranche_debut, r.tranche_fin, r.operator_code, r.operator_name, r.territory, r.attribution_date
+                    FROM number_ranges r
+                    WHERE r.tranche_debut <= ? AND r.tranche_fin >= ?
+                    ORDER BY LENGTH(r.ezabpqm) DESC LIMIT 1
+                    """.trimIndent(),
+                    arrayOf(normalized, normalized)
+                )
+
+                cursor.use {
+                    if (it.moveToFirst()) {
+                        range = ArcepNumberRange(
+                            id = it.getLong(0),
+                            ezabpqm = it.getString(1),
+                            trancheDebut = it.getString(2),
+                            trancheFin = it.getString(3),
+                            operatorCode = it.getString(4),
+                            operatorName = it.getString(5),
+                            territory = it.getString(6),
+                            attributionDate = it.getString(7)
+                        )
                     }
-                    if (range != null) break
                 }
+            }
+
+            // 2. Prefix fallback if not matched by full 10-digit range
+            if (range == null) {
+                for (len in listOf(7, 6, 5, 4, 3, 2)) {
+                    if (normalized.length >= len) {
+                        val prefix = normalized.substring(0, len)
+                        val cursor = database.rawQuery(
+                            """
+                            SELECT r.id, r.ezabpqm, r.tranche_debut, r.tranche_fin, r.operator_code, r.operator_name, r.territory, r.attribution_date
+                            FROM number_ranges r
+                            WHERE r.ezabpqm = ? LIMIT 1
+                            """.trimIndent(),
+                            arrayOf(prefix)
+                        )
+                        cursor.use {
+                            if (it.moveToFirst()) {
+                                range = ArcepNumberRange(
+                                    id = it.getLong(0),
+                                    ezabpqm = it.getString(1),
+                                    trancheDebut = it.getString(2),
+                                    trancheFin = it.getString(3),
+                                    operatorCode = it.getString(4),
+                                    operatorName = it.getString(5),
+                                    territory = it.getString(6),
+                                    attributionDate = it.getString(7)
+                                )
+                            }
+                        }
+                        if (range != null) break
+                    }
+                }
+            }
+
+            if (range != null) {
+                rangeMap[rawNum] = range
             }
         }
 
-        // 3. Fetch operator legal profile if range found
-        var operator: ArcepOperator? = null
-        val opCode = range?.operatorCode
-        if (!opCode.isNullOrBlank()) {
+        val operatorCodes = rangeMap.values.map { it.operatorCode }.filter { !it.isNullOrBlank() }.distinct()
+        val operatorMap = mutableMapOf<String, ArcepOperator>()
+
+        if (operatorCodes.isNotEmpty()) {
+            val placeholders = operatorCodes.joinToString(",") { "?" }
             val cursorOp = database.rawQuery(
                 """
                 SELECT code, name, siret, rcs, address, declaration_date
                 FROM operators
-                WHERE code = ? LIMIT 1
+                WHERE code IN ($placeholders)
                 """.trimIndent(),
-                arrayOf(opCode)
+                operatorCodes.toTypedArray()
             )
             cursorOp.use {
-                if (it.moveToFirst()) {
-                    operator = ArcepOperator(
-                        code = it.getString(0),
+                while (it.moveToNext()) {
+                    val code = it.getString(0)
+                    operatorMap[code] = ArcepOperator(
+                        code = code,
                         name = it.getString(1),
                         siret = it.getString(2),
                         rcs = it.getString(3),
@@ -169,23 +187,47 @@ class ArcepDatabaseManager private constructor(private val context: Context) : L
             }
         }
 
-        // Fallback for operator if not in operator table
-        if (operator == null && range != null) {
-            operator = ArcepOperator(
-                code = range!!.operatorCode,
-                name = range!!.operatorName
+        val resultMap = mutableMapOf<String, ArcepLookupResult>()
+        for (rawNum in uniqueNumbers) {
+            val (normalized, formatted, phoneType) = parsedMap[rawNum]!!
+            if (normalized.isBlank()) {
+                resultMap[rawNum] = ArcepLookupResult(
+                    queryNumber = rawNum,
+                    normalizedNumber = "",
+                    formattedNumber = "Numéro masqué",
+                    operator = null,
+                    range = null,
+                    numberType = PhoneNumberType.INCONNU,
+                    isFound = false
+                )
+                continue
+            }
+
+            val range = rangeMap[rawNum]
+            var operator: ArcepOperator? = null
+            val opCode = range?.operatorCode
+            if (!opCode.isNullOrBlank()) {
+                operator = operatorMap[opCode]
+            }
+            if (operator == null && range != null) {
+                operator = ArcepOperator(
+                    code = range.operatorCode,
+                    name = range.operatorName
+                )
+            }
+
+            resultMap[rawNum] = ArcepLookupResult(
+                queryNumber = rawNum,
+                normalizedNumber = normalized,
+                formattedNumber = formatted,
+                operator = operator,
+                range = range,
+                numberType = phoneType,
+                isFound = (range != null)
             )
         }
 
-        return@withContext ArcepLookupResult(
-            queryNumber = rawNumber,
-            normalizedNumber = normalized,
-            formattedNumber = formatted,
-            operator = operator,
-            range = range,
-            numberType = phoneType,
-            isFound = (range != null)
-        )
+        resultMap
     }
 
     suspend fun searchPrefixesOrOperators(query: String): List<ArcepLookupResult> = withContext(Dispatchers.IO) {
