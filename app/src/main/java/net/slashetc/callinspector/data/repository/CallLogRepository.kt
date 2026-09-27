@@ -16,6 +16,15 @@ import net.slashetc.callinspector.util.PhoneNumberFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+private data class RawCallRecord(
+    val id: Long,
+    val rawNum: String,
+    val cachedName: String?,
+    val date: Long,
+    val duration: Long,
+    val callType: CallType
+)
+
 class CallLogRepository(private val context: Context) {
 
     private val dbManager = ArcepDatabaseManager.getInstance(context)
@@ -68,6 +77,7 @@ class CallLogRepository(private val context: Context) {
                 "${CallLog.Calls.DATE} DESC"
             )
 
+            val rawRecords = mutableListOf<RawCallRecord>()
             cursor?.use {
                 val idIdx = it.getColumnIndex(CallLog.Calls._ID)
                 val numberIdx = it.getColumnIndex(CallLog.Calls.NUMBER)
@@ -76,7 +86,7 @@ class CallLogRepository(private val context: Context) {
                 val durationIdx = it.getColumnIndex(CallLog.Calls.DURATION)
                 val typeIdx = it.getColumnIndex(CallLog.Calls.TYPE)
 
-                while (it.moveToNext() && entries.size < 100) {
+                while (it.moveToNext() && rawRecords.size < 100) {
                     val id = if (idIdx >= 0) it.getLong(idIdx) else 0L
                     val rawNum = if (numberIdx >= 0) it.getString(numberIdx) ?: "" else ""
                     val cachedName = if (nameIdx >= 0) it.getString(nameIdx) else null
@@ -93,28 +103,34 @@ class CallLogRepository(private val context: Context) {
                         else -> CallType.UNKNOWN
                     }
 
-                    val lookup = dbManager.lookupNumber(rawNum)
-                    val note = notes[lookup.normalizedNumber]
-
-                    entries.add(
-                        CallLogEntry(
-                            id = id,
-                            rawNumber = rawNum,
-                            normalizedNumber = lookup.normalizedNumber,
-                            formattedNumber = lookup.formattedNumber,
-                            cachedName = cachedName,
-                            timestamp = date,
-                            durationSeconds = duration,
-                            callType = callType,
-                            lookupResult = lookup,
-                            isSpamFlagged = note?.isSpam ?: lookup.numberType.isDemarchage,
-                            isFavorite = note?.isFavorite ?: false,
-                            userNote = note?.userNote,
-                            reportCount = reports[lookup.normalizedNumber]?.count ?: 0,
-                            lastReportedAt = reports[lookup.normalizedNumber]?.lastReportedAt
-                        )
-                    )
+                    rawRecords.add(RawCallRecord(id, rawNum, cachedName, date, duration, callType))
                 }
+            }
+
+            val lookups = dbManager.lookupNumbers(rawRecords.map { it.rawNum })
+
+            for (record in rawRecords) {
+                val lookup = lookups[record.rawNum] ?: dbManager.lookupNumber(record.rawNum)
+                val note = notes[lookup.normalizedNumber]
+
+                entries.add(
+                    CallLogEntry(
+                        id = record.id,
+                        rawNumber = record.rawNum,
+                        normalizedNumber = lookup.normalizedNumber,
+                        formattedNumber = lookup.formattedNumber,
+                        cachedName = record.cachedName,
+                        timestamp = record.date,
+                        durationSeconds = record.duration,
+                        callType = record.callType,
+                        lookupResult = lookup,
+                        isSpamFlagged = note?.isSpam ?: lookup.numberType.isDemarchage,
+                        isFavorite = note?.isFavorite ?: false,
+                        userNote = note?.userNote,
+                        reportCount = reports[lookup.normalizedNumber]?.count ?: 0,
+                        lastReportedAt = reports[lookup.normalizedNumber]?.lastReportedAt
+                    )
+                )
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to read the device call log", e)
@@ -148,9 +164,11 @@ class CallLogRepository(private val context: Context) {
         val results = mutableListOf<CallLogEntry>()
         val reports = loadReportStats()
         val notes = loadNotes()
+        val lookups = dbManager.lookupNumbers(sampleNumbers.map { it.first })
+
         for ((idx, item) in sampleNumbers.withIndex()) {
             val (rawNum, callType, timestamp) = item
-            val lookup = dbManager.lookupNumber(rawNum)
+            val lookup = lookups[rawNum] ?: dbManager.lookupNumber(rawNum)
             val note = notes[lookup.normalizedNumber]
 
             val cachedName = when (rawNum) {
