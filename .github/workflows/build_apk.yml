@@ -175,6 +175,14 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      # Pull requests build the debug APK, whose D8 dexing of every library took about 7 CPU-minutes per
+      # run (mergeExtDexDebug waits on it): main only built the release APK (R8), so the Gradle cache it
+      # saves never held the debug dex, and no pull request could reuse it. Building the debug APK here
+      # puts it in main's cache. The APK itself is not uploaded.
+      - name: Warm the debug dexing cache (Main Branch)
+        if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+        run: ./gradlew assembleDebug --stacktrace --profile
+
       # Per-task timings (Gradle --profile) of every build step above, to compare runs: the slowest tasks
       # go to the job summary and this log, the full reports to the gradle-profile artifact.
       - name: Summarize Gradle profile
