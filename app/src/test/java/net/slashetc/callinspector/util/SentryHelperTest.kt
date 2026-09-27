@@ -7,6 +7,7 @@ import net.slashetc.callinspector.OperatorInfoApp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
@@ -30,6 +31,20 @@ class SentryHelperTest {
             .commit()
     }
 
+    @After
+    fun tearDown() {
+        Sentry.close()
+    }
+
+    // Enabling telemetry starts the real SDK: point it at a local port that accepts nothing, so tests
+    // never send events to the project's Sentry (the fallback DSN, or the CI's SENTRY_DSN).
+    private fun useUnreachableDsn() {
+        context.getSharedPreferences("sentry_dev_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putString("custom_dsn", "http://test@127.0.0.1:9/1")
+            .commit()
+    }
+
     @Test
     fun `telemetry is disabled by default (opt-in)`() {
         assertFalse(SentryHelper.isTelemetryEnabled(context))
@@ -37,6 +52,7 @@ class SentryHelperTest {
 
     @Test
     fun `telemetry opt-out updates preference correctly`() {
+        useUnreachableDsn()
         SentryHelper.setTelemetryEnabled(context, false)
         assertFalse(SentryHelper.isTelemetryEnabled(context))
 
@@ -80,6 +96,7 @@ class SentryHelperTest {
     @Test
     fun `opting back in restarts the Sentry SDK`() {
         assumeTrue(context is OperatorInfoApp)
+        useUnreachableDsn()
         SentryHelper.setTelemetryEnabled(context, false)
         SentryHelper.setTelemetryEnabled(context, true)
         assertTrue(Sentry.isEnabled())
