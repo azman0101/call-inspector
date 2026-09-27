@@ -129,12 +129,15 @@ class CallLogRepository(private val context: Context) {
 
     suspend fun generateSampleCalls(): List<CallLogEntry> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
+        // Numbers shown with a contact name use the ranges ARCEP reserves for fiction (01 99 00, 06 39 98),
+        // which belong to no one: no real subscriber appears next to an invented name. The others show
+        // operator lookups on assigned ranges, without a name.
         val sampleNumbers = listOf(
             Triple("0162001122", CallType.MISSED, now - 15 * 60 * 1000L), // 15 mins ago
-            Triple("0612345678", CallType.INCOMING, now - 2 * 3600 * 1000L), // 2 hrs ago
+            Triple("0639980112", CallType.INCOMING, now - 2 * 3600 * 1000L), // 2 hrs ago
             Triple("0270334455", CallType.MISSED, now - 5 * 3600 * 1000L), // 5 hrs ago
-            Triple("0142680000", CallType.INCOMING, now - 22 * 3600 * 1000L), // yesterday
-            Triple("0781234567", CallType.INCOMING, now - 28 * 3600 * 1000L),
+            Triple("0199000134", CallType.INCOMING, now - 22 * 3600 * 1000L), // yesterday
+            Triple("0639980567", CallType.INCOMING, now - 28 * 3600 * 1000L),
             Triple("0948123456", CallType.REJECTED, now - 48 * 3600 * 1000L),
             Triple("0491002233", CallType.INCOMING, now - 72 * 3600 * 1000L),
             Triple("0892353535", CallType.MISSED, now - 96 * 3600 * 1000L),
@@ -151,9 +154,9 @@ class CallLogRepository(private val context: Context) {
             val note = notes[lookup.normalizedNumber]
 
             val cachedName = when (rawNum) {
-                "0612345678" -> "Sophie Martin"
-                "0142680000" -> "Cabinet Médical"
-                "0781234567" -> "Alexandre D."
+                "0639980112" -> "Sophie Martin"
+                "0199000134" -> "Cabinet Médical"
+                "0639980567" -> "Alexandre D."
                 else -> null
             }
 
