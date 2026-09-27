@@ -1,5 +1,9 @@
 # Info Opérateur
 
+[![Build](https://github.com/azman0101/call-inspector/actions/workflows/build_apk.yml/badge.svg?branch=main&event=push)](https://github.com/azman0101/call-inspector/actions/workflows/build_apk.yml?query=branch%3Amain+event%3Apush)
+[![VirusTotal](https://img.shields.io/badge/VirusTotal-rapport%20de%20l%27APK%20release-394EFF?logo=virustotal&logoColor=white)](https://github.com/azman0101/call-inspector/actions/workflows/build_apk.yml?query=branch%3Amain+event%3Apush)
+[![Licence MIT](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
+
 Application Android Kotlin / Jetpack Compose qui analyse l'historique d'appels du téléphone et identifie automatiquement l'opérateur de télécommunication et l'entreprise titulaire de chaque numéro selon les données publiques de l'**ARCEP** (Autorité de régulation des communications électroniques, des postes et de la distribution de la presse).
 
 > **Note sur le nom et la marque pour publication** : Initialement nommé « Arcep Opérateur », le projet a été renommé **« Info Opérateur »** pour respecter le droit des marques de l'ARCEP et les règles de publication du Google Play Store interdisant l'usage de marques institutionnelles comme nom d'application.
@@ -202,6 +206,10 @@ Un workflow GitHub Actions dédié (`.github/workflows/build_apk.yml`) est confi
 - **Artefact généré** :
   - L'APK de test signé avec la clé de debug (`app-debug.apk`) est automatiquement téléchargeable sous le nom **`info-operateur-debug-apk`** dans la section *Artifacts* de l'exécution GitHub Actions (durée de rétention : 14 jours).
   - Cet APK peut être installé directement sur n'importe quel smartphone Android de test sans certificat de production.
+
+### Analyse VirusTotal de l'APK release
+
+À chaque build sur `main`, la CI envoie l'APK release à [VirusTotal](https://www.virustotal.com) (`tools/virustotal_scan.sh`). Le résumé du run (badge VirusTotal ci-dessus, puis le dernier run de `main`) donne l'empreinte SHA-256 de l'APK, le nombre de détections et le lien vers le rapport public `https://www.virustotal.com/gui/file/<sha256>`. L'analyse est informative : une détection, souvent un faux positif sur une app qui lit le journal d'appels, affiche un avertissement mais ne bloque jamais la release. Le secret `VIRUSTOTAL_API_KEY` active l'analyse ; sans lui, l'étape est ignorée.
 
 ### Vérifier la signature d'un APK de release
 Les APK de release construits sur `main` sont signés avec la clé d'upload stable du projet (secret `KEYSTORE_BASE64`). Pour vérifier qu'un APK téléchargé provient bien de cette clé (par ex. sous Termux, `pkg install apksigner`) :
