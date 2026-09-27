@@ -1,7 +1,7 @@
 # TODO
 
-Follow-ups collected from the descriptions of PRs #11 to #30 and from direct commits to `main`
-(up to `d7019c0`). Checked on 2026-09-26.
+Follow-ups collected from the descriptions of PRs #11 to #36 and from direct commits to `main`
+(up to `989be97`). Checked on 2026-09-27.
 
 ## Open
 
@@ -84,15 +84,48 @@ Follow-ups collected from the descriptions of PRs #11 to #30 and from direct com
   transactions or sessions reach Sentry; turned back on, the "Info Opérateur initialisé" startup log
   shows up again.
 
-### Development environment
+### Build and CI (from #31 to #36)
 
-- [ ] **Speed up local builds in Claude Code cloud sessions (optional).** `dl.google.com` is now allowed
-  and `testDebugUnitTest` ran locally, but each session has to install the Android SDK (command-line
-  tools, `platforms;android-36.1`) with `sdkmanager`, and Maven Central answers `429 Too Many Requests`
-  to parallel downloads: Gradle needs `--max-workers=1`, and Robolectric's `android-all` jar download
-  can fail the same way. A SessionStart hook could install the SDK and warm the Gradle cache.
-- [ ] **(Optional) Turn off the Sentry Gradle plugin's own telemetry.** During local builds it tries to
-  reach `ingest.sentry.io`; the sandbox blocks it, harmlessly.
+- [ ] **Decide on #36 (Dependabot, GitHub Actions majors).** checkout 7, setup-java 6, upload-artifact 7 and
+  setup-python 7 are fine. `gradle/actions/setup-gradle` 6 is not: its default cache is the proprietary
+  `gradle-actions-caching` component (Gradle Terms of Use; free for public repositories, "Free Preview" for
+  private ones), and its open-source `basic` mode drops `gradle-home-cache-includes` (the NVD database
+  cache) and restore keys. Take setup-gradle 5.0.2 instead (MIT, Node 24, same inputs as 4.4.3), and add
+  an `ignore` rule for `gradle/actions >= 6` to `.github/dependabot.yml`. The four other bumps also clear
+  GitHub's Node.js 20 deprecation warning.
+- [ ] **Replace `material-icons-extended`.** About 50 icons are used, 25 of them outside
+  `material-icons-core`, but the library makes `classes.dex` 44 MB in the debug APK and is the main input
+  of the slowest remaining task on main, `minifyReleaseWithR8` (about 3 min 15). Copy the used icons as
+  local `ImageVector`s (Apache 2.0, keep the header) and drop the dependency.
+- [ ] **Confirm the pull request speed-up on the next PR.** Since #35, main restores the configuration
+  cache ("Reusing configuration cache") and the debug dexing (`mergeExtDexDebug` 2.2 s instead of
+  2 min 48, main job about 7 min instead of 12). The next PR run should show the same; its job summary
+  lists the slowest tasks (`tools/gradle_profile_summary.py`).
+- [ ] **Check `update_arcep.yml` with pinned actions** (from #34) on its next scheduled or manual run.
+- [ ] **(Optional) Install the Android SDK in a SessionStart hook for cloud sessions.** Since #31, cloud
+  sessions download Maven Central artifacts from Google's mirror, so parallel builds no longer hit
+  `429 Too Many Requests` (`AGENTS.md`); each new container still needs the SDK (`platforms;android-36.1`,
+  `build-tools;36.0.0`) in `/root/android-sdk`.
+
+### Going public (security review of 2026-09-27)
+
+A gitleaks scan of all 134 commits (34 branches, 32 pull request refs) and of the working tree found no
+secret; keystores, `.env` and `google-services.json` were never committed.
+
+- [ ] **Turn on the repository's security settings when it goes public**: secret scanning and push
+  protection, Dependabot alerts, private vulnerability reporting, a protection rule on `main` (pull request
+  and green CI required), and approval for workflows from outside contributors (Settings > Actions).
+- [ ] **Rate-limit the Sentry project.** Its DSN is in the manifests and `SentryHelper.FALLBACK_DSN`, public
+  by design: turn on spike protection and inbound filters so that nobody can spend the quota.
+- [ ] **Delete stale branches** (Jules, Copilot and merged branches) before publishing, and consider
+  "Automatically delete head branches" in the repository settings.
+- [ ] **Keep the author email private from now on** ("Keep my email addresses private" and the noreply
+  address). 112 commits already carry `azman0101@gmail.com`; rewriting history is not worth it.
+- [ ] **Check who can read the `copilot` environment** (it holds no secret today).
+- [ ] **Check #33 on a device**: in demo mode, Sophie Martin, Cabinet Médical and Alexandre D. appear on
+  the fictional numbers (01 99 00 01 34, 06 39 98 01 12, 06 39 98 05 67), without an operator.
+- [ ] **Check #31 on a device**: notes, favorites and the SignalConso profile are still read after updating
+  (Room was dropped and `androidx.sqlite` is now a direct dependency, same version 2.6.2).
 
 ## Resolved (kept for context)
 
@@ -100,7 +133,7 @@ Follow-ups collected from the descriptions of PRs #11 to #30 and from direct com
   and `packageRelease` succeeded and the throwaway-key warning was emitted as expected.
 - [x] Package rename compiles and tests pass: CI "Build & Test Android APK" on #16 succeeded.
 - [x] Persistent upload keystore: the `KEYSTORE_BASE64`, `STORE_PASSWORD` and `KEY_PASSWORD`
-  secrets are set. On main run #67 (attempt 2), the log shows
+  secrets are set (since #35, only in the `release` environment). On main run #67 (attempt 2), the log shows
   `Restoring my-upload-key.jks from secrets.KEYSTORE_BASE64...`, and `validateSigningRelease` and
   `packageRelease` succeeded. Keep a backup of the keystore outside the repo: without it, no
   future APK can update existing installs.
@@ -108,7 +141,8 @@ Follow-ups collected from the descriptions of PRs #11 to #30 and from direct com
   `CN=slashetc.net debug`, SHA-256 `bf094faa…2f554045`. They install next to the release app as
   `net.slashetc.callinspector.debug`, and the release key is only restored on pushes to `main`.
 - [x] Gradle can build in Claude Code cloud sessions: `dl.google.com` was allowed in the environment's
-  network policy (see the open item above for what each session still has to set up).
+  network policy, and since #31 Maven Central artifacts come from Google's mirror there
+  (`CLAUDE_CODE_REMOTE=true`), so builds no longer need `--max-workers=1`.
 - [x] ARCEP TLS pinning (#22) and update hardening (#23), including the `GlobalSign Root CA - R3`
   backup pin, confirmed from the Debian CA bundle, and backup pins for Root R6, R46 and E46.
 - [x] Call history search by number without spaces, and manual lookup by operator name (#25).
@@ -121,6 +155,20 @@ Follow-ups collected from the descriptions of PRs #11 to #30 and from direct com
 - [x] `security/phase-2-encrypted-storage` branch deleted (superseded by #30, which encrypts only the user's
   data). Its tip was `ad7f7de` ("ci: run build checks only for pull requests"); to restore it:
   `git push origin ad7f7de6e06090a642bc4a9ede67e2d5970cded7:refs/heads/security/phase-2-encrypted-storage`.
+- [x] Unused Room, Moshi codegen and KSP removed; the Sentry Gradle plugin no longer sends its own
+  telemetry (#31).
+- [x] CI build time (#31, #32): Kotlin compiles once per run (`SENTRY_DSN` set for the whole job); the
+  version and DSN are read as lazy providers, so the configuration cache survives across runs (saved with
+  the `GRADLE_ENCRYPTION_KEY` secret, `tools/set-gradle-encryption-key.sh`); the pull request OWASP scan
+  runs in its own job; main also builds the debug APK so pull requests restore its dexing; every build
+  writes its slowest tasks to the job summary. Main went from about 12 to 7 minutes.
+- [x] Release signing secrets only in the `release` environment, restricted to `main` (#35,
+  `tools/setup-release-environment.sh`); the repository-level copies were deleted. Main run 130 signed
+  the release APK from it (`Restoring my-upload-key.jks from secrets.KEYSTORE_BASE64...`, no throwaway
+  key), with `SENTRY_DSN` and `NVD_API_KEY` from the same environment.
+- [x] GitHub Actions pinned to commit SHAs, updated weekly by Dependabot (#34).
+- [x] Unit tests no longer send events to the project's Sentry, and the demo contacts with invented names
+  use ARCEP's fiction ranges (#33).
 - [x] Telemetry scope decided (after #26): diagnostics stay opt-in and off by default, so nothing is sent.
   Once enabled, error reports, performance traces and session data are sent with a random installation id,
   i.e. pseudonymous data without personal information; `legal/CGU.md` (article 6, #29) says so.
