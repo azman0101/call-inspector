@@ -2,7 +2,9 @@ package net.slashetc.callinspector.ui
 
 import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.toJsExpression
 import org.json.JSONObject
+import org.json.JSONTokener
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -21,19 +23,23 @@ class SignalConsoActivityTest {
     }
 
     @Test
-    fun `toJsExpression escapes quotes and script injection attempt`() {
+    fun `toJsExpression keeps a breakout attempt inside the JSON_parse string argument`() {
         val maliciousProfileJson = JSONObject()
             .put("firstName", "\"; alert('XSS'); //")
             .put("lastName", "</script><script>alert('XSS')</script>")
+            .put("email", "\\\"); alert('XSS'); (\"")
             .toString()
 
         val jsExpr = maliciousProfileJson.toJsExpression()
 
-        // Verify that quotes inside the JSON string are double-escaped so they cannot break out of JSON.parse("...")
         assertTrue(jsExpr.startsWith("JSON.parse(\""))
         assertTrue(jsExpr.endsWith("\")"))
-        // Check that the payload is safely enclosed in JSON.parse string parameter
-        assertTrue(jsExpr.contains("alert('XSS')"))
+        val argument = jsExpr.removePrefix("JSON.parse(").removeSuffix(")")
+        // Every quote between the delimiters is escaped, so none can close the string literal early.
+        val inner = argument.substring(1, argument.length - 1)
+        assertFalse(Regex("""(?<!\\)(\\\\)*"""").containsMatchIn(inner))
+        // The argument is one string literal that decodes back to exactly the original JSON.
+        assertEquals(maliciousProfileJson, JSONTokener(argument).nextValue())
     }
 
     @Test
