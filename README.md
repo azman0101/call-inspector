@@ -179,6 +179,8 @@ Le fichier `app/src/main/assets/arcep_data.db` est copié au premier démarrage 
 - **Android SDK** avec `platforms;android-36` (extension 1) et `build-tools;36.0.0`
 - Variables `ANDROID_HOME` ou `ANDROID_SDK_ROOT` configurées (ou chemin renseigné dans `local.properties`).
 
+Sur Ubuntu (machine de dev ou agent de code), `tools/setup-agent-ubuntu.sh` installe ce qui manque (JDK 21, SDK Android, Python 3, sqlite3), écrit `local.properties` puis lance `testDebugUnitTest` pour précharger les dépendances. `--check` vérifie sans rien modifier et `--no-warmup` saute les tests. Le `setup.sh` à la racine vise Termux (ARM64).
+
 ### Compilation sur macOS / Linux
 ```sh
 # Vérifier la version de Gradle
