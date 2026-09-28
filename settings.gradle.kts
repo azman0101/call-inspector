@@ -13,11 +13,20 @@ pluginManagement {
         includeGroupByRegex("androidx.*")
       }
     }
+    maven("https://plugins.gradle.org/m2/") {
+      name = "GradlePluginPortalDirect"
+      content {
+        includeGroup("org.gradle.toolchains.foojay-resolver-convention")
+        includeGroup("org.gradle.toolchains")
+        includeGroup("org.owasp.dependencycheck")
+        includeModule("org.owasp", "dependency-check-gradle")
+        includeGroup("com.google.android.libraries.mapsplatform.secrets-gradle-plugin")
+      }
+    }
     if (useMavenCentralMirror) {
       maven("https://maven-central.storage-download.googleapis.com/maven2/") { name = "MavenCentralMirror" }
     }
     mavenCentral()
-    gradlePluginPortal()
   }
 }
 
