@@ -63,6 +63,8 @@ class SearchBugVerificationTest {
     fun `searching manual lookup by operator name should query operators`() {
         assertEquals("Bouygues Telecom", SearchQueries.prefixSearchQuery("Bouygues Telecom"))
         assertEquals("Orange", SearchQueries.prefixSearchQuery("  Orange "))
+        assertEquals("Société Réunionnaise du Radiotéléphone", SearchQueries.prefixSearchQuery("Société Réunionnaise du Radiotéléphone"))
+        assertEquals("SFR Fibre", SearchQueries.prefixSearchQuery("SFR Fibre"))
     }
 
     @Test

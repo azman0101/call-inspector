@@ -19,7 +19,13 @@ object SearchQueries {
         return digits.isNotEmpty() && digits.all { it.isDigit() } && call.normalizedNumber.contains(digits)
     }
 
-    // Operator names/codes are searched as typed; numbers as a normalized prefix (full numbers use the exact lookup).
+    /**
+     * Prepares input for manual prefix or operator database searches.
+     * Operator names and codes (containing letters) are searched as typed without length limits
+     * (minimum 2 characters), allowing names longer than 6 characters to reach database search.
+     * Phone numbers are normalized and restricted to prefixes between 2 and 6 digits
+     * (full 10-digit numbers use exact lookup instead).
+     */
     fun prefixSearchQuery(input: String): String? {
         val trimmed = input.trim()
         if (trimmed.any { it.isLetter() }) return trimmed.takeIf { it.length >= 2 }
