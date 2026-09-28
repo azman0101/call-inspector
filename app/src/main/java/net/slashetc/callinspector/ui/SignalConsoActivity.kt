@@ -107,6 +107,12 @@ class SignalConsoActivity : ComponentActivity() {
                 .put("shareContact", it.shareContact ?: JSONObject.NULL)
                 .toString()
         } ?: "null"
+
+        /** Encodes a JSON string as a safe JavaScript expression using JSON.parse(). */
+        internal fun String.toJsExpression(): String =
+            "JSON.parse(" + JSONObject.quote(this)
+                .replace("\u2028", "\\u2028")
+                .replace("\u2029", "\\u2029") + ")"
     }
 
     // The saved contact details, as a JS literal, injected with the plan on every page load.
@@ -120,8 +126,8 @@ class SignalConsoActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val planJson = intent.getStringExtra(EXTRA_PLAN_JSON) ?: run { finish(); return }
         val prefillScript = assets.open("signalconso_prefill.js").bufferedReader().use { it.readText() }
-        // JSONObject.toString() yields a valid JS object literal, so the plan can't break out of the script.
-        val injection = { "window.__icPlan = $planJson;\nwindow.__icContact = $contactJson;\n$prefillScript" }
+        // Safely pass JSON strings as parsed JS expressions via JSON.parse(quote(...)).
+        val injection = { "window.__icPlan = ${planJson.toJsExpression()};\nwindow.__icContact = ${contactJson.toJsExpression()};\n$prefillScript" }
         val profileStore = ReporterProfileStore.getInstance(this)
         val operatorName = JSONObject(planJson).optJSONObject("company")
             ?.takeIf { it.optString("source") == ReportedCompany.Source.OPERATOR.name }
@@ -140,7 +146,7 @@ class SignalConsoActivity : ComponentActivity() {
                     contactJson = saved.toContactJson()
                     if (Uri.parse(webView.url ?: "").host == SignalConsoReport.HOST) {
                         webView.evaluateJavascript(
-                            "window.__icContact = $contactJson; if (window.__icPrefillRun) window.__icPrefillRun();", null
+                            "window.__icContact = ${contactJson.toJsExpression()}; if (window.__icPrefillRun) window.__icPrefillRun();", null
                         )
                     }
                 }
