@@ -15,14 +15,13 @@ pluginManagement {
     }
     if (useMavenCentralMirror) {
       maven("https://maven-central.storage-download.googleapis.com/maven2/") { name = "MavenCentralMirror" }
-    } else {
-      mavenCentral()
     }
+    mavenCentral()
     gradlePluginPortal()
   }
 }
 
-plugins { id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0" }
+plugins { id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0" }
 
 val useMavenCentralMirror = System.getenv("CLAUDE_CODE_REMOTE") == "true" ||
   providers.gradleProperty("mavenCentralMirror").orNull == "true"
@@ -33,9 +32,8 @@ dependencyResolutionManagement {
     google()
     if (useMavenCentralMirror) {
       maven("https://maven-central.storage-download.googleapis.com/maven2/") { name = "MavenCentralMirror" }
-    } else {
-      mavenCentral()
     }
+    mavenCentral()
   }
 }
 
