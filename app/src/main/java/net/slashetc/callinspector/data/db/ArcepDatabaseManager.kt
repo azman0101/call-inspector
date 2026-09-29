@@ -105,7 +105,11 @@ class ArcepDatabaseManager private constructor(private val context: Context) : L
                     )
                     SELECT inputs.num, r.id, r.ezabpqm, r.tranche_debut, r.tranche_fin, r.operator_code, r.operator_name, r.territory, r.attribution_date
                     FROM inputs
-                    JOIN number_ranges r ON r.tranche_debut <= inputs.num AND r.tranche_fin >= inputs.num
+                    JOIN number_ranges r ON r.id = (
+                        SELECT id FROM number_ranges WHERE tranche_debut <= inputs.num
+                        ORDER BY tranche_debut DESC LIMIT 1
+                    )
+                    WHERE r.tranche_fin >= inputs.num
                     """.trimIndent(),
                     chunk.toTypedArray()
                 )
@@ -122,10 +126,7 @@ class ArcepDatabaseManager private constructor(private val context: Context) : L
                             territory = it.getString(7),
                             attributionDate = it.getString(8)
                         )
-                        val existing = directRangeByNormalized[num]
-                        if (existing == null || range.ezabpqm.length > existing.ezabpqm.length) {
-                            directRangeByNormalized[num] = range
-                        }
+                        directRangeByNormalized[num] = range
                     }
                 }
             }

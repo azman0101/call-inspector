@@ -112,30 +112,44 @@ class ArcepDatabaseManagerTest {
     }
 
     @Test
-    fun `benchmark lookupNumbers batch performance`() = runBlocking {
-        // Prepare 100 sample numbers (mix of assigned, unassigned, short numbers, and masked numbers)
-        val sampleNumbers = (100000..100099).map { i ->
-            when (i % 5) {
-                0 -> "01056%05d".format(i - 100000)
-                1 -> "06%08d".format(i - 100000)
-                2 -> "00000%05d".format(i - 100000)
-                3 -> "10%02d".format(i % 100)
-                else -> ""
+    fun `test number ranges in database do not overlap`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val tempFile = java.io.File.createTempFile("test_arcep_ranges", ".db", context.cacheDir)
+        try {
+            context.assets.open("arcep_data.db").use { input ->
+                java.io.FileOutputStream(tempFile).use { output ->
+                    input.copyTo(output)
+                }
             }
+            val database = android.database.sqlite.SQLiteDatabase.openDatabase(
+                tempFile.absolutePath, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY
+            )
+            val ranges = mutableListOf<Pair<String, String>>()
+            try {
+                database.rawQuery(
+                    "SELECT tranche_debut, tranche_fin FROM number_ranges ORDER BY tranche_debut ASC", null
+                ).use { cursor ->
+                    val debutIdx = cursor.getColumnIndex("tranche_debut")
+                    val finIdx = cursor.getColumnIndex("tranche_fin")
+                    while (cursor.moveToNext()) {
+                        ranges.add(Pair(cursor.getString(debutIdx), cursor.getString(finIdx)))
+                    }
+                }
+            } finally {
+                database.close()
+            }
+
+            assertTrue("Database should contain number ranges", ranges.isNotEmpty())
+            for (i in 0 until ranges.size - 1) {
+                val currentFin = ranges[i].second
+                val nextDebut = ranges[i + 1].first
+                assertTrue(
+                    "Range ${ranges[i].first}-${currentFin} overlaps with ${nextDebut}-${ranges[i + 1].second}",
+                    currentFin < nextDebut
+                )
+            }
+        } finally {
+            tempFile.delete()
         }
-
-        // Warm up
-        dbManager.lookupNumbers(sampleNumbers)
-
-        val iterations = 30
-        var totalNanos = 0L
-        repeat(iterations) {
-            val start = System.nanoTime()
-            dbManager.lookupNumbers(sampleNumbers)
-            totalNanos += (System.nanoTime() - start)
-        }
-
-        val avgTimeMs = (totalNanos / iterations.toDouble()) / 1_000_000.0
-        println("BENCHMARK_RESULT: lookupNumbers 100 batch average time: %.3f ms".format(avgTimeMs))
     }
 }
