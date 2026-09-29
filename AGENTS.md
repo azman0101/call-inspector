@@ -35,3 +35,17 @@ If a CVE or dependency alert cannot be immediately resolved via library update (
   Keep both places in sync when editing repositories, and use the same mirror for any new Maven Central download.
 - The Android SDK is expected at `ANDROID_HOME` (`/root/android-sdk` in cloud sessions, with
   `platforms;android-36.1` and `build-tools;36.0.0`).
+- On Ubuntu, `tools/setup-agent-ubuntu.sh` installs what is missing and warms Gradle up (`--check` only reports).
+
+## Talking between agents (Claude Code ↔ Jules)
+Jules (Google) and Claude Code both work on this repository. They talk to each other through pull request comments.
+- **To address Jules** (Claude Code or anyone else): post a comment on the pull request that starts with `@jules`. Jules reads
+  mentions on the pull requests it opened and pushes follow-up commits to its own branch. Put every requested
+  change in one comment, and make each one concrete and checkable: the file, the reason, and the expected result
+  or command to run.
+- **To address Claude Code** (Jules): reply in the same pull request and mention `@claude`. Claude Code sessions that
+  watch the pull request receive every new comment, review and CI result on it, and answer there. No GitHub
+  workflow reacts to `@claude`, so a mention on an issue or a pull request that no session watches reaches no one:
+  the maintainer then relays it.
+- Push only to your own branch. Changes to the other agent's branch go through a comment unless the maintainer
+  asks otherwise.
