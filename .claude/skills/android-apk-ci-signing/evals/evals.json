@@ -1,0 +1,23 @@
+{
+  "skill_name": "android-apk-ci-signing",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Ma CI GitHub Actions est verte mais l'APK release téléchargé s'appelle app-release-unsigned.apk et Android refuse de l'installer. Dans app/build.gradle.kts j'ai `if (file(System.getenv(\"KEYSTORE_PATH\") ?: \"release.jks\").exists()) signingConfig = signingConfigs.getByName(\"release\")` et le workflow décode le secret KEYSTORE_BASE64 dans release.jks à la racine du repo. Corrige ça.",
+      "expected_output": "Explains that file() resolves from app/ so the keystore is never found and the condition silently skips signing; switches to rootProject.file(), removes the condition so a missing keystore fails the build, and adds a check that rejects unsigned APKs / verifies the certificate with apksigner.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "I generated my upload key with `keytool -genkeypair -keystore upload.p12 -storepass S3cret! -keypass K3yPass! -alias upload ...` on JDK 21, put STORE_PASSWORD=S3cret! and KEY_PASSWORD=K3yPass! in GitHub secrets, and `keytool -list` works fine locally, but the release build in CI fails signing. What's going on and how do I store the secrets so it works?",
+      "expected_output": "Identifies PKCS12 default type: -keypass was ignored, so the key password equals the store password; keytool does not validate the key password for PKCS12 so -list/-certreq succeeding proves nothing; recommends KEY_PASSWORD=STORE_PASSWORD, validating with a KeyStore.getKey check (CheckKey.java), single-line base64 with sha256 round-trip, secrets set via stdin.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Set up a GitHub Actions workflow for my Android app (AGP 8.x, JDK 21, minSdk 26): PRs should get a debug APK testers can install over the previous one, pushes to main a signed release APK, and I don't want PR builds to be able to read the release key. Give me the workflow and the Gradle signing config.",
+      "expected_output": "A workflow with read-only default permissions, stable debug key from a secret with applicationIdSuffix .debug, release secrets in a GitHub Environment limited to main selected only for main pushes, secrets passed via step env, throwaway-key fallback with ::warning:: and matching alias, tests before assemble, versionCode from run_number, apksigner signature verification before upload-artifact, rootProject.file for the keystore path.",
+      "files": []
+    }
+  ]
+}
