@@ -15,8 +15,9 @@ pluginManagement {
     }
     if (useMavenCentralMirror) {
       maven("https://maven-central.storage-download.googleapis.com/maven2/") { name = "MavenCentralMirror" }
+    } else {
+      mavenCentral()
     }
-    mavenCentral()
     gradlePluginPortal()
   }
 }

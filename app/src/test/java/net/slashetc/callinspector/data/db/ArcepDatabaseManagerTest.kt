@@ -110,4 +110,32 @@ class ArcepDatabaseManagerTest {
             assertEquals(single, fromBatch)
         }
     }
+
+    @Test
+    fun `benchmark lookupNumbers batch performance`() = runBlocking {
+        // Prepare 100 sample numbers (mix of assigned, unassigned, short numbers, and masked numbers)
+        val sampleNumbers = (100000..100099).map { i ->
+            when (i % 5) {
+                0 -> "01056%05d".format(i - 100000)
+                1 -> "06%08d".format(i - 100000)
+                2 -> "00000%05d".format(i - 100000)
+                3 -> "10%02d".format(i % 100)
+                else -> ""
+            }
+        }
+
+        // Warm up
+        dbManager.lookupNumbers(sampleNumbers)
+
+        val iterations = 30
+        var totalNanos = 0L
+        repeat(iterations) {
+            val start = System.nanoTime()
+            dbManager.lookupNumbers(sampleNumbers)
+            totalNanos += (System.nanoTime() - start)
+        }
+
+        val avgTimeMs = (totalNanos / iterations.toDouble()) / 1_000_000.0
+        println("BENCHMARK_RESULT: lookupNumbers 100 batch average time: %.3f ms".format(avgTimeMs))
+    }
 }

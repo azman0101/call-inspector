@@ -88,58 +88,91 @@ class ArcepDatabaseManager private constructor(private val context: Context) : L
         val database = getReadableDb()
         val rangeMap = mutableMapOf<String, ArcepNumberRange>()
 
-        for (rawNum in uniqueNumbers) {
+        // 1. Batched Direct Range Lookup
+        val directCandidates = uniqueNumbers.mapNotNull { rawNum ->
             val (normalized, _, _) = parsedMap[rawNum]!!
-            if (normalized.isBlank()) continue
+            if (normalized.isNotBlank() && normalized.length >= 4) normalized else null
+        }.distinct()
 
-            var range: ArcepNumberRange? = null
-
-            // 1. Direct range lookup
-            if (normalized.length >= 4) {
+        val directRangeByNormalized = mutableMapOf<String, ArcepNumberRange>()
+        if (directCandidates.isNotEmpty()) {
+            for (chunk in directCandidates.chunked(200)) {
+                val placeholders = chunk.joinToString(",") { "(?)" }
                 val cursor = database.rawQuery(
                     """
-                    SELECT r.id, r.ezabpqm, r.tranche_debut, r.tranche_fin, r.operator_code, r.operator_name, r.territory, r.attribution_date
-                    FROM number_ranges r
-                    WHERE r.tranche_debut <= ? AND r.tranche_fin >= ?
-                    ORDER BY LENGTH(r.ezabpqm) DESC LIMIT 1
+                    WITH inputs(num) AS (
+                        VALUES $placeholders
+                    )
+                    SELECT inputs.num, r.id, r.ezabpqm, r.tranche_debut, r.tranche_fin, r.operator_code, r.operator_name, r.territory, r.attribution_date
+                    FROM inputs
+                    JOIN number_ranges r ON r.tranche_debut <= inputs.num AND r.tranche_fin >= inputs.num
                     """.trimIndent(),
-                    arrayOf(normalized, normalized)
+                    chunk.toTypedArray()
                 )
-
                 cursor.use {
-                    if (it.moveToFirst()) {
-                        range = ArcepNumberRange(
-                            id = it.getLong(0),
-                            ezabpqm = it.getString(1),
-                            trancheDebut = it.getString(2),
-                            trancheFin = it.getString(3),
-                            operatorCode = it.getString(4),
-                            operatorName = it.getString(5),
-                            territory = it.getString(6),
-                            attributionDate = it.getString(7)
+                    while (it.moveToNext()) {
+                        val num = it.getString(0)
+                        val range = ArcepNumberRange(
+                            id = it.getLong(1),
+                            ezabpqm = it.getString(2),
+                            trancheDebut = it.getString(3),
+                            trancheFin = it.getString(4),
+                            operatorCode = it.getString(5),
+                            operatorName = it.getString(6),
+                            territory = it.getString(7),
+                            attributionDate = it.getString(8)
                         )
+                        val existing = directRangeByNormalized[num]
+                        if (existing == null || range.ezabpqm.length > existing.ezabpqm.length) {
+                            directRangeByNormalized[num] = range
+                        }
                     }
                 }
             }
+        }
 
-            // 2. Prefix fallback if not matched by full 10-digit range
-            if (range == null) {
-                for (len in listOf(7, 6, 5, 4, 3, 2)) {
-                    if (normalized.length >= len) {
-                        val prefix = normalized.substring(0, len)
-                        val cursor = database.rawQuery(
-                            """
-                            SELECT r.id, r.ezabpqm, r.tranche_debut, r.tranche_fin, r.operator_code, r.operator_name, r.territory, r.attribution_date
-                            FROM number_ranges r
-                            WHERE r.ezabpqm = ? LIMIT 1
-                            """.trimIndent(),
-                            arrayOf(prefix)
-                        )
-                        cursor.use {
-                            if (it.moveToFirst()) {
-                                range = ArcepNumberRange(
+        for (rawNum in uniqueNumbers) {
+            val (normalized, _, _) = parsedMap[rawNum]!!
+            val range = directRangeByNormalized[normalized]
+            if (range != null) {
+                rangeMap[rawNum] = range
+            }
+        }
+
+        // 2. Batched Prefix Fallback for unmatched numbers
+        val unmatchedRawNumbers = uniqueNumbers.filter { rawNum ->
+            val (normalized, _, _) = parsedMap[rawNum]!!
+            normalized.isNotBlank() && rangeMap[rawNum] == null
+        }
+
+        if (unmatchedRawNumbers.isNotEmpty()) {
+            val prefixLens = listOf(7, 6, 5, 4, 3, 2)
+            val candidatePrefixes = unmatchedRawNumbers.flatMap { rawNum ->
+                val (normalized, _, _) = parsedMap[rawNum]!!
+                prefixLens.mapNotNull { len ->
+                    if (normalized.length >= len) normalized.substring(0, len) else null
+                }
+            }.distinct()
+
+            if (candidatePrefixes.isNotEmpty()) {
+                val prefixToRangeMap = mutableMapOf<String, ArcepNumberRange>()
+                for (chunk in candidatePrefixes.chunked(200)) {
+                    val placeholders = chunk.joinToString(",") { "?" }
+                    val cursor = database.rawQuery(
+                        """
+                        SELECT r.id, r.ezabpqm, r.tranche_debut, r.tranche_fin, r.operator_code, r.operator_name, r.territory, r.attribution_date
+                        FROM number_ranges r
+                        WHERE r.ezabpqm IN ($placeholders)
+                        """.trimIndent(),
+                        chunk.toTypedArray()
+                    )
+                    cursor.use {
+                        while (it.moveToNext()) {
+                            val ezabpqm = it.getString(1)
+                            if (!prefixToRangeMap.containsKey(ezabpqm)) {
+                                prefixToRangeMap[ezabpqm] = ArcepNumberRange(
                                     id = it.getLong(0),
-                                    ezabpqm = it.getString(1),
+                                    ezabpqm = ezabpqm,
                                     trancheDebut = it.getString(2),
                                     trancheFin = it.getString(3),
                                     operatorCode = it.getString(4),
@@ -149,13 +182,22 @@ class ArcepDatabaseManager private constructor(private val context: Context) : L
                                 )
                             }
                         }
-                        if (range != null) break
                     }
                 }
-            }
 
-            if (range != null) {
-                rangeMap[rawNum] = range
+                for (rawNum in unmatchedRawNumbers) {
+                    val (normalized, _, _) = parsedMap[rawNum]!!
+                    for (len in prefixLens) {
+                        if (normalized.length >= len) {
+                            val prefix = normalized.substring(0, len)
+                            val range = prefixToRangeMap[prefix]
+                            if (range != null) {
+                                rangeMap[rawNum] = range
+                                break
+                            }
+                        }
+                    }
+                }
             }
         }
 
