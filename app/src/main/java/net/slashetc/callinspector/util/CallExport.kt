@@ -6,7 +6,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
-import kotlin.math.abs
 
 enum class CallExportFormat { CSV, MARKDOWN }
 
@@ -18,8 +17,9 @@ data class ExportableNumber(val normalizedNumber: String, val calls: List<CallLo
 
 /**
  * Formats calls for the clipboard, to answer an operator that asks which calls to look for in its
- * traffic data (e.g. after a SignalConso report): the calling number, the exact date and time with its
- * UTC offset, and the line that received them.
+ * traffic data (e.g. after a SignalConso report): the calling number, the exact date and time in the
+ * phone's local time, and the line that received them. The Markdown version is meant to be pasted into
+ * an AI assistant along with the operator's mail, so it starts with instructions for writing the reply.
  */
 object CallExport {
 
@@ -54,7 +54,6 @@ object CallExport {
             add("Numéro appelant")
             add("Date")
             add("Heure")
-            add("Fuseau")
             add("Type")
             add("Durée (s)")
             add("Opérateur")
@@ -66,7 +65,6 @@ object CallExport {
                 add(call.formattedNumber)
                 add(date(call.timestamp, timeZone))
                 add(time(call.timestamp, timeZone))
-                add(utcOffset(call.timestamp, timeZone))
                 add(typeLabel(call.callType))
                 add(call.durationSeconds.coerceAtLeast(0).toString())
                 add(call.lookupResult.operatorDisplayName)
@@ -84,17 +82,17 @@ object CallExport {
             add("Numéro appelant")
             add("Date")
             add("Heure")
-            add("Fuseau")
             add("Type")
             add("Durée")
             add("Opérateur")
             if (options.includeNotes) add("Note")
         }
         return buildString {
+            append(AI_INSTRUCTIONS).append("\n\n")
             val subject = options.searchLabel?.takeIf { it.isNotBlank() }?.let { " correspondant à « ${it.trim()} »" }.orEmpty()
             append("**Appels$subject** : ${plural(calls.size, "appel")} de ${plural(numberCount, "numéro")}\n")
             if (receiving != null) append("\nLigne ayant reçu les appels : $receiving\n")
-            append("\n")
+            append("\nHeures locales du téléphone (${timeZone.id}).\n\n")
             append(header.joinToString(" | ", "| ", " |")).append("\n")
             append(header.joinToString("|", "|", "|") { "---" }).append("\n")
             calls.forEach { call ->
@@ -102,7 +100,6 @@ object CallExport {
                     add(call.formattedNumber)
                     add(date(call.timestamp, timeZone))
                     add(time(call.timestamp, timeZone))
-                    add(utcOffset(call.timestamp, timeZone))
                     add(typeLabel(call.callType))
                     add(PhoneNumberFormatter.formatDuration(call.durationSeconds))
                     add(call.lookupResult.operatorDisplayName)
@@ -112,6 +109,15 @@ object CallExport {
             }
         }
     }
+
+    // Mail clients show Markdown as raw symbols: the assistant must write the reply in plain text.
+    internal val AI_INSTRUCTIONS = """
+        > **Consignes pour l'assistant IA qui rédige la réponse :**
+        > - Écris le mail en texte brut, sans aucune mise en forme Markdown (pas de `**`, de titres `#`, de tableau `|` ni de puces `*`) : les clients mail ne l'affichent pas et le rendent illisible.
+        > - Présente chaque appel sur une ligne de phrase simple, par exemple : « Le 28/09/2026 à 14:03:12, appel manqué du 01 59 39 12 34 ».
+        > - Donne les dates et heures telles qu'elles figurent ci-dessous (heure locale), sans les convertir.
+        > - Indique le numéro de la ligne qui a reçu les appels, et reprends ce que le mail de l'opérateur demande de préciser.
+    """.trimIndent()
 
     fun typeLabel(type: CallType): String = when (type) {
         CallType.INCOMING -> "Reçu"
@@ -127,13 +133,6 @@ object CallExport {
 
     private fun time(epochMillis: Long, timeZone: TimeZone) =
         SimpleDateFormat("HH:mm:ss", Locale.FRENCH).apply { this.timeZone = timeZone }.format(Date(epochMillis))
-
-    // Per call: a period of calls can span a daylight saving time change.
-    internal fun utcOffset(epochMillis: Long, timeZone: TimeZone): String {
-        val offsetMinutes = timeZone.getOffset(epochMillis) / 60_000
-        val sign = if (offsetMinutes < 0) "-" else "+"
-        return "UTC%s%02d:%02d".format(Locale.ROOT, sign, abs(offsetMinutes) / 60, abs(offsetMinutes) % 60)
-    }
 
     private fun plural(count: Int, word: String) = "$count $word" + if (count > 1) "s" else ""
 

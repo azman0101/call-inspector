@@ -210,13 +210,23 @@ fun CallExportSheet(
                             .testTag("export_receiving_number")
                     )
 
+                    if (format == CallExportFormat.MARKDOWN) {
+                        Text(
+                            text = "Pour un assistant IA : le texte commence par la consigne de rédiger le mail en texte brut, sans Markdown.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 14.sp,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                    }
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = exportText.lines().take(8).joinToString("\n"),
+                            // The data, not the assistant instructions that start the Markdown text.
+                            text = exportText.removePrefix(CallExport.AI_INSTRUCTIONS).trimStart().lines().take(8).joinToString("\n"),
                             fontFamily = FontFamily.Monospace,
                             fontSize = 10.sp,
                             lineHeight = 13.sp,

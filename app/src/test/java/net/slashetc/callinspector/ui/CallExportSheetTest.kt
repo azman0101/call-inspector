@@ -74,7 +74,7 @@ class CallExportSheetTest {
         composeRule.onNodeWithTag("export_copy_button").assertTextContains("Copier 3 appels").performClick()
 
         val text = clipboardText()!!
-        assertTrue(text.startsWith("**Appels correspondant à « QWALIKOM »** : 3 appels de 2 numéros"))
+        assertTrue(text.contains("**Appels correspondant à « QWALIKOM »** : 3 appels de 2 numéros"))
         assertTrue(text.contains("Ligne ayant reçu les appels : 06 12 34 56 78"))
         assertEquals(3, text.lines().count { it.startsWith("| 01 59 39") })
         assertTrue(dismissed)
@@ -102,7 +102,7 @@ class CallExportSheetTest {
         composeRule.onNodeWithTag("export_copy_button").assertIsEnabled().performClick()
 
         val csv = clipboardText()!!
-        assertTrue(csv.startsWith("Numéro appelant,Date,Heure,Fuseau,Type,Durée (s),Opérateur\n"))
+        assertTrue(csv.startsWith("Numéro appelant,Date,Heure,Type,Durée (s),Opérateur\n"))
         assertEquals(3, csv.trimEnd().lines().size)
         assertFalse(csv.contains("01 59 39 56 78"))
         assertFalse(csv.contains("Ligne appelée"))

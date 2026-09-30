@@ -76,15 +76,15 @@ class CallExportTest {
     }
 
     @Test
-    fun `csv lists each call with date, time and the UTC offset of that day`() {
+    fun `csv lists each call with its local date and time`() {
         val csv = CallExport.format(calls, CallExport.Options(CallExportFormat.CSV), paris)
 
         assertEquals(
             """
-            Numéro appelant,Date,Heure,Fuseau,Type,Durée (s),Opérateur
-            01 59 39 12 34,20/03/2026,10:00:00,UTC+01:00,Rejeté,0,Qwalikom
-            09 48 12 34 56,27/09/2026,09:30:05,UTC+02:00,Manqué,0,Qwalikom
-            01 59 39 12 34,28/09/2026,14:03:12,UTC+02:00,Reçu,65,Qwalikom
+            Numéro appelant,Date,Heure,Type,Durée (s),Opérateur
+            01 59 39 12 34,20/03/2026,10:00:00,Rejeté,0,Qwalikom
+            09 48 12 34 56,27/09/2026,09:30:05,Manqué,0,Qwalikom
+            01 59 39 12 34,28/09/2026,14:03:12,Reçu,65,Qwalikom
             """.trimIndent() + "\n",
             csv
         )
@@ -99,9 +99,9 @@ class CallExportTest {
         )
         val lines = csv.trimEnd().lines()
 
-        assertEquals("Numéro appelant,Date,Heure,Fuseau,Type,Durée (s),Opérateur,Ligne appelée,Note", lines[0])
+        assertEquals("Numéro appelant,Date,Heure,Type,Durée (s),Opérateur,Ligne appelée,Note", lines[0])
         assertEquals(
-            "01 59 39 12 34,28/09/2026,14:03:12,UTC+02:00,Reçu,65,Qwalikom,06 12 34 56 78,\"Isolation, rappel \"\"urgent\"\"\"",
+            "01 59 39 12 34,28/09/2026,14:03:12,Reçu,65,Qwalikom,06 12 34 56 78,\"Isolation, rappel \"\"urgent\"\"\"",
             lines[3]
         )
         assertTrue(lines[1].endsWith(",06 12 34 56 78,"))
@@ -116,16 +116,18 @@ class CallExportTest {
         )
 
         assertEquals(
-            """
+            CallExport.AI_INSTRUCTIONS + "\n\n" + """
             **Appels correspondant à « QWALIKOM »** : 3 appels de 2 numéros
 
             Ligne ayant reçu les appels : 06 12 34 56 78
 
-            | Numéro appelant | Date | Heure | Fuseau | Type | Durée | Opérateur |
-            |---|---|---|---|---|---|---|
-            | 01 59 39 12 34 | 20/03/2026 | 10:00:00 | UTC+01:00 | Rejeté | 0 s | Qwalikom |
-            | 09 48 12 34 56 | 27/09/2026 | 09:30:05 | UTC+02:00 | Manqué | 0 s | Qwalikom |
-            | 01 59 39 12 34 | 28/09/2026 | 14:03:12 | UTC+02:00 | Reçu | 1m 5s | Qwalikom |
+            Heures locales du téléphone (Europe/Paris).
+
+            | Numéro appelant | Date | Heure | Type | Durée | Opérateur |
+            |---|---|---|---|---|---|
+            | 01 59 39 12 34 | 20/03/2026 | 10:00:00 | Rejeté | 0 s | Qwalikom |
+            | 09 48 12 34 56 | 27/09/2026 | 09:30:05 | Manqué | 0 s | Qwalikom |
+            | 01 59 39 12 34 | 28/09/2026 | 14:03:12 | Reçu | 1m 5s | Qwalikom |
             """.trimIndent() + "\n",
             markdown
         )
@@ -137,10 +139,21 @@ class CallExportTest {
 
         val markdown = CallExport.format(withNote, CallExport.Options(CallExportFormat.MARKDOWN, includeNotes = true), paris)
 
-        assertTrue(markdown.startsWith("**Appels** : 1 appel de 1 numéro\n"))
+        assertTrue(markdown.contains("\n**Appels** : 1 appel de 1 numéro\n"))
         assertTrue(markdown.contains("| Note |"))
         assertTrue(markdown.contains("| Qwalikom | a \\| b c |\n"))
         assertFalse(markdown.contains("Ligne ayant reçu"))
+    }
+
+    @Test
+    fun `markdown tells the AI assistant to write the mail in plain text, csv has no instructions`() {
+        val markdown = CallExport.format(calls, CallExport.Options(CallExportFormat.MARKDOWN), paris)
+        val csv = CallExport.format(calls, CallExport.Options(CallExportFormat.CSV), paris)
+
+        assertTrue(markdown.startsWith("> **Consignes pour l'assistant IA"))
+        assertTrue(markdown.contains("texte brut, sans aucune mise en forme Markdown"))
+        assertFalse(markdown.contains("UTC"))
+        assertFalse(csv.contains("assistant"))
     }
 
     @Test
@@ -150,13 +163,5 @@ class CallExportTest {
 
         assertFalse(csv.contains("Isolation"))
         assertFalse(markdown.contains("Isolation"))
-    }
-
-    @Test
-    fun `utcOffset handles negative and non-whole-hour offsets`() {
-        val now = at(2026, 1, 15, 12, 0)
-        assertEquals("UTC-03:00", CallExport.utcOffset(now, TimeZone.getTimeZone("America/Sao_Paulo")))
-        assertEquals("UTC+05:30", CallExport.utcOffset(now, TimeZone.getTimeZone("Asia/Kolkata")))
-        assertEquals("UTC+00:00", CallExport.utcOffset(now, TimeZone.getTimeZone("UTC")))
     }
 }
