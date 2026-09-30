@@ -59,6 +59,8 @@ data class ArcepUiState(
     /** The release whose notes are shown ("Nouveautés"); null when closed. */
     val releaseNotes: AppRelease? = null,
     val isUpdateCheckEnabled: Boolean = true,
+    /** Debug builds: offer newer releases automatically too (off by default). */
+    val isUpdateCheckEnabledInDebug: Boolean = false,
     val updateStatus: net.slashetc.callinspector.data.repository.UpdateStatus = net.slashetc.callinspector.data.repository.UpdateStatus.Idle
 ) {
     val isPermanentlyDenied: Boolean
@@ -82,9 +84,22 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
     init {
         checkPermissionAndLoad()
         loadStats()
-        _uiState.update { it.copy(isUpdateCheckEnabled = appUpdateChecker.isEnabled) }
-        // Debug builds are another app (.debug): a release APK would install next to them, not update them.
-        if (BuildConfig.BUILD_TYPE == "release") checkAppUpdate()
+        _uiState.update {
+            it.copy(
+                isUpdateCheckEnabled = appUpdateChecker.isEnabled,
+                isUpdateCheckEnabledInDebug = appUpdateChecker.isEnabledInDebug
+            )
+        }
+        // Debug builds are another app (.debug): a release APK would install next to them, not update them,
+        // so they only look for releases when the user turned that on ("Signaler les releases").
+        if (BuildConfig.BUILD_TYPE == "release") {
+            checkAppUpdate()
+        } else if (appUpdateChecker.isEnabledInDebug) {
+            viewModelScope.launch {
+                val update = appUpdateChecker.availableUpdate()
+                _uiState.update { it.copy(availableAppUpdate = update) }
+            }
+        }
     }
 
     /** Looks for a newer release (at most daily) and, right after an update, shows what it brings. */
@@ -116,6 +131,12 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
     fun setUpdateCheckEnabled(enabled: Boolean) {
         appUpdateChecker.isEnabled = enabled
         _uiState.update { it.copy(isUpdateCheckEnabled = enabled, availableAppUpdate = null) }
+        if (enabled) checkAppUpdateNow()
+    }
+
+    fun setUpdateCheckEnabledInDebug(enabled: Boolean) {
+        appUpdateChecker.isEnabledInDebug = enabled
+        _uiState.update { it.copy(isUpdateCheckEnabledInDebug = enabled, availableAppUpdate = if (enabled) it.availableAppUpdate else null) }
         if (enabled) checkAppUpdateNow()
     }
 

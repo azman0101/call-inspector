@@ -34,6 +34,14 @@ class AppUpdateChecker internal constructor(
         set(value) = prefs.edit().putBoolean(KEY_ENABLED, value).apply()
 
     /**
+     * Debug builds only: also offer newer releases automatically. Off by default, since a release APK does
+     * not update a debug build (another app, ".debug") but installs next to it.
+     */
+    var isEnabledInDebug: Boolean
+        get() = prefs.getBoolean(KEY_ENABLED_IN_DEBUG, false)
+        set(value) = prefs.edit().putBoolean(KEY_ENABLED_IN_DEBUG, value).apply()
+
+    /**
      * The newer release to offer, or null. GitHub is asked at most once every [CHECK_INTERVAL_MS] unless
      * [force]; in between, the last answer is reused. A release the user dismissed is not offered again.
      */
@@ -98,6 +106,7 @@ class AppUpdateChecker internal constructor(
         private const val TAG = "AppUpdateChecker"
         private const val PREFS_NAME = "app_updates"
         private const val KEY_ENABLED = "check_enabled"
+        private const val KEY_ENABLED_IN_DEBUG = "check_enabled_in_debug"
         private const val KEY_LAST_CHECK = "last_check_at"
         private const val KEY_LATEST_JSON = "latest_release_json"
         private const val KEY_DISMISSED_CODE = "dismissed_version_code"

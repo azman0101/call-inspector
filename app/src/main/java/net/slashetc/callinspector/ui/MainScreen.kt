@@ -167,6 +167,7 @@ fun MainScreen(
                         onTriggerUpdate = { viewModel.triggerDatabaseUpdate() },
                         onResetUpdateStatus = { viewModel.resetUpdateStatus() },
                         onSetUpdateCheckEnabled = { viewModel.setUpdateCheckEnabled(it) },
+                        onSetUpdateCheckEnabledInDebug = { viewModel.setUpdateCheckEnabledInDebug(it) },
                         onCheckAppUpdateNow = { viewModel.checkAppUpdateNow() },
                         onShowInstalledReleaseNotes = { viewModel.showInstalledReleaseNotes() }
                     )

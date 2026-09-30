@@ -127,6 +127,14 @@ class AppUpdateCheckerTest {
     }
 
     @Test
+    fun `release offers in a debug build are off by default and remembered once turned on`() {
+        assertEquals(false, checker(174).isEnabledInDebug)
+        checker(174).isEnabledInDebug = true
+        assertEquals(true, checker(174).isEnabledInDebug)
+        assertEquals(true, checker(174).isEnabled) // the general setting is independent
+    }
+
+    @Test
     fun `what's new shows once, after an update, never on a fresh install`() = runBlocking {
         responses[AppUpdateChecker.TAG_URL + "v1.0.174"] = release(174)
         responses[AppUpdateChecker.TAG_URL + "v1.0.180"] = release(180)

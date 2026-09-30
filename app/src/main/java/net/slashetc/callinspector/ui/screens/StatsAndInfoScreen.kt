@@ -86,6 +86,7 @@ fun StatsAndInfoScreen(
     onTriggerUpdate: (() -> Unit)? = null,
     onResetUpdateStatus: (() -> Unit)? = null,
     onSetUpdateCheckEnabled: ((Boolean) -> Unit)? = null,
+    onSetUpdateCheckEnabledInDebug: ((Boolean) -> Unit)? = null,
     onCheckAppUpdateNow: (() -> Unit)? = null,
     onShowInstalledReleaseNotes: (() -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -1003,6 +1004,44 @@ fun StatsAndInfoScreen(
                                 checked = uiState.isUpdateCheckEnabled,
                                 onCheckedChange = onSetUpdateCheckEnabled,
                                 modifier = Modifier.testTag("update_check_switch")
+                            )
+                        }
+                    }
+
+                    // Debug builds only: a release installs next to them instead of updating them.
+                    if (onSetUpdateCheckEnabledInDebug != null && net.slashetc.callinspector.BuildConfig.DEBUG && uiState.isUpdateCheckEnabled) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                    RoundedCornerShape(10.dp)
+                                )
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Signaler les releases dans la version debug",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Désactivé par défaut : une release ne met pas à jour cette version debug, elle s'installe à côté. « Rechercher une mise à jour » reste disponible.",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    lineHeight = 15.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Switch(
+                                checked = uiState.isUpdateCheckEnabledInDebug,
+                                onCheckedChange = onSetUpdateCheckEnabledInDebug,
+                                modifier = Modifier.testTag("update_check_debug_switch")
                             )
                         }
                     }
