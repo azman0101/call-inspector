@@ -30,15 +30,26 @@ case "$APK" in *unsigned*) echo "::error::Unsigned APK, not published: $APK"; ex
 
 if [ -z "${APKSIGNER:-}" ]; then
   sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
-  APKSIGNER="$(ls -d "$sdk"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1 || true)"
+  # Newest stable build-tools: release candidates sort after their final version with sort -V.
+  APKSIGNER="$(ls -d "$sdk"/build-tools/*/apksigner 2>/dev/null | grep -v -- '-rc' | sort -V | tail -1 || true)"
 fi
 [ -x "${APKSIGNER:-}" ] || { echo "::error::apksigner not found (set APKSIGNER or ANDROID_HOME)"; exit 1; }
 
-# The signer check reads the same certificate users are told to compare in the README.
-cert_sha256="$("$APKSIGNER" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
+# The signer check reads the same certificate users are told to compare in the README. apksigner's wording
+# changed across versions ("Signer #1 certificate SHA-256 digest:" up to build-tools 36, "V2 Signer:
+# certificate SHA-256 digest:" from 37), so only the digest after "certificate SHA-256 digest:" is read, and
+# every signer listed must carry the release certificate.
+signer_output="$("$APKSIGNER" verify --print-certs "$APK" 2>&1)" || {
+  echo "$signer_output"
+  echo "::error::apksigner could not verify $APK: release not published."
+  exit 1
+}
+cert_digests="$(printf '%s\n' "$signer_output" | grep -oE 'certificate SHA-256 digest: [0-9a-fA-F]{64}' | awk '{print tolower($NF)}' | sort -u)"
+cert_sha256="$(printf '%s\n' "$cert_digests" | head -1)"
 expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ': ' | tr 'A-F' 'a-f')"
-if [ "$cert_sha256" != "$expected" ]; then
-  echo "::error::APK signed with certificate ${cert_sha256:-none}, not the release key $expected: release not published."
+if [ -z "$cert_sha256" ] || [ "$cert_digests" != "$expected" ]; then
+  echo "$signer_output"
+  echo "::error::APK signed with certificate(s) ${cert_digests:-none}, not the release key $expected: release not published."
   exit 1
 fi
 

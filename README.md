@@ -231,6 +231,7 @@ Résultat attendu :
 Signer #1 certificate DN: CN=slashetc.net, O=slashetc, C=FR
 Signer #1 certificate SHA-256 digest: 1f45c660f2385aee7bdd9aa05eaa562d8b4caf7fcfcb32c386a2f2fdd8ed793a
 ```
+(À partir des build-tools 37, `apksigner` écrit `V2 Signer: certificate …` au lieu de `Signer #1 certificate …` : seule l'empreinte compte.)
 - Si l'empreinte SHA-256 diffère, l'APK n'a pas été signé avec la clé du projet (secret absent ou modifié) : il ne pourra pas mettre à jour une installation existante.
 - `keytool -printcert -jarfile` n'affiche rien pour cet APK : avec `minSdk` 24, seuls les schémas de signature v2+ sont utilisés, que `keytool` ne sait pas lire.
 
