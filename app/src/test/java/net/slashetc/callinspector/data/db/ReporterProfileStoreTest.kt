@@ -31,6 +31,7 @@ class ReporterProfileStoreTest {
         }
         store.clear()
         store.clearReports()
+        store.clearLineNumbers()
     }
 
     @Test
@@ -113,5 +114,15 @@ class ReporterProfileStoreTest {
             mapOf("0162000000" to ReportStats(2, 3_000L), "0270000000" to ReportStats(1, 2_000L)),
             store.reportStats()
         )
+    }
+
+    @Test
+    fun `line numbers are remembered per line and a correction replaces the old one`() = runBlocking {
+        assertTrue(store.lineNumbers().isEmpty())
+        store.saveLineNumber("comp/Svc|1", " 06 39 98 00 01 ")
+        store.saveLineNumber("comp/Svc|2", "0639980002")
+        store.saveLineNumber("comp/Svc|1", "07 11 22 33 44")
+        store.clear()
+        assertEquals(mapOf("comp/Svc|1" to "07 11 22 33 44", "comp/Svc|2" to "0639980002"), store.lineNumbers())
     }
 }

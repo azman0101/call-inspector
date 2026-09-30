@@ -17,6 +17,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import net.slashetc.callinspector.util.PhoneLines
+import net.slashetc.callinspector.util.ReceivingLine
 import net.slashetc.callinspector.util.SearchQueries
 
 enum class CallFilter {
@@ -45,6 +49,8 @@ data class ArcepUiState(
     val userNotice: String? = null,
     val showPermissionDialog: Boolean = false,
     val permissionDeniedCount: Int = 0,
+    /** The call export being shown, by receiving line; null when closed. */
+    val exportLines: List<ReceivingLine>? = null,
     val updateStatus: net.slashetc.callinspector.data.repository.UpdateStatus = net.slashetc.callinspector.data.repository.UpdateStatus.Idle
 ) {
     val isPermanentlyDenied: Boolean
@@ -57,6 +63,7 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
     private val dbManager = ArcepDatabaseManager.getInstance(application)
     private val updateManager = net.slashetc.callinspector.data.repository.ArcepUpdateManager(application)
     private val profileStore = ReporterProfileStore.getInstance(application)
+    private val lineDetector = net.slashetc.callinspector.data.repository.PhoneLineDetector(application)
 
     private val _uiState = MutableStateFlow(ArcepUiState())
     val uiState: StateFlow<ArcepUiState> = _uiState.asStateFlow()
@@ -219,8 +226,31 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** The phone of the user's SignalConso profile: the line operators ask for to find the calls. */
-    suspend fun reporterPhone(): String? = profileStore.load()?.phone?.takeIf { it.isNotBlank() }
+    /**
+     * Opens the export of [calls]: groups them by the line (SIM...) that received them, with each line's
+     * number from the user's saved lines, the call log or the system.
+     */
+    fun openExport(calls: List<CallLogEntry>) {
+        viewModelScope.launch {
+            val stored = runCatching { profileStore.lineNumbers() }.getOrDefault(emptyMap())
+            val detected = withContext(Dispatchers.IO) {
+                runCatching { lineDetector.detect(calls.mapNotNull { it.lineId }.toSet()) }.getOrDefault(emptyMap())
+            }
+            _uiState.update { it.copy(exportLines = PhoneLines.linesOf(calls, stored, detected)) }
+        }
+    }
+
+    /** Remembers the number of one of the user's lines, asked once, and refreshes the open export. */
+    fun saveLineNumber(lineKey: String, number: String) {
+        viewModelScope.launch {
+            profileStore.saveLineNumber(lineKey, number)
+            _uiState.value.exportLines?.let { lines -> openExport(lines.flatMap { it.calls }.sortedByDescending { it.timestamp }) }
+        }
+    }
+
+    fun closeExport() {
+        _uiState.update { it.copy(exportLines = null) }
+    }
 
     fun onManualSearchInput(input: String) {
         _uiState.update { it.copy(manualSearchInput = input) }

@@ -8,6 +8,9 @@ import android.os.Build
 import android.os.PersistableBundle
 import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,6 +38,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -50,39 +54,48 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import net.slashetc.callinspector.data.model.CallLogEntry
 import net.slashetc.callinspector.ui.theme.ArcepBlue
 import net.slashetc.callinspector.util.CallExport
 import net.slashetc.callinspector.util.CallExportFormat
 import net.slashetc.callinspector.util.PhoneNumberFormatter
+import net.slashetc.callinspector.util.ReceivingLine
 
 /**
  * Picks caller numbers from a search result (e.g. every number of one operator) and copies their calls
  * to the clipboard as CSV or Markdown, to answer an operator that asks for the calls to look for.
+ *
+ * The export covers one of the user's lines only, named in it: when the calls reached several lines
+ * (dual SIM), the user picks one, so the reply never mixes two called numbers. A line whose number is
+ * unknown is asked for once; [onSaveLineNumber] remembers it.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CallExportSheet(
-    calls: List<CallLogEntry>,
+    lines: List<ReceivingLine>,
     searchLabel: String,
-    initialReceivingNumber: String,
+    onSaveLineNumber: (lineKey: String, number: String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var lineKey by remember { mutableStateOf(lines.first().key) }
+    val line = lines.firstOrNull { it.key == lineKey } ?: lines.first()
+    val calls = line.calls
     val numbers = remember(calls) { CallExport.numbersIn(calls) }
-    var selected by remember(numbers) { mutableStateOf(numbers.map { it.normalizedNumber }.toSet()) }
+    var selected by remember(line.key) { mutableStateOf(numbers.map { it.normalizedNumber }.toSet()) }
     var format by remember { mutableStateOf(CallExportFormat.MARKDOWN) }
     var includeNotes by remember { mutableStateOf(false) }
-    var receivingNumber by remember(initialReceivingNumber) { mutableStateOf(initialReceivingNumber) }
+    var editingLineNumber by remember(line.key, line.number) { mutableStateOf(line.number == null) }
+    var lineNumberInput by remember(line.key, line.number) { mutableStateOf(line.number.orEmpty()) }
 
     val selectedCalls = CallExport.selectedCalls(calls, selected)
     val hasNotes = calls.any { !it.userNote.isNullOrBlank() }
     val exportText = CallExport.format(
         selectedCalls,
-        CallExport.Options(format, includeNotes && hasNotes, receivingNumber, searchLabel)
+        CallExport.Options(format, includeNotes && hasNotes, line.number, searchLabel)
     )
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
@@ -117,6 +130,108 @@ fun CallExportSheet(
                     .weight(1f, fill = false)
                     .testTag("export_list")
             ) {
+                item(key = "line") {
+                    if (lines.size > 1) {
+                        Text(
+                            text = "Ces appels sont arrivés sur ${lines.size} lignes. L'export ne porte que sur la ligne choisie :",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 16.sp
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.horizontalScroll(rememberScrollState())
+                        ) {
+                            lines.forEachIndexed { index, option ->
+                                FilterChip(
+                                    selected = option.key == line.key,
+                                    onClick = { lineKey = option.key },
+                                    label = {
+                                        Text(
+                                            "${option.number ?: option.label} · ${option.calls.size} appel${if (option.calls.size > 1) "s" else ""}",
+                                            fontSize = 12.sp
+                                        )
+                                    },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = ArcepBlue,
+                                        selectedLabelColor = Color.White
+                                    ),
+                                    modifier = Modifier.testTag("export_line_$index")
+                                )
+                            }
+                        }
+                    }
+
+                    if (editingLineNumber) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                val lastCall = line.calls.maxBy { it.timestamp }
+                                Text(
+                                    text = "Quel est le numéro de la ligne « ${line.label} » ?",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = "Dernier appel reçu dessus : ${PhoneNumberFormatter.formatTimestamp(lastCall.timestamp)}, " +
+                                        "du ${lastCall.formattedNumber}. Il sera mémorisé pour les prochains exports.",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    lineHeight = 15.sp
+                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    OutlinedTextField(
+                                        value = lineNumberInput,
+                                        onValueChange = { lineNumberInput = it },
+                                        placeholder = { Text("06 12 34 56 78", fontSize = 13.sp) },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("export_line_number_input")
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Button(
+                                        onClick = { onSaveLineNumber(line.key, lineNumberInput.trim()) },
+                                        enabled = PhoneNumberFormatter.normalize(lineNumberInput).count(Char::isDigit) >= 4,
+                                        colors = ButtonDefaults.buttonColors(containerColor = ArcepBlue),
+                                        modifier = Modifier.testTag("export_line_number_save")
+                                    ) {
+                                        Text("Mémoriser", fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "Ligne appelée : ${line.number} (${line.label})",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("export_line_number")
+                            )
+                            TextButton(
+                                onClick = { editingLineNumber = true },
+                                modifier = Modifier.testTag("export_line_number_edit")
+                            ) {
+                                Text("Modifier", fontSize = 12.sp, color = ArcepBlue)
+                            }
+                        }
+                    }
+                    HorizontalDivider()
+                }
+
                 item(key = "select_all") {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -197,18 +312,6 @@ fun CallExportSheet(
                             Text("Inclure mes notes", fontSize = 13.sp)
                         }
                     }
-
-                    OutlinedTextField(
-                        value = receivingNumber,
-                        onValueChange = { receivingNumber = it },
-                        label = { Text("Mon numéro, qui a reçu les appels (optionnel)", fontSize = 12.sp) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp)
-                            .testTag("export_receiving_number")
-                    )
 
                     if (format == CallExportFormat.MARKDOWN) {
                         Text(

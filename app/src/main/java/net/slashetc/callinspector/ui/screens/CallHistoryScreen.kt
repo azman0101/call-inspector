@@ -58,11 +58,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -104,7 +99,6 @@ fun CallHistoryScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var showExport by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -395,7 +389,7 @@ fun CallHistoryScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 TextButton(
-                    onClick = { showExport = true },
+                    onClick = { viewModel.openExport(uiState.filteredCalls) },
                     modifier = Modifier.testTag("export_calls_button")
                 ) {
                     Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp), tint = ArcepBlue)
@@ -447,20 +441,15 @@ fun CallHistoryScreen(
         )
     }
 
-    if (showExport) {
-        var receivingNumber by remember { mutableStateOf<String?>(null) }
-        LaunchedEffect(Unit) { receivingNumber = viewModel.reporterPhone().orEmpty() }
-        // Waits for the profile so the field starts with the user's number.
-        receivingNumber?.let { initial ->
-            CallExportSheet(
-                calls = uiState.filteredCalls,
-                searchLabel = uiState.callSearchQuery.trim().ifEmpty {
-                    callFilters.firstOrNull { it.first == uiState.selectedFilter }?.second.orEmpty()
-                },
-                initialReceivingNumber = initial,
-                onDismiss = { showExport = false }
-            )
-        }
+    uiState.exportLines?.let { lines ->
+        CallExportSheet(
+            lines = lines,
+            searchLabel = uiState.callSearchQuery.trim().ifEmpty {
+                callFilters.firstOrNull { it.first == uiState.selectedFilter }?.second.orEmpty()
+            },
+            onSaveLineNumber = { key, number -> viewModel.saveLineNumber(key, number) },
+            onDismiss = { viewModel.closeExport() }
+        )
     }
 
     // Permission Rationale & Settings Dialog
