@@ -19,6 +19,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import net.slashetc.callinspector.BuildConfig
+import net.slashetc.callinspector.data.repository.AppUpdateChecker
+import net.slashetc.callinspector.util.AppRelease
 import net.slashetc.callinspector.util.PhoneLines
 import net.slashetc.callinspector.util.ReceivingLine
 import net.slashetc.callinspector.util.SearchQueries
@@ -51,6 +54,11 @@ data class ArcepUiState(
     val permissionDeniedCount: Int = 0,
     /** The call export being shown, by receiving line; null when closed. */
     val exportLines: List<ReceivingLine>? = null,
+    /** A newer version published on GitHub, offered in a banner until downloaded or dismissed. */
+    val availableAppUpdate: AppRelease? = null,
+    /** The release whose notes are shown ("Nouveautés"); null when closed. */
+    val releaseNotes: AppRelease? = null,
+    val isUpdateCheckEnabled: Boolean = true,
     val updateStatus: net.slashetc.callinspector.data.repository.UpdateStatus = net.slashetc.callinspector.data.repository.UpdateStatus.Idle
 ) {
     val isPermanentlyDenied: Boolean
@@ -64,6 +72,7 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
     private val updateManager = net.slashetc.callinspector.data.repository.ArcepUpdateManager(application)
     private val profileStore = ReporterProfileStore.getInstance(application)
     private val lineDetector = net.slashetc.callinspector.data.repository.PhoneLineDetector(application)
+    private val appUpdateChecker = AppUpdateChecker(application)
 
     private val _uiState = MutableStateFlow(ArcepUiState())
     val uiState: StateFlow<ArcepUiState> = _uiState.asStateFlow()
@@ -73,6 +82,60 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
     init {
         checkPermissionAndLoad()
         loadStats()
+        _uiState.update { it.copy(isUpdateCheckEnabled = appUpdateChecker.isEnabled) }
+        // Debug builds are another app (.debug): a release APK would install next to them, not update them.
+        if (BuildConfig.BUILD_TYPE == "release") checkAppUpdate()
+    }
+
+    /** Looks for a newer release (at most daily) and, right after an update, shows what it brings. */
+    private fun checkAppUpdate() {
+        viewModelScope.launch {
+            val whatsNew = appUpdateChecker.whatsNewAfterUpdate()
+            val update = appUpdateChecker.availableUpdate()
+            _uiState.update { it.copy(availableAppUpdate = update, releaseNotes = whatsNew ?: it.releaseNotes) }
+        }
+    }
+
+    fun checkAppUpdateNow() {
+        viewModelScope.launch {
+            val update = appUpdateChecker.availableUpdate(force = true)
+            _uiState.update {
+                it.copy(
+                    availableAppUpdate = update,
+                    userNotice = if (update == null) "Vous avez la dernière version (${BuildConfig.VERSION_NAME})" else null
+                )
+            }
+        }
+    }
+
+    fun dismissAppUpdate() {
+        _uiState.value.availableAppUpdate?.let { appUpdateChecker.dismiss(it) }
+        _uiState.update { it.copy(availableAppUpdate = null) }
+    }
+
+    fun setUpdateCheckEnabled(enabled: Boolean) {
+        appUpdateChecker.isEnabled = enabled
+        _uiState.update { it.copy(isUpdateCheckEnabled = enabled, availableAppUpdate = null) }
+        if (enabled) checkAppUpdateNow()
+    }
+
+    fun showReleaseNotes(release: AppRelease) {
+        _uiState.update { it.copy(releaseNotes = release) }
+    }
+
+    /** The installed version's notes, fetched on demand. */
+    fun showInstalledReleaseNotes() {
+        viewModelScope.launch {
+            val release = appUpdateChecker.installedRelease()
+            _uiState.update {
+                if (release != null) it.copy(releaseNotes = release)
+                else it.copy(userNotice = "Notes de la version ${BuildConfig.VERSION_NAME} indisponibles (hors ligne ou version non publiée)")
+            }
+        }
+    }
+
+    fun closeReleaseNotes() {
+        _uiState.update { it.copy(releaseNotes = null) }
     }
 
     fun checkPermissionAndLoad() {

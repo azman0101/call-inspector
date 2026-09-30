@@ -215,7 +215,7 @@ Chaque build sur `main` publie une [release GitHub](https://github.com/azman0101
 - l'APK signé avec la clé de release, `info-operateur-<version>.apk`, et son fichier `.sha256` ;
 - des notes de version : empreinte SHA-256 de l'APK, certificat de signature, rapport VirusTotal, lien vers le run GitHub Actions et son artefact, puis les pull requests fusionnées depuis la release précédente.
 
-La [dernière release](https://github.com/azman0101/call-inspector/releases/latest) est toujours à la même adresse. La CI refuse de publier un APK qui n'est pas signé avec la clé du projet (secret `KEYSTORE_BASE64` absent, par exemple) : il ne pourrait mettre à jour aucune installation. Relancer le job d'une version déjà publiée remplace ses fichiers et ses notes.
+La [dernière release](https://github.com/azman0101/call-inspector/releases/latest) est toujours à la même adresse. L'application elle-même (APK release) consulte ces releases au plus une fois par jour : elle affiche un bandeau quand une version plus récente est publiée, avec ses nouveautés et le lien de téléchargement, et montre les nouveautés de la version installée au premier lancement après une mise à jour (réglage *Vérifier les mises à jour*, `AppUpdateChecker`). La CI refuse de publier un APK qui n'est pas signé avec la clé du projet (secret `KEYSTORE_BASE64` absent, par exemple) : il ne pourrait mettre à jour aucune installation. Relancer le job d'une version déjà publiée remplace ses fichiers et ses notes.
 
 ### Analyse VirusTotal de l'APK release
 

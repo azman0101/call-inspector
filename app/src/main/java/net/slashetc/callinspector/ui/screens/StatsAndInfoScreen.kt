@@ -85,6 +85,9 @@ fun StatsAndInfoScreen(
     uiState: ArcepUiState,
     onTriggerUpdate: (() -> Unit)? = null,
     onResetUpdateStatus: (() -> Unit)? = null,
+    onSetUpdateCheckEnabled: ((Boolean) -> Unit)? = null,
+    onCheckAppUpdateNow: (() -> Unit)? = null,
+    onShowInstalledReleaseNotes: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -330,6 +333,29 @@ fun StatsAndInfoScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
                             )
+                        }
+
+                        // Versions published on GitHub (tools/publish_release.sh)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            if (onShowInstalledReleaseNotes != null) {
+                                TextButton(
+                                    onClick = onShowInstalledReleaseNotes,
+                                    modifier = Modifier.testTag("installed_release_notes_button")
+                                ) {
+                                    Text("Nouveautés de cette version", fontSize = 11.sp)
+                                }
+                            }
+                            if (onCheckAppUpdateNow != null && uiState.isUpdateCheckEnabled) {
+                                TextButton(
+                                    onClick = onCheckAppUpdateNow,
+                                    modifier = Modifier.testTag("check_app_update_button")
+                                ) {
+                                    Text("Rechercher une mise à jour", fontSize = 11.sp)
+                                }
+                            }
                         }
                     }
                 }
@@ -942,6 +968,43 @@ fun StatsAndInfoScreen(
                             },
                             modifier = Modifier.testTag("telemetry_opt_in_switch")
                         )
+                    }
+
+                    if (onSetUpdateCheckEnabled != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                    RoundedCornerShape(10.dp)
+                                )
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Vérifier les mises à jour",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Une fois par jour au plus, l'application consulte la liste publique des versions sur GitHub (api.github.com) et vous signale la nouvelle. Aucune donnée vous concernant n'est envoyée.",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    lineHeight = 15.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Switch(
+                                checked = uiState.isUpdateCheckEnabled,
+                                onCheckedChange = onSetUpdateCheckEnabled,
+                                modifier = Modifier.testTag("update_check_switch")
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
