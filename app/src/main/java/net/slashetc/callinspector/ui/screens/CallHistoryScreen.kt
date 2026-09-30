@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
@@ -69,6 +70,7 @@ import androidx.compose.ui.unit.sp
 import net.slashetc.callinspector.data.model.CallLogEntry
 import net.slashetc.callinspector.ui.SignalConsoActivity
 import net.slashetc.callinspector.ui.components.CallDetailBottomSheet
+import net.slashetc.callinspector.ui.components.CallExportSheet
 import net.slashetc.callinspector.ui.components.CallItemCard
 import net.slashetc.callinspector.ui.components.PermissionRationaleDialog
 import net.slashetc.callinspector.ui.theme.ArcepBlue
@@ -80,6 +82,14 @@ import net.slashetc.callinspector.ui.theme.WarningAmberSoft
 import net.slashetc.callinspector.viewmodel.ArcepUiState
 import net.slashetc.callinspector.viewmodel.ArcepViewModel
 import net.slashetc.callinspector.viewmodel.CallFilter
+
+private val callFilters = listOf(
+    Pair(CallFilter.TOUS, "Tous"),
+    Pair(CallFilter.DEMARCHAGE_SPAM, "⚠️ Démarchage / Spam"),
+    Pair(CallFilter.MANQUES, "Manqués"),
+    Pair(CallFilter.ENTRANTS, "Entrants"),
+    Pair(CallFilter.FAVORIS, "Favoris")
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -344,15 +354,7 @@ fun CallHistoryScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(bottom = 8.dp)
         ) {
-            val filters = listOf(
-                Pair(CallFilter.TOUS, "Tous"),
-                Pair(CallFilter.DEMARCHAGE_SPAM, "⚠️ Démarchage / Spam"),
-                Pair(CallFilter.MANQUES, "Manqués"),
-                Pair(CallFilter.ENTRANTS, "Entrants"),
-                Pair(CallFilter.FAVORIS, "Favoris")
-            )
-
-            items(filters) { (filter, label) ->
+            items(callFilters) { (filter, label) ->
                 val selected = uiState.selectedFilter == filter
                 FilterChip(
                     selected = selected,
@@ -364,6 +366,36 @@ fun CallHistoryScreen(
                     ),
                     modifier = Modifier.testTag("filter_chip_${filter.name}")
                 )
+            }
+        }
+
+        // A search or a filter narrowed the list: its calls can be copied, e.g. to answer an operator
+        val exportLabel = uiState.callSearchQuery.trim().ifEmpty {
+            callFilters.firstOrNull { it.first == uiState.selectedFilter && it.first != CallFilter.TOUS }?.second.orEmpty()
+        }
+        if (!uiState.isLoading && uiState.filteredCalls.isNotEmpty() && exportLabel.isNotEmpty()) {
+            val numberCount = uiState.filteredCalls.distinctBy { it.normalizedNumber }.size
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "${uiState.filteredCalls.size} appel${if (uiState.filteredCalls.size > 1) "s" else ""} · " +
+                        "$numberCount numéro${if (numberCount > 1) "s" else ""}",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(
+                    onClick = { viewModel.openExport(uiState.filteredCalls) },
+                    modifier = Modifier.testTag("export_calls_button")
+                ) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp), tint = ArcepBlue)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Exporter / copier", fontSize = 12.sp, color = ArcepBlue)
+                }
             }
         }
 
@@ -406,6 +438,17 @@ fun CallHistoryScreen(
             onToggleFavorite = { viewModel.toggleFavorite(it) },
             onSaveNote = { phone, note -> viewModel.saveCallNote(phone, note) },
             onReport = { reported -> reportLauncher.launch(SignalConsoActivity.intent(context, reported, uiState.calls)) }
+        )
+    }
+
+    uiState.exportLines?.let { lines ->
+        CallExportSheet(
+            lines = lines,
+            searchLabel = uiState.callSearchQuery.trim().ifEmpty {
+                callFilters.firstOrNull { it.first == uiState.selectedFilter }?.second.orEmpty()
+            },
+            onSaveLineNumber = { key, number -> viewModel.saveLineNumber(key, number) },
+            onDismiss = { viewModel.closeExport() }
         )
     }
 
