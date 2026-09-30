@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
@@ -57,6 +58,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,6 +75,7 @@ import androidx.compose.ui.unit.sp
 import net.slashetc.callinspector.data.model.CallLogEntry
 import net.slashetc.callinspector.ui.SignalConsoActivity
 import net.slashetc.callinspector.ui.components.CallDetailBottomSheet
+import net.slashetc.callinspector.ui.components.CallExportSheet
 import net.slashetc.callinspector.ui.components.CallItemCard
 import net.slashetc.callinspector.ui.components.PermissionRationaleDialog
 import net.slashetc.callinspector.ui.theme.ArcepBlue
@@ -81,6 +88,14 @@ import net.slashetc.callinspector.viewmodel.ArcepUiState
 import net.slashetc.callinspector.viewmodel.ArcepViewModel
 import net.slashetc.callinspector.viewmodel.CallFilter
 
+private val callFilters = listOf(
+    Pair(CallFilter.TOUS, "Tous"),
+    Pair(CallFilter.DEMARCHAGE_SPAM, "⚠️ Démarchage / Spam"),
+    Pair(CallFilter.MANQUES, "Manqués"),
+    Pair(CallFilter.ENTRANTS, "Entrants"),
+    Pair(CallFilter.FAVORIS, "Favoris")
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CallHistoryScreen(
@@ -89,6 +104,7 @@ fun CallHistoryScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var showExport by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -344,15 +360,7 @@ fun CallHistoryScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(bottom = 8.dp)
         ) {
-            val filters = listOf(
-                Pair(CallFilter.TOUS, "Tous"),
-                Pair(CallFilter.DEMARCHAGE_SPAM, "⚠️ Démarchage / Spam"),
-                Pair(CallFilter.MANQUES, "Manqués"),
-                Pair(CallFilter.ENTRANTS, "Entrants"),
-                Pair(CallFilter.FAVORIS, "Favoris")
-            )
-
-            items(filters) { (filter, label) ->
+            items(callFilters) { (filter, label) ->
                 val selected = uiState.selectedFilter == filter
                 FilterChip(
                     selected = selected,
@@ -364,6 +372,36 @@ fun CallHistoryScreen(
                     ),
                     modifier = Modifier.testTag("filter_chip_${filter.name}")
                 )
+            }
+        }
+
+        // A search or a filter narrowed the list: its calls can be copied, e.g. to answer an operator
+        val exportLabel = uiState.callSearchQuery.trim().ifEmpty {
+            callFilters.firstOrNull { it.first == uiState.selectedFilter && it.first != CallFilter.TOUS }?.second.orEmpty()
+        }
+        if (!uiState.isLoading && uiState.filteredCalls.isNotEmpty() && exportLabel.isNotEmpty()) {
+            val numberCount = uiState.filteredCalls.distinctBy { it.normalizedNumber }.size
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "${uiState.filteredCalls.size} appel${if (uiState.filteredCalls.size > 1) "s" else ""} · " +
+                        "$numberCount numéro${if (numberCount > 1) "s" else ""}",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(
+                    onClick = { showExport = true },
+                    modifier = Modifier.testTag("export_calls_button")
+                ) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp), tint = ArcepBlue)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Exporter / copier", fontSize = 12.sp, color = ArcepBlue)
+                }
             }
         }
 
@@ -407,6 +445,22 @@ fun CallHistoryScreen(
             onSaveNote = { phone, note -> viewModel.saveCallNote(phone, note) },
             onReport = { reported -> reportLauncher.launch(SignalConsoActivity.intent(context, reported, uiState.calls)) }
         )
+    }
+
+    if (showExport) {
+        var receivingNumber by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(Unit) { receivingNumber = viewModel.reporterPhone().orEmpty() }
+        // Waits for the profile so the field starts with the user's number.
+        receivingNumber?.let { initial ->
+            CallExportSheet(
+                calls = uiState.filteredCalls,
+                searchLabel = uiState.callSearchQuery.trim().ifEmpty {
+                    callFilters.firstOrNull { it.first == uiState.selectedFilter }?.second.orEmpty()
+                },
+                initialReceivingNumber = initial,
+                onDismiss = { showExport = false }
+            )
+        }
     }
 
     // Permission Rationale & Settings Dialog

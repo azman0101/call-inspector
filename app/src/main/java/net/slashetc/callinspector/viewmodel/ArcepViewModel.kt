@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import net.slashetc.callinspector.data.db.ArcepDatabaseManager
 import net.slashetc.callinspector.data.db.DatabaseStats
+import net.slashetc.callinspector.data.db.ReporterProfileStore
 import net.slashetc.callinspector.data.model.ArcepLookupResult
 import net.slashetc.callinspector.data.model.CallLogEntry
 import net.slashetc.callinspector.data.model.CallType
@@ -55,6 +56,7 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = CallLogRepository(application)
     private val dbManager = ArcepDatabaseManager.getInstance(application)
     private val updateManager = net.slashetc.callinspector.data.repository.ArcepUpdateManager(application)
+    private val profileStore = ReporterProfileStore.getInstance(application)
 
     private val _uiState = MutableStateFlow(ArcepUiState())
     val uiState: StateFlow<ArcepUiState> = _uiState.asStateFlow()
@@ -216,6 +218,9 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    /** The phone of the user's SignalConso profile: the line operators ask for to find the calls. */
+    suspend fun reporterPhone(): String? = profileStore.load()?.phone?.takeIf { it.isNotBlank() }
 
     fun onManualSearchInput(input: String) {
         _uiState.update { it.copy(manualSearchInput = input) }
