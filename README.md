@@ -2,6 +2,7 @@
 
 [![Build](https://github.com/azman0101/call-inspector/actions/workflows/build_apk.yml/badge.svg?branch=main&event=push)](https://github.com/azman0101/call-inspector/actions/workflows/build_apk.yml?query=branch%3Amain+event%3Apush)
 [![VirusTotal](https://img.shields.io/badge/VirusTotal-rapport%20de%20l%27APK%20release-394EFF?logo=virustotal&logoColor=white)](https://www.virustotal.com/gui/file/a1edb815dcddba138019a17a0273072acc9fd827207c2de25fe709c9224caee2)
+[![Dernière release](https://img.shields.io/github/v/release/azman0101/call-inspector?label=t%C3%A9l%C3%A9charger%20l%27APK)](https://github.com/azman0101/call-inspector/releases/latest)
 [![Licence MIT](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
 
 Application Android Kotlin / Jetpack Compose qui analyse l'historique d'appels du téléphone et identifie automatiquement l'opérateur de télécommunication et l'entreprise titulaire de chaque numéro selon les données publiques de l'**ARCEP** (Autorité de régulation des communications électroniques, des postes et de la distribution de la presse).
@@ -207,6 +208,15 @@ Un workflow GitHub Actions dédié (`.github/workflows/build_apk.yml`) est confi
   - L'APK de test signé avec la clé de debug (`app-debug.apk`) est automatiquement téléchargeable sous le nom **`info-operateur-debug-apk`** dans la section *Artifacts* de l'exécution GitHub Actions (durée de rétention : 14 jours).
   - Cet APK peut être installé directement sur n'importe quel smartphone Android de test sans certificat de production.
 
+### Releases : télécharger l'APK signé
+
+Chaque build sur `main` publie une [release GitHub](https://github.com/azman0101/call-inspector/releases) (`tools/publish_release.sh`) :
+- un tag `v1.0.<numéro du run>` sur le commit construit ;
+- l'APK signé avec la clé de release, `info-operateur-<version>.apk`, et son fichier `.sha256` ;
+- des notes de version : empreinte SHA-256 de l'APK, certificat de signature, rapport VirusTotal, lien vers le run GitHub Actions et son artefact, puis les pull requests fusionnées depuis la release précédente.
+
+La [dernière release](https://github.com/azman0101/call-inspector/releases/latest) est toujours à la même adresse. La CI refuse de publier un APK qui n'est pas signé avec la clé du projet (secret `KEYSTORE_BASE64` absent, par exemple) : il ne pourrait mettre à jour aucune installation. Relancer le job d'une version déjà publiée remplace ses fichiers et ses notes.
+
 ### Analyse VirusTotal de l'APK release
 
 À chaque build sur `main`, la CI envoie l'APK release à [VirusTotal](https://www.virustotal.com) (`tools/virustotal_scan.sh`). Le badge VirusTotal ci-dessus pointe directement vers le rapport public de la dernière analyse : comme son lien dépend du SHA-256 de chaque APK, la CI le met à jour dans ce README à chaque build sur `main`. Le résumé du run donne les mêmes informations : empreinte SHA-256, nombre de détections, lien du rapport. L'analyse est informative : une détection, souvent un faux positif sur une app qui lit le journal d'appels, affiche un avertissement mais ne bloque jamais la release. Le secret `VIRUSTOTAL_API_KEY` active l'analyse ; sans lui, l'étape est ignorée et le badge garde son dernier lien connu.
@@ -214,7 +224,7 @@ Un workflow GitHub Actions dédié (`.github/workflows/build_apk.yml`) est confi
 ### Vérifier la signature d'un APK de release
 Les APK de release construits sur `main` sont signés avec la clé d'upload stable du projet (secret `KEYSTORE_BASE64`). Pour vérifier qu'un APK téléchargé provient bien de cette clé (par ex. sous Termux, `pkg install apksigner`) :
 ```sh
-apksigner verify --print-certs app-release.apk
+apksigner verify --print-certs info-operateur-<version>.apk
 ```
 Résultat attendu :
 ```text

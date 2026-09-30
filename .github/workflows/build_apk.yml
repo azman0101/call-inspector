@@ -22,8 +22,9 @@ jobs:
     # run, pull requests included, uses 'production' and cannot read them. Both environments need
     # SENTRY_DSN and NVD_API_KEY (tools/setup-release-environment.sh).
     environment: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && 'release' || 'production' }}
-    # contents: write only so the VirusTotal badge step can commit the current report link back to main
-    # (see that step). The workflow-level permissions above stay read-only for every other job and step.
+    # contents: write so that, on main, the VirusTotal badge step can commit the current report link and the
+    # release step can create the tag and the GitHub release (see those steps). The workflow-level
+    # permissions above stay read-only for every other job.
     permissions:
       contents: write
     env:
@@ -234,6 +235,24 @@ jobs:
             git commit -m "docs: point the VirusTotal badge at the latest release APK report [skip ci]"
             git push
           fi
+
+      # Every build on main becomes a GitHub release: tag v<version> on the built commit, the signed APK and
+      # its SHA-256 as assets, and notes listing the checksums, signing certificate, VirusTotal report, this
+      # run, and the pull requests merged since the previous release. The script refuses an APK that is not
+      # signed with the release key (a missing KEYSTORE_BASE64 secret makes the build fall back to a throwaway
+      # key): such an APK could not update any install. Tags made with GITHUB_TOKEN start no workflow run.
+      - name: Publish the GitHub release
+        if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_NAME: ${{ env.VERSION_NAME }}
+          # Release signing certificate, as published in the README ("Vérifier la signature").
+          EXPECTED_CERT_SHA256: 1f45c660f2385aee7bdd9aa05eaa562d8b4caf7fcfcb32c386a2f2fdd8ed793a
+          ARTIFACT_NAME: info-operateur-release-v${{ env.VERSION_NAME }}
+          VIRUSTOTAL_REPORT_URL: ${{ steps.virustotal.outputs.report_url }}
+          VIRUSTOTAL_MALICIOUS: ${{ steps.virustotal.outputs.malicious }}
+          VIRUSTOTAL_SUSPICIOUS: ${{ steps.virustotal.outputs.suspicious }}
+        run: tools/publish_release.sh "$(ls app/build/outputs/apk/release/*.apk | head -1)"
 
       # Pull requests build the debug APK, whose D8 dexing of every library took about 7 CPU-minutes per
       # run (mergeExtDexDebug waits on it): main only built the release APK (R8), so the Gradle cache it
