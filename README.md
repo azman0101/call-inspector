@@ -1,7 +1,7 @@
 # Info Opérateur
 
 [![Build](https://github.com/azman0101/call-inspector/actions/workflows/build_apk.yml/badge.svg?branch=main&event=push)](https://github.com/azman0101/call-inspector/actions/workflows/build_apk.yml?query=branch%3Amain+event%3Apush)
-[![VirusTotal](https://img.shields.io/badge/VirusTotal-rapport%20de%20l%27APK%20release-394EFF?logo=virustotal&logoColor=white)](https://www.virustotal.com/gui/file/fbc382cf362a8875afa92d5a01bc2ad121de7f1b0ca5b7bbbe245e8077e014c2)
+[![VirusTotal](https://img.shields.io/badge/VirusTotal-rapport%20de%20l%27APK%20release-394EFF?logo=virustotal&logoColor=white)](https://www.virustotal.com/gui/file/a1edb815dcddba138019a17a0273072acc9fd827207c2de25fe709c9224caee2)
 [![Licence MIT](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
 
 Application Android Kotlin / Jetpack Compose qui analyse l'historique d'appels du téléphone et identifie automatiquement l'opérateur de télécommunication et l'entreprise titulaire de chaque numéro selon les données publiques de l'**ARCEP** (Autorité de régulation des communications électroniques, des postes et de la distribution de la presse).
