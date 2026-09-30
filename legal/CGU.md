@@ -1,6 +1,6 @@
 # Conditions générales d'utilisation et confidentialité
 
-*Dernière mise à jour : 26 septembre 2026*
+*Dernière mise à jour : 30 septembre 2026*
 
 **Info Opérateur** identifie l'opérateur d'un numéro de téléphone à partir des données publiques de l'ARCEP et aide à signaler le démarchage abusif sur SignalConso. L'application vous demande d'accepter ces conditions à sa première ouverture, puis à chaque modification.
 
@@ -28,9 +28,10 @@ L'application n'a pas de serveur. Elle se connecte uniquement à :
 
 1. `extranet.arcep.fr`, pour mettre à jour la base de numérotation à votre demande (HTTPS avec vérification du certificat) ;
 2. `signal.conso.gouv.fr`, quand vous ouvrez le formulaire de signalement, et `entreprise.signal.conso.gouv.fr`, pour y rechercher l'opérateur par son SIRET ou son nom ;
-3. Sentry (`sentry.io`, hébergé dans l'Union européenne), seulement si vous activez les rapports d'anomalies (article 6).
+3. Sentry (`sentry.io`, hébergé dans l'Union européenne), seulement si vous activez les rapports d'anomalies (article 6) ;
+4. `api.github.com`, pour savoir si une nouvelle version de l'application est publiée et afficher ses nouveautés : au plus une fois par jour, et à votre demande. Seule la liste publique des versions est consultée ; aucune donnée vous concernant n'est envoyée. Vous pouvez le désactiver dans *Observatoire* > *Confidentialité & Données* > *Vérifier les mises à jour*.
 
-Les liens vers `arcep.fr` et `jalerte.arcep.fr` s'ouvrent dans votre navigateur.
+Les liens vers `arcep.fr` et `jalerte.arcep.fr`, ainsi que le téléchargement d'une nouvelle version (`github.com`), s'ouvrent dans votre navigateur.
 
 ## 5. Signalement sur SignalConso
 

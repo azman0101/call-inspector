@@ -4,7 +4,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -35,6 +35,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import net.slashetc.callinspector.BuildConfig
+import net.slashetc.callinspector.ui.components.AppUpdateBanner
+import net.slashetc.callinspector.ui.components.ReleaseNotesSheet
 import net.slashetc.callinspector.ui.screens.CallHistoryScreen
 import net.slashetc.callinspector.ui.screens.NumberLookupScreen
 import net.slashetc.callinspector.ui.screens.StatsAndInfoScreen
@@ -139,11 +142,18 @@ fun MainScreen(
             }
         }
     ) { innerPadding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            uiState.availableAppUpdate?.let { release ->
+                AppUpdateBanner(
+                    release = release,
+                    onShowNotes = { viewModel.showReleaseNotes(release) },
+                    onDismiss = { viewModel.dismissAppUpdate() }
+                )
+            }
             AnimatedContent(
                 targetState = uiState.currentTab,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
@@ -155,11 +165,23 @@ fun MainScreen(
                     2 -> StatsAndInfoScreen(
                         uiState = uiState,
                         onTriggerUpdate = { viewModel.triggerDatabaseUpdate() },
-                        onResetUpdateStatus = { viewModel.resetUpdateStatus() }
+                        onResetUpdateStatus = { viewModel.resetUpdateStatus() },
+                        onSetUpdateCheckEnabled = { viewModel.setUpdateCheckEnabled(it) },
+                        onSetUpdateCheckEnabledInDebug = { viewModel.setUpdateCheckEnabledInDebug(it) },
+                        onCheckAppUpdateNow = { viewModel.checkAppUpdateNow() },
+                        onShowInstalledReleaseNotes = { viewModel.showInstalledReleaseNotes() }
                     )
                     else -> CallHistoryScreen(uiState = uiState, viewModel = viewModel)
                 }
             }
         }
+    }
+
+    uiState.releaseNotes?.let { release ->
+        ReleaseNotesSheet(
+            release = release,
+            offerDownload = release.versionCode > BuildConfig.VERSION_CODE,
+            onDismiss = { viewModel.closeReleaseNotes() }
+        )
     }
 }
