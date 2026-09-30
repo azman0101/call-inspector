@@ -75,37 +75,41 @@ object CallExport {
         return (listOf(header) + rows).joinToString("\n") { row -> row.joinToString(",") { csvField(it) } } + "\n"
     }
 
+    // A plain list rather than a Markdown table: the text is meant for an AI assistant, and a table's
+    // pipes and "---" separators cost tokens without adding information.
     private fun markdown(calls: List<CallLogEntry>, options: Options, timeZone: TimeZone): String {
         val receiving = options.receivingNumber?.takeIf { it.isNotBlank() }?.trim()
         val numberCount = calls.map { it.normalizedNumber }.distinct().size
-        val header = buildList {
-            add("Numéro appelant")
-            add("Date")
-            add("Heure")
-            add("Type")
-            add("Durée")
-            add("Opérateur")
-            if (options.includeNotes) add("Note")
+        // One operator for all calls (the usual case after searching its name): stated once, not per call.
+        val sharedOperator = calls.map { it.lookupResult.operatorDisplayName }.distinct().singleOrNull()
+        val fields = buildList {
+            add("date heure")
+            add("numéro appelant")
+            add("type")
+            add("durée")
+            if (sharedOperator == null) add("opérateur")
+            if (options.includeNotes) add("note")
         }
         return buildString {
             append(AI_INSTRUCTIONS).append("\n\n")
             val subject = options.searchLabel?.takeIf { it.isNotBlank() }?.let { " correspondant à « ${it.trim()} »" }.orEmpty()
-            append("**Appels$subject** : ${plural(calls.size, "appel")} de ${plural(numberCount, "numéro")}\n")
-            if (receiving != null) append("\nLigne ayant reçu les appels : $receiving\n")
-            append("\nHeures locales du téléphone (${timeZone.id}).\n\n")
-            append(header.joinToString(" | ", "| ", " |")).append("\n")
-            append(header.joinToString("|", "|", "|") { "---" }).append("\n")
+            append("**Appels$subject** : ${plural(calls.size, "appel")} de ${plural(numberCount, "numéro")}")
+            if (sharedOperator != null) append(", opérateur $sharedOperator")
+            append("\n")
+            if (receiving != null) append("Ligne ayant reçu les appels : $receiving\n")
+            append("Heures locales du téléphone (${timeZone.id}). Chaque appel : ${fields.joinToString(", ")}.\n\n")
             calls.forEach { call ->
-                val cells = buildList {
+                val values = buildList {
+                    add("${date(call.timestamp, timeZone)} ${time(call.timestamp, timeZone)}")
                     add(call.formattedNumber)
-                    add(date(call.timestamp, timeZone))
-                    add(time(call.timestamp, timeZone))
                     add(typeLabel(call.callType))
                     add(PhoneNumberFormatter.formatDuration(call.durationSeconds))
-                    add(call.lookupResult.operatorDisplayName)
-                    if (options.includeNotes) add(call.userNote.orEmpty())
+                    if (sharedOperator == null) add(call.lookupResult.operatorDisplayName)
                 }
-                append(cells.joinToString(" | ", "| ", " |") { markdownCell(it) }).append("\n")
+                append("- ").append(values.joinToString(", "))
+                val note = call.userNote?.let { singleLine(it) }?.takeIf { it.isNotEmpty() }
+                if (options.includeNotes && note != null) append(", note : ").append(note)
+                append("\n")
             }
         }
     }
@@ -144,7 +148,7 @@ object CallExport {
             value
         }
 
-    // A note may hold a pipe or a line break, which would split the table row.
-    private fun markdownCell(value: String): String =
-        value.replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ').replace("|", "\\|").trim()
+    // A note may hold line breaks, which would split the call's line.
+    private fun singleLine(value: String): String =
+        value.replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ').trim()
 }

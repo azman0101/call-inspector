@@ -108,7 +108,7 @@ class CallExportTest {
     }
 
     @Test
-    fun `markdown has a summary, the receiving line and one table row per call`() {
+    fun `markdown has a summary, the receiving line and one list line per call`() {
         val markdown = CallExport.format(
             calls,
             CallExport.Options(CallExportFormat.MARKDOWN, receivingNumber = "06 12 34 56 78", searchLabel = "QWALIKOM"),
@@ -117,32 +117,43 @@ class CallExportTest {
 
         assertEquals(
             CallExport.AI_INSTRUCTIONS + "\n\n" + """
-            **Appels correspondant à « QWALIKOM »** : 3 appels de 2 numéros
-
+            **Appels correspondant à « QWALIKOM »** : 3 appels de 2 numéros, opérateur Qwalikom
             Ligne ayant reçu les appels : 06 12 34 56 78
+            Heures locales du téléphone (Europe/Paris). Chaque appel : date heure, numéro appelant, type, durée.
 
-            Heures locales du téléphone (Europe/Paris).
-
-            | Numéro appelant | Date | Heure | Type | Durée | Opérateur |
-            |---|---|---|---|---|---|
-            | 01 59 39 12 34 | 20/03/2026 | 10:00:00 | Rejeté | 0 s | Qwalikom |
-            | 09 48 12 34 56 | 27/09/2026 | 09:30:05 | Manqué | 0 s | Qwalikom |
-            | 01 59 39 12 34 | 28/09/2026 | 14:03:12 | Reçu | 1m 5s | Qwalikom |
+            - 20/03/2026 10:00:00, 01 59 39 12 34, Rejeté, 0 s
+            - 27/09/2026 09:30:05, 09 48 12 34 56, Manqué, 0 s
+            - 28/09/2026 14:03:12, 01 59 39 12 34, Reçu, 1m 5s
             """.trimIndent() + "\n",
             markdown
         )
     }
 
     @Test
-    fun `markdown notes cannot break the table`() {
+    fun `markdown names the operator on each line when calls come from several`() {
+        val mixed = calls + call(4, "0612345678", at(2026, 9, 29, 8, 0)).let {
+            it.copy(lookupResult = it.lookupResult.copy(operator = ArcepOperator(code = "FRTE", name = "Orange")))
+        }
+
+        val markdown = CallExport.format(mixed, CallExport.Options(CallExportFormat.MARKDOWN), paris)
+
+        assertTrue(markdown.contains("**Appels** : 4 appels de 3 numéros\n"))
+        assertTrue(markdown.contains("Chaque appel : date heure, numéro appelant, type, durée, opérateur.\n"))
+        assertTrue(markdown.contains("- 29/09/2026 08:00:00, 06 12 34 56 78, Manqué, 0 s, Orange\n"))
+        assertTrue(markdown.contains("- 20/03/2026 10:00:00, 01 59 39 12 34, Rejeté, 0 s, Qwalikom\n"))
+    }
+
+    @Test
+    fun `markdown notes stay on their call's line`() {
         val withNote = listOf(call(9, "0159391234", at(2026, 9, 28, 8, 0), note = "a | b\nc"))
 
         val markdown = CallExport.format(withNote, CallExport.Options(CallExportFormat.MARKDOWN, includeNotes = true), paris)
 
-        assertTrue(markdown.contains("\n**Appels** : 1 appel de 1 numéro\n"))
-        assertTrue(markdown.contains("| Note |"))
-        assertTrue(markdown.contains("| Qwalikom | a \\| b c |\n"))
+        assertTrue(markdown.contains("\n**Appels** : 1 appel de 1 numéro, opérateur Qwalikom\n"))
+        assertTrue(markdown.contains("Chaque appel : date heure, numéro appelant, type, durée, note.\n"))
+        assertTrue(markdown.endsWith("- 28/09/2026 08:00:00, 01 59 39 12 34, Manqué, 0 s, note : a | b c\n"))
         assertFalse(markdown.contains("Ligne ayant reçu"))
+        assertFalse(markdown.contains("---"))
     }
 
     @Test

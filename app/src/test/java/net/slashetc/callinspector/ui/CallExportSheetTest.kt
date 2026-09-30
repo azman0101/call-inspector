@@ -76,7 +76,7 @@ class CallExportSheetTest {
         val text = clipboardText()!!
         assertTrue(text.contains("**Appels correspondant à « QWALIKOM »** : 3 appels de 2 numéros"))
         assertTrue(text.contains("Ligne ayant reçu les appels : 06 12 34 56 78"))
-        assertEquals(3, text.lines().count { it.startsWith("| 01 59 39") })
+        assertEquals(3, text.lines().count { it.startsWith("- ") && it.contains(", 01 59 39") })
         assertTrue(dismissed)
     }
 
