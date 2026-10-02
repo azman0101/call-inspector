@@ -1,5 +1,6 @@
 package net.slashetc.callinspector
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -21,11 +22,17 @@ import net.slashetc.callinspector.viewmodel.ArcepViewModel
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        const val EXTRA_SHOW_DEMARCHAGE = "net.slashetc.callinspector.SHOW_DEMARCHAGE"
+        const val EXTRA_SEARCH_NUMBER = "net.slashetc.callinspector.SEARCH_NUMBER"
+    }
+
     private val viewModel: ArcepViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (savedInstanceState == null) handleShortcut(intent)
         setContent {
             MyApplicationTheme {
                 val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -50,6 +57,20 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleShortcut(intent)
+    }
+
+    // From the home screen widget (telemarketing calls) or the quick settings tile (one caller's number).
+    private fun handleShortcut(intent: Intent?) {
+        when {
+            intent == null -> Unit
+            intent.getBooleanExtra(EXTRA_SHOW_DEMARCHAGE, false) -> viewModel.showDemarchageCalls()
+            intent.hasExtra(EXTRA_SEARCH_NUMBER) -> viewModel.showCallsFrom(intent.getStringExtra(EXTRA_SEARCH_NUMBER).orEmpty())
         }
     }
 

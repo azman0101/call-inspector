@@ -208,6 +208,12 @@ Un workflow GitHub Actions dédié (`.github/workflows/build_apk.yml`) est confi
   - L'APK de test signé avec la clé de debug (`app-debug.apk`) est automatiquement téléchargeable sous le nom **`info-operateur-debug-apk`** dans la section *Artifacts* de l'exécution GitHub Actions (durée de rétention : 14 jours).
   - Cet APK peut être installé directement sur n'importe quel smartphone Android de test sans certificat de production.
 
+### Widget et tuile Réglages rapides
+- **Widget « Démarchage »** (écran d'accueil) : appels de démarchage reçus aujourd'hui et cette semaine (depuis lundi), c'est-à-dire les numéros des tranches réservées au démarchage ou marqués comme spam. Mis à jour toutes les 30 minutes et à chaque ouverture de l'app ; un appui ouvre le journal filtré sur le démarchage.
+- **Tuile « Qui m'a appelé ? »** (Réglages rapides) : un appui affiche le numéro, l'heure et l'opérateur ARCEP du dernier appel manqué, rejeté ou bloqué, sans ouvrir l'app. Téléphone verrouillé, la réponse n'apparaît qu'après le déverrouillage. « Voir dans l'app » ouvre le journal sur ce numéro.
+
+Tout est calculé sur le téléphone, à partir du journal d'appels : aucune connexion réseau.
+
 ### Releases : télécharger l'APK signé
 
 Chaque build sur `main` publie une [release GitHub](https://github.com/azman0101/call-inspector/releases) (`tools/publish_release.sh`) :

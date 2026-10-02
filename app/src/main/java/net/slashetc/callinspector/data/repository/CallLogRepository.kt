@@ -160,6 +160,66 @@ class CallLogRepository(private val context: Context) {
         return@withContext entries
     }
 
+    /**
+     * The most recent call the user did not take (missed, rejected or blocked), with its operator: what the
+     * "Qui m'a appelé ?" quick settings tile shows. Reads the call log only, never the samples; null without
+     * the permission or such a call.
+     */
+    suspend fun lastUnansweredCall(): CallLogEntry? = withContext(Dispatchers.IO) {
+        if (!hasPermission()) return@withContext null
+        val unanswered = setOf(CallLog.Calls.MISSED_TYPE, CallLog.Calls.REJECTED_TYPE, CallLog.Calls.BLOCKED_TYPE)
+        val record = try {
+            context.contentResolver.query(
+                CallLog.Calls.CONTENT_URI,
+                arrayOf(CallLog.Calls._ID, CallLog.Calls.NUMBER, CallLog.Calls.CACHED_NAME, CallLog.Calls.DATE, CallLog.Calls.TYPE),
+                "${CallLog.Calls.TYPE} IN (${unanswered.joinToString(",")})",
+                null,
+                "${CallLog.Calls.DATE} DESC"
+            )?.use { cursor ->
+                val typeIdx = cursor.getColumnIndex(CallLog.Calls.TYPE)
+                // The selection already keeps unanswered calls; checked again in case a provider ignores it.
+                generateSequence { if (cursor.moveToNext()) cursor else null }
+                    .firstOrNull { it.getInt(typeIdx) in unanswered }
+                    ?.let {
+                        RawCallRecord(
+                            id = it.getLong(it.getColumnIndexOrThrow(CallLog.Calls._ID)),
+                            rawNum = it.getString(it.getColumnIndexOrThrow(CallLog.Calls.NUMBER)).orEmpty(),
+                            cachedName = it.getString(it.getColumnIndexOrThrow(CallLog.Calls.CACHED_NAME)),
+                            date = it.getLong(it.getColumnIndexOrThrow(CallLog.Calls.DATE)),
+                            duration = 0L,
+                            callType = when (it.getInt(typeIdx)) {
+                                CallLog.Calls.MISSED_TYPE -> CallType.MISSED
+                                CallLog.Calls.REJECTED_TYPE -> CallType.REJECTED
+                                else -> CallType.BLOCKED
+                            },
+                            lineId = null,
+                            viaNumber = null
+                        )
+                    }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read the last unanswered call", e)
+            null
+        } ?: return@withContext null
+
+        val lookup = dbManager.lookupNumber(record.rawNum)
+        val note = loadNotes()[lookup.normalizedNumber]
+        CallLogEntry(
+            id = record.id,
+            rawNumber = record.rawNum,
+            normalizedNumber = lookup.normalizedNumber,
+            formattedNumber = lookup.formattedNumber,
+            cachedName = record.cachedName,
+            timestamp = record.date,
+            durationSeconds = 0L,
+            callType = record.callType,
+            lookupResult = lookup,
+            isSpamFlagged = note?.isSpam ?: lookup.numberType.isDemarchage,
+            isFavorite = note?.isFavorite ?: false,
+            userNote = note?.userNote
+        )
+    }
+
     suspend fun generateSampleCalls(): List<CallLogEntry> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         // Numbers shown with a contact name use the ranges ARCEP reserves for fiction (01 99 00, 06 39 98),

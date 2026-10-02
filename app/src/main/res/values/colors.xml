@@ -7,4 +7,9 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- Home screen widget and quick settings tile -->
+    <color name="widget_background">#FFFFFFFF</color>
+    <color name="widget_text">#FF0B2545</color>
+    <color name="widget_text_secondary">#FF5B6B7F</color>
+    <color name="widget_alert">#FFC62828</color>
 </resources>
