@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.view.ViewGroup
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -292,6 +293,8 @@ class SignalConsoActivity : ComponentActivity() {
     override fun onDestroy() {
         webView?.apply {
             stopLoading()
+            // WebView.destroy() must come after the view leaves the hierarchy (still the AndroidView's here).
+            (parent as? ViewGroup)?.removeView(this)
             destroy()
         }
         webView = null

@@ -57,11 +57,13 @@ object SignalConsoReport {
 
     /**
      * The report form itself: the only page the app hands the user's data to (security review, SR-01).
-     * Exact host, HTTPS, and the form's path, resolved first so that "../" can't lead elsewhere.
+     * Exact host, HTTPS, and the form's path as sent, resolved first so that "../" can't lead elsewhere. An
+     * encoded character ("%2F..%2F") or a backslash is refused rather than decoded: the form's path has none.
      */
     fun isFormUrl(url: String?): Boolean {
         if (!isSignalConsoUrl(url)) return false
-        val path = URI(url).normalize().path ?: return false
+        val path = URI(url).normalize().rawPath ?: return false
+        if ('%' in path || '\\' in path) return false
         return path == FORM_PATH || path.startsWith("$FORM_PATH/")
     }
 
