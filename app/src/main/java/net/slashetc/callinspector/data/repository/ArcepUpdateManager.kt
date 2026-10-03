@@ -45,8 +45,10 @@ enum class ArcepUpdateResult {
     UP_TO_DATE,
     /** ARCEP answered, but with an HTTP error or implausible data: the active database is kept. */
     REJECTED,
-    /** Network or local error (offline, TLS, disk): worth trying again soon. */
+    /** Network or local error (download cut, TLS, disk full): the active database is kept. */
     FAILED,
+    /** Automatic check: ARCEP could not be reached (offline), nothing was downloaded. */
+    UNREACHABLE,
 }
 
 class ArcepUpdateManager internal constructor(
@@ -193,7 +195,7 @@ class ArcepUpdateManager internal constructor(
             if (onlyIfChanged) {
                 if (majnumModified == null || ceModified == null) {
                     onProgress(UpdateStatus.Error("Extranet ARCEP injoignable : la base actuelle est conservée."))
-                    return@withContext ArcepUpdateResult.FAILED
+                    return@withContext ArcepUpdateResult.UNREACHABLE
                 }
                 if (isUpToDate(majnumModified, ceModified, dbManager.metadata())) {
                     onProgress(UpdateStatus.Idle)

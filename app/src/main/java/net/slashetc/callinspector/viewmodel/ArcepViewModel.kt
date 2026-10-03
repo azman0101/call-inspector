@@ -87,7 +87,6 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
     init {
         checkPermissionAndLoad()
         loadStats()
-        updateArcepDatabaseIfDue()
         _uiState.update {
             it.copy(
                 isUpdateCheckEnabled = appUpdateChecker.isEnabled,
@@ -413,20 +412,25 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
             val result = updateManager.checkAndDownloadUpdate { status ->
                 _uiState.update { it.copy(updateStatus = status) }
             }
-            arcepAutoUpdate.record(result)
             if (result == ArcepUpdateResult.UPDATED) {
+                // A fresh database also counts as this week's automatic check.
+                arcepAutoUpdate.record(result)
                 loadStats()
                 loadCalls()
             }
         }
     }
 
+    private var arcepAutoUpdateStarted = false
+
     /**
      * At first launch, then weekly: checks ARCEP's files and downloads them only when they changed. Its
-     * progress shows in the Observatoire card; a failure stays silent (retried at the next launch).
+     * progress shows in the Observatoire card; a failure stays silent. Called once the terms of use are
+     * accepted (they disclose this connection), at most once per view model.
      */
-    private fun updateArcepDatabaseIfDue() {
-        if (!arcepAutoUpdate.isDue()) return
+    fun updateArcepDatabaseIfDue() {
+        if (arcepAutoUpdateStarted || !arcepAutoUpdate.isDue()) return
+        arcepAutoUpdateStarted = true
         viewModelScope.launch {
             val result = updateManager.checkAndDownloadUpdate(onlyIfChanged = true) { status ->
                 if (status !is net.slashetc.callinspector.data.repository.UpdateStatus.Error) {

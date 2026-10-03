@@ -20,11 +20,12 @@ class ArcepAutoUpdate internal constructor(
     fun isDue(): Boolean = now() - prefs.getLong(KEY_LAST_CHECK, 0L) >= CHECK_INTERVAL_MS
 
     /**
-     * Records a check. A failed one (ARCEP unreachable) is not recorded, so the next launch tries again:
-     * a phone offline at its first launch still gets the data.
+     * Records a check. Only an unreachable ARCEP (nothing downloaded) is not recorded, so the next launch
+     * tries again: a phone offline at its first launch still gets the data. Any other failure waits a week,
+     * so a local error after the download (disk full) can't repeat the download at every launch.
      */
     fun record(result: ArcepUpdateResult) {
-        if (result != ArcepUpdateResult.FAILED) prefs.edit().putLong(KEY_LAST_CHECK, now()).apply()
+        if (result != ArcepUpdateResult.UNREACHABLE) prefs.edit().putLong(KEY_LAST_CHECK, now()).apply()
     }
 
     companion object {

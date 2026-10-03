@@ -33,6 +33,7 @@ class ArcepAutoUpdateTest {
     private var majnumDate = "Fri, 02 Oct 2026 08:00:00 GMT"
     private var ceDate = "Thu, 01 Oct 2026 08:00:00 GMT"
     private var offline = false
+    private var downloadsCut = false
     private val requests = mutableListOf<String>()
 
     // Plausible volumes (ArcepUpdateManager.MIN_EXPECTED_*): 600 operators, 10 000 ranges.
@@ -53,6 +54,7 @@ class ArcepAutoUpdateTest {
         val url = request.url.toString()
         requests += "${request.method} $url"
         if (offline) throw IOException("offline")
+        if (downloadsCut && request.method == "GET") throw IOException("connection reset")
         val (date, body) = when (url) {
             ArcepUpdateManager.MAJNUM_URL -> majnumDate to majnumCsv
             ArcepUpdateManager.CE_URL -> ceDate to ceCsv
@@ -101,9 +103,13 @@ class ArcepAutoUpdateTest {
     }
 
     @Test
-    fun `a failed check is retried at the next launch, a rejected one waits a week`() {
-        policy.record(ArcepUpdateResult.FAILED)
+    fun `an unreachable ARCEP is retried at the next launch, any other failure waits a week`() {
+        policy.record(ArcepUpdateResult.UNREACHABLE)
         assertTrue(policy.isDue())
+        policy.record(ArcepUpdateResult.FAILED)
+        assertFalse(policy.isDue())
+
+        clearPrefs()
         policy.record(ArcepUpdateResult.REJECTED)
         assertFalse(policy.isDue())
     }
@@ -140,10 +146,21 @@ class ArcepAutoUpdateTest {
         val before = ArcepDatabaseManager.getInstance(context).metadata()
         offline = true
 
-        assertEquals(ArcepUpdateResult.FAILED, autoUpdate())
+        assertEquals(ArcepUpdateResult.UNREACHABLE, autoUpdate())
         assertTrue(gets.isEmpty())
         assertEquals(before, ArcepDatabaseManager.getInstance(context).metadata())
         assertTrue(policy.isDue())
+    }
+
+    @Test
+    fun `a failure once ARCEP answered keeps the database and waits a week`() {
+        // The dates came back, the download broke: retrying at every launch could download again and again.
+        val before = ArcepDatabaseManager.getInstance(context).metadata()
+        downloadsCut = true
+
+        assertEquals(ArcepUpdateResult.FAILED, autoUpdate())
+        assertEquals(before, ArcepDatabaseManager.getInstance(context).metadata())
+        assertFalse(policy.isDue())
     }
 
     @Test
