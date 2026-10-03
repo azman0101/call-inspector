@@ -1,7 +1,7 @@
 # TODO
 
-Follow-ups collected from the descriptions of PRs #11 to #36 and from direct commits to `main`
-(up to `989be97`). Checked on 2026-09-27.
+Follow-ups collected from the descriptions of PRs #11 to #56 and from direct commits to `main`
+(up to `c840e82`). Checked on 2026-10-03.
 
 ## Open
 
@@ -15,6 +15,7 @@ Follow-ups collected from the descriptions of PRs #11 to #36 and from direct com
 - [ ] **Keep the executable bit on `gradlew` and `tools/generate-debug-keystore.sh`.** #29 restored it
   (`100755`) after `9d56dcf` dropped it, as `4a3e621` had before #26. The editor or tool used for direct
   commits loses the mode: check `core.fileMode` there, or fix it with `git update-index --chmod=+x`.
+  Still `100755` on `main` at `c840e82`.
 
 ### Package / app identity (from #16)
 
@@ -70,8 +71,6 @@ Follow-ups collected from the descriptions of PRs #11 to #36 and from direct com
 - [ ] **Find the audit items M4 and M5.** Commits exist for M1 (build hardening), M2 (encrypted storage,
   #27 and #30), M3 (TLS pinning and update hardening, #22 and #23) and M6 (dependency scan), but none for
   M4 and M5. The source audit document isn't in the repo.
-- [x] ~~**Biometric app lock.**~~ Dropped on 2026-10-03 by the maintainer: the phone app already shows the
-  call log without authentication, so locking this app would not protect it.
 - [ ] **Renew the ARCEP TLS pins before 2027-09-25** (from #22). After that date Android ignores the
   pin-set and updates keep working without pinning (fail-open by design).
 - [ ] **Check an ARCEP update on a device** (from #23): "Vérifier et actualiser la base ARCEP" still
@@ -85,13 +84,6 @@ Follow-ups collected from the descriptions of PRs #11 to #36 and from direct com
 
 ### Build and CI (from #31 to #36)
 
-- [ ] **Decide on #36 (Dependabot, GitHub Actions majors).** checkout 7, setup-java 6, upload-artifact 7 and
-  setup-python 7 are fine. `gradle/actions/setup-gradle` 6 is not: its default cache is the proprietary
-  `gradle-actions-caching` component (Gradle Terms of Use; free for public repositories, "Free Preview" for
-  private ones), and its open-source `basic` mode drops `gradle-home-cache-includes` (the NVD database
-  cache) and restore keys. Take setup-gradle 5.0.2 instead (MIT, Node 24, same inputs as 4.4.3), and add
-  an `ignore` rule for `gradle/actions >= 6` to `.github/dependabot.yml`. The four other bumps also clear
-  GitHub's Node.js 20 deprecation warning.
 - [ ] **Replace `material-icons-extended`.** About 50 icons are used, 25 of them outside
   `material-icons-core`, but the library makes `classes.dex` 44 MB in the debug APK and is the main input
   of the slowest remaining task on main, `minifyReleaseWithR8` (about 3 min 15). Copy the used icons as
@@ -100,11 +92,41 @@ Follow-ups collected from the descriptions of PRs #11 to #36 and from direct com
   cache ("Reusing configuration cache") and the debug dexing (`mergeExtDexDebug` 2.2 s instead of
   2 min 48, main job about 7 min instead of 12). The next PR run should show the same; its job summary
   lists the slowest tasks (`tools/gradle_profile_summary.py`).
-- [ ] **Check `update_arcep.yml` with pinned actions** (from #34) on its next scheduled or manual run.
 - [ ] **(Optional) Install the Android SDK in a SessionStart hook for cloud sessions.** Since #31, cloud
   sessions download Maven Central artifacts from Google's mirror, so parallel builds no longer hit
   `429 Too Many Requests` (`AGENTS.md`); each new container still needs the SDK (`platforms;android-36.1`,
   `build-tools;36.0.0`) in `/root/android-sdk`.
+
+### Security review from Codex (#56, open)
+
+- [ ] **Decide on #56.** It adds `SECURITY_REVIEW.md` (reviewed revision `25900f3`): no critical or high
+  finding, two medium and two low ones, all open:
+  - **SR-01 (medium)**: `SignalConsoActivity` puts the reporter profile and the report plan in page-global
+    JavaScript variables, readable by any script of the SignalConso page for the document's lifetime.
+    #44 already passes the JSON through `JSON.parse`; the review asks for a closure, only the current
+    step's fields, clearing them after use, and injection only on the expected HTTPS paths;
+  - **SR-02 (medium)**: `update_arcep.yml` pushes the regenerated ARCEP database straight to `main`, which
+    publishes a release, with no review and no bounds on row counts, file sizes or required fields. The
+    review suggests opening a pull request with structural checks instead;
+  - **SR-03 (low)**: external URIs are dispatched without an allow-list;
+  - **SR-04 (low)**: WebView settings could be tightened explicitly.
+
+  Its dependency CVE status is unverified (no NVD access where it ran); the OWASP job in CI covers it.
+
+### Quick settings tile and dates (from #54 and #55)
+
+- [ ] **Don't re-apply the tile's search when the app is reopened from Recents.** `MainActivity` runs
+  `handleShortcut` whenever `savedInstanceState` is null. After "Voir dans l'app", Back, then reopening
+  from Recents, Android delivers the tile's intent again and the history is searched on that number once
+  more. Ignore intents carrying `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`.
+- [ ] **Check #55 on a device**: a call from yesterday, less than 24 hours old, shows "Hier à …".
+
+### Releases and updates (from #51 to #53)
+
+- [ ] **Check the update banner of #53 on a device**, with a release install one version behind: the
+  banner offers the latest release, "Nouveautés de cette version" shows its notes, **✕** hides that
+  version until the next one, "Rechercher une mise à jour" checks right away. Debug builds never check
+  on their own.
 
 ### Going public (security review of 2026-09-27)
 
@@ -116,8 +138,9 @@ secret; keystores, `.env` and `google-services.json` were never committed.
   and green CI required), and approval for workflows from outside contributors (Settings > Actions).
 - [ ] **Rate-limit the Sentry project.** Its DSN is in the manifests and `SentryHelper.FALLBACK_DSN`, public
   by design: turn on spike protection and inbound filters so that nobody can spend the quota.
-- [ ] **Delete stale branches** (Jules, Copilot and merged branches) before publishing, and consider
-  "Automatically delete head branches" in the repository settings.
+- [ ] **Delete stale branches** (Jules, Codex, Copilot and merged branches) before publishing, and consider
+  "Automatically delete head branches" in the repository settings. On 2026-10-03: 53 remote branches,
+  22 of them already merged into `main`.
 - [ ] **Keep the author email private from now on** ("Keep my email addresses private" and the noreply
   address). 112 commits already carry `azman0101@gmail.com`; rewriting history is not worth it.
 - [ ] **Check who can read the `copilot` environment** (it holds no secret today).
@@ -171,5 +194,27 @@ secret; keystores, `.env` and `google-services.json` were never committed.
 - [x] Telemetry scope decided (after #26): diagnostics stay opt-in and off by default, so nothing is sent.
   Once enabled, error reports, performance traces and session data are sent with a random installation id,
   i.e. pseudonymous data without personal information; `legal/CGU.md` (article 6, #29) says so.
+- [x] GitHub Actions majors decided (#36): #38 took checkout 7, setup-java 6, upload-artifact 7,
+  setup-python 7 and setup-gradle 5.0.2 (MIT) instead of 6, whose default cache is proprietary; #42 fixed
+  the Dependabot `ignore` rule for setup-gradle 6, and #40 (setup-gradle 6.3.0) was closed.
+- [x] `update_arcep.yml` works with pinned actions (#34): its scheduled run committed `99ea18f` on
+  2026-10-01.
+- [x] MIT license, AI-generated code notice and VirusTotal scan of the release APK (#37); the README badge
+  points at the latest report and is updated by each `main` build (#39).
+- [x] Faster ARCEP lookups: bulk lookups (#41), then one indexed floor query per batch (#49); assertion
+  tests for `lookupNumbers` and `getCallLogs` (#43).
+- [x] SignalConso WebView data passed through `JSON.parse` (#44), with a stricter escaping test.
+- [x] Export of a search's calls to the clipboard, as Markdown or CSV (#50).
+- [x] Every `main` build publishes a GitHub release with its signed APK and notes (#51), and the
+  certificate check reads any `apksigner` output format (#52). First releases on 2026-09-30; `v1.0.182`
+  carries `c840e82`.
+- [x] The app tells when a newer release is published, and what it brings (#53).
+- [x] Quick settings tile "Qui m'a appelé ?" (#54), checked on a device; the home screen widget first
+  proposed in the same PR was dropped as not useful.
+- [x] Date labels count calendar days (#55): a call from yesterday no longer shows "Aujourd'hui" when it
+  is less than 24 hours old. The bug dated from the first commit.
+- [x] Closed without merging: #45, #46 and #48 (Jules), #47 (Ubuntu setup script for coding agents).
+- [x] Biometric app lock dropped on 2026-10-03 by the maintainer: the phone app already shows the call log
+  without authentication, so locking this app would not protect it.
 - [x] Telemetry opt-out stops every Sentry path (#26). Since `9d56dcf`, telemetry is opt-in
   (off by default), which settles the "opt-out by default" point raised in #26.
