@@ -218,6 +218,18 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** The history searched on one caller's number (from the quick settings tile). */
+    fun showCallsFrom(number: String) {
+        _uiState.update { state ->
+            state.copy(
+                currentTab = 0,
+                selectedFilter = CallFilter.TOUS,
+                callSearchQuery = number,
+                filteredCalls = applyFilter(state.calls, CallFilter.TOUS, number)
+            )
+        }
+    }
+
     fun forceLoadSampleCalls() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
