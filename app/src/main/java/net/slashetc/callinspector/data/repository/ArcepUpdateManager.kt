@@ -8,6 +8,8 @@ import android.util.Log
 import net.slashetc.callinspector.data.db.ArcepDatabaseManager
 import net.slashetc.callinspector.data.db.CallNote
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -35,12 +37,23 @@ sealed class UpdateStatus {
     data class Error(val errorMessage: String) : UpdateStatus()
 }
 
-class ArcepUpdateManager(private val context: Context) {
+/** How an update attempt ended. */
+enum class ArcepUpdateResult {
+    /** A new database was compiled and is now active. */
+    UPDATED,
+    /** Automatic check: ARCEP's files have not changed since the active database, nothing was downloaded. */
+    UP_TO_DATE,
+    /** ARCEP answered, but with an HTTP error or implausible data: the active database is kept. */
+    REJECTED,
+    /** Network or local error (offline, TLS, disk): worth trying again soon. */
+    FAILED,
+}
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .build()
+class ArcepUpdateManager internal constructor(
+    private val context: Context,
+    private val client: OkHttpClient,
+) {
+    constructor(context: Context) : this(context, defaultClient)
 
     private val dbManager = ArcepDatabaseManager.getInstance(context)
 
@@ -116,31 +129,78 @@ class ArcepUpdateManager(private val context: Context) {
         fun sanitizeNonNullableToken(token: String?, maxLength: Int, defaultIfEmpty: String = ""): String {
             return sanitizeToken(token, maxLength) ?: defaultIfEmpty
         }
+
+        /** Metadata keys holding the Last-Modified dates of the two files the active database was built from. */
+        const val META_MAJNUM_DATE = "version_date"
+        const val META_CE_DATE = "ce_version_date"
+
+        /**
+         * True when both files still carry the Last-Modified dates recorded in the active database. A missing
+         * date on either side (server without the header, database built before it was recorded) counts as a
+         * change, so the data is downloaded rather than left stale.
+         */
+        fun isUpToDate(majnumModified: String, ceModified: String, metadata: Map<String, String>): Boolean =
+            majnumModified.isNotBlank() && ceModified.isNotBlank() &&
+                majnumModified == metadata[META_MAJNUM_DATE] && ceModified == metadata[META_CE_DATE]
+
+        // One update at a time: the automatic one at launch and a tap on the button share the temporary file.
+        private val updateLock = Mutex()
+
+        private val defaultClient: OkHttpClient by lazy {
+            OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .build()
+        }
     }
 
+    /**
+     * Downloads ARCEP's two files, compiles them and swaps the active database. With [onlyIfChanged] (the
+     * automatic check), it first asks only for the files' dates and stops there when they match the active
+     * database, or when ARCEP cannot be reached.
+     */
     suspend fun checkAndDownloadUpdate(
+        onlyIfChanged: Boolean = false,
         onProgress: (UpdateStatus) -> Unit
-    ): Boolean = withContext(Dispatchers.IO) {
+    ): ArcepUpdateResult = updateLock.withLock { update(onlyIfChanged, onProgress) }
+
+    private fun lastModified(url: String): String? = try {
+        val request = Request.Builder()
+            .url(url)
+            .head()
+            .header("User-Agent", "ArcepOperateur/1.0 (Android)")
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (response.isSuccessful) response.header("Last-Modified").orEmpty() else ""
+        }
+    } catch (e: Exception) {
+        Log.w(TAG, "HEAD request failed for $url: ${e.message}")
+        null
+    }
+
+    private suspend fun update(
+        onlyIfChanged: Boolean,
+        onProgress: (UpdateStatus) -> Unit
+    ): ArcepUpdateResult = withContext(Dispatchers.IO) {
         val tempDbFile = File(context.cacheDir, "arcep_update_temp.db")
         var openedTempDb: SQLiteDatabase? = null
         try {
             onProgress(UpdateStatus.Checking())
 
-            // 1. Check HEAD on MAJNUM
-            val headReq = Request.Builder()
-                .url(MAJNUM_URL)
-                .head()
-                .header("User-Agent", "ArcepOperateur/1.0 (Android)")
-                .build()
-
-            val lastModifiedHeader = try {
-                client.newCall(headReq).execute().use { response ->
-                    response.header("Last-Modified") ?: ""
+            // 1. The files' dates (HEAD): null when ARCEP can't be reached, empty without the header.
+            val majnumModified = lastModified(MAJNUM_URL)
+            val ceModified = lastModified(CE_URL)
+            if (onlyIfChanged) {
+                if (majnumModified == null || ceModified == null) {
+                    onProgress(UpdateStatus.Error("Extranet ARCEP injoignable : la base actuelle est conservée."))
+                    return@withContext ArcepUpdateResult.FAILED
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "HEAD request failed, proceeding with direct download: ${e.message}")
-                ""
+                if (isUpToDate(majnumModified, ceModified, dbManager.metadata())) {
+                    onProgress(UpdateStatus.Idle)
+                    return@withContext ArcepUpdateResult.UP_TO_DATE
+                }
             }
+            val lastModifiedHeader = majnumModified.orEmpty()
 
             // 2. Download identifiants_CE.csv
             onProgress(UpdateStatus.Downloading("Téléchargement des identifiants opérateurs...", 0.15f))
@@ -152,12 +212,12 @@ class ArcepUpdateManager(private val context: Context) {
             val ceBytes = client.newCall(ceRequest).execute().use { ceResponse ->
                 if (!ceResponse.isSuccessful) {
                     onProgress(UpdateStatus.Error("Échec du téléchargement des opérateurs : Code HTTP ${ceResponse.code}"))
-                    return@withContext false
+                    return@withContext ArcepUpdateResult.REJECTED
                 }
                 ceResponse.body?.byteStream()?.let { readLimited(it, MAX_DOWNLOAD_BYTES) }
             } ?: run {
                 onProgress(UpdateStatus.Error("Fichier opérateurs vide"))
-                return@withContext false
+                return@withContext ArcepUpdateResult.REJECTED
             }
 
             // 3. Download MAJNUM.csv
@@ -170,12 +230,12 @@ class ArcepUpdateManager(private val context: Context) {
             val majBytes = client.newCall(majRequest).execute().use { majResponse ->
                 if (!majResponse.isSuccessful) {
                     onProgress(UpdateStatus.Error("Échec du téléchargement de MAJNUM : Code HTTP ${majResponse.code}"))
-                    return@withContext false
+                    return@withContext ArcepUpdateResult.REJECTED
                 }
                 majResponse.body?.byteStream()?.let { readLimited(it, MAX_DOWNLOAD_BYTES) }
             } ?: run {
                 onProgress(UpdateStatus.Error("Fichier MAJNUM vide"))
-                return@withContext false
+                return@withContext ArcepUpdateResult.REJECTED
             }
 
             // 4. Compile into temporary SQLite database
@@ -321,7 +381,7 @@ class ArcepUpdateManager(private val context: Context) {
             if (!isPlausibleArcepData(rangeCount, opCount)) {
                 Log.w(TAG, "Rejected ARCEP update: $rangeCount ranges, $opCount operators")
                 onProgress(UpdateStatus.Error("Données ARCEP incomplètes ($rangeCount tranches, $opCount opérateurs) : la base actuelle est conservée."))
-                return@withContext false
+                return@withContext ArcepUpdateResult.REJECTED
             }
 
             // 5. User notes live encrypted in CallNotesStore. Notes it hasn't migrated yet (it does so on
@@ -335,7 +395,8 @@ class ArcepUpdateManager(private val context: Context) {
             tempDb.beginTransaction()
             val metaStmt = tempDb.compileStatement("INSERT INTO arcep_metadata VALUES (?, ?);")
             val metaList = listOf(
-                Pair("version_date", dateLabel),
+                Pair(META_MAJNUM_DATE, dateLabel),
+                Pair(META_CE_DATE, ceModified.orEmpty()),
                 Pair("generated_at", nowStr),
                 Pair("ranges_count", rangeCount.toString()),
                 Pair("operators_count", opCount.toString()),
@@ -371,7 +432,7 @@ class ArcepUpdateManager(private val context: Context) {
                     date = dateLabel
                 )
             )
-            true
+            ArcepUpdateResult.UPDATED
         } catch (e: Exception) {
             if (e.hasTlsPinningFailure()) {
                 Sentry.captureMessage("TLS certificate pinning failed for extranet.arcep.fr")
@@ -379,7 +440,7 @@ class ArcepUpdateManager(private val context: Context) {
             }
             Log.e(TAG, "Erreur lors de la mise à jour ARCEP", e)
             onProgress(UpdateStatus.Error("Erreur : ${e.localizedMessage ?: e.message}"))
-            false
+            ArcepUpdateResult.FAILED
         } finally {
             openedTempDb?.takeIf { it.isOpen }?.let { db -> runCatching { db.close() } }
             SQLiteDatabase.deleteDatabase(tempDbFile)

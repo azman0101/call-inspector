@@ -21,6 +21,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.slashetc.callinspector.BuildConfig
 import net.slashetc.callinspector.data.repository.AppUpdateChecker
+import net.slashetc.callinspector.data.repository.ArcepAutoUpdate
+import net.slashetc.callinspector.data.repository.ArcepUpdateResult
 import net.slashetc.callinspector.util.AppRelease
 import net.slashetc.callinspector.util.PhoneLines
 import net.slashetc.callinspector.util.ReceivingLine
@@ -75,6 +77,7 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
     private val profileStore = ReporterProfileStore.getInstance(application)
     private val lineDetector = net.slashetc.callinspector.data.repository.PhoneLineDetector(application)
     private val appUpdateChecker = AppUpdateChecker(application)
+    private val arcepAutoUpdate = ArcepAutoUpdate(application)
 
     private val _uiState = MutableStateFlow(ArcepUiState())
     val uiState: StateFlow<ArcepUiState> = _uiState.asStateFlow()
@@ -84,6 +87,7 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
     init {
         checkPermissionAndLoad()
         loadStats()
+        updateArcepDatabaseIfDue()
         _uiState.update {
             it.copy(
                 isUpdateCheckEnabled = appUpdateChecker.isEnabled,
@@ -406,12 +410,35 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
 
     fun triggerDatabaseUpdate() {
         viewModelScope.launch {
-            updateManager.checkAndDownloadUpdate { status ->
+            val result = updateManager.checkAndDownloadUpdate { status ->
                 _uiState.update { it.copy(updateStatus = status) }
-                if (status is net.slashetc.callinspector.data.repository.UpdateStatus.Success) {
-                    loadStats()
-                    loadCalls()
+            }
+            arcepAutoUpdate.record(result)
+            if (result == ArcepUpdateResult.UPDATED) {
+                loadStats()
+                loadCalls()
+            }
+        }
+    }
+
+    /**
+     * At first launch, then weekly: checks ARCEP's files and downloads them only when they changed. Its
+     * progress shows in the Observatoire card; a failure stays silent (retried at the next launch).
+     */
+    private fun updateArcepDatabaseIfDue() {
+        if (!arcepAutoUpdate.isDue()) return
+        viewModelScope.launch {
+            val result = updateManager.checkAndDownloadUpdate(onlyIfChanged = true) { status ->
+                if (status !is net.slashetc.callinspector.data.repository.UpdateStatus.Error) {
+                    _uiState.update { it.copy(updateStatus = status) }
                 }
+            }
+            arcepAutoUpdate.record(result)
+            if (result == ArcepUpdateResult.UPDATED) {
+                loadStats()
+                loadCalls()
+            } else {
+                resetUpdateStatus()
             }
         }
     }

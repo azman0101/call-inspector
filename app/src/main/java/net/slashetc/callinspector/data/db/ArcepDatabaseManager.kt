@@ -407,6 +407,16 @@ class ArcepDatabaseManager private constructor(private val context: Context) : L
         )
     }
 
+    /** The `arcep_metadata` table (empty for a database built before it existed). */
+    @Synchronized
+    fun metadata(): Map<String, String> = try {
+        getReadableDb().rawQuery("SELECT key, value FROM arcep_metadata", null).use { cursor ->
+            buildMap { while (cursor.moveToNext()) put(cursor.getString(0), cursor.getString(1)) }
+        }
+    } catch (e: Exception) {
+        emptyMap()
+    }
+
     /** Notes kept in cleartext here before [CallNotesStore]; they are moved to it on first use. */
     @Synchronized
     override fun read(): List<CallNote> = readLegacyCallNotes(getReadableDb())

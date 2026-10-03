@@ -194,6 +194,7 @@ def build_database(output_path: str):
 
     metadata = [
         ("version_date", version_label),
+        ("ce_version_date", ce_mod),
         ("generated_at", now_iso),
         ("ranges_count", str(range_count)),
         ("operators_count", str(op_count)),
