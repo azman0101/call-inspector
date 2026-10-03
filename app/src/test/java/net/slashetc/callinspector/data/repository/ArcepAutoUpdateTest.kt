@@ -20,6 +20,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
 import java.io.IOException
+import java.security.MessageDigest
+import javax.net.ssl.SSLPeerUnverifiedException
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -34,6 +36,7 @@ class ArcepAutoUpdateTest {
     private var ceDate = "Thu, 01 Oct 2026 08:00:00 GMT"
     private var offline = false
     private var downloadsCut = false
+    private var pinningFails = false
     private val requests = mutableListOf<String>()
 
     // Plausible volumes (ArcepUpdateManager.MIN_EXPECTED_*): 600 operators, 10 000 ranges.
@@ -54,6 +57,7 @@ class ArcepAutoUpdateTest {
         val url = request.url.toString()
         requests += "${request.method} $url"
         if (offline) throw IOException("offline")
+        if (pinningFails) throw SSLPeerUnverifiedException("Certificate pinning failure!")
         if (downloadsCut && request.method == "GET") throw IOException("connection reset")
         val (date, body) = when (url) {
             ArcepUpdateManager.MAJNUM_URL -> majnumDate to majnumCsv
@@ -124,6 +128,9 @@ class ArcepAutoUpdateTest {
         assertEquals(majnumDate, metadata[ArcepUpdateManager.META_MAJNUM_DATE])
         assertEquals(ceDate, metadata[ArcepUpdateManager.META_CE_DATE])
         assertEquals("10000", metadata["ranges_count"])
+        // The source fingerprints shown in the Observatoire, as the build script records them.
+        assertEquals(sha256(majnumCsv), metadata["majnum_sha256"])
+        assertEquals(sha256(ceCsv), metadata["ce_sha256"])
         assertFalse(policy.isDue())
     }
 
@@ -153,6 +160,16 @@ class ArcepAutoUpdateTest {
     }
 
     @Test
+    fun `a certificate pinning failure is a failure, not an unreachable ARCEP`() {
+        // Retrying it at every launch would hide it; it is reported (Sentry, when enabled) and waits a week.
+        pinningFails = true
+
+        assertEquals(ArcepUpdateResult.FAILED, autoUpdate())
+        assertTrue(gets.isEmpty())
+        assertFalse(policy.isDue())
+    }
+
+    @Test
     fun `a failure once ARCEP answered keeps the database and waits a week`() {
         // The dates came back, the download broke: retrying at every launch could download again and again.
         val before = ArcepDatabaseManager.getInstance(context).metadata()
@@ -171,6 +188,9 @@ class ArcepAutoUpdateTest {
         assertEquals(ArcepUpdateResult.UPDATED, manager.checkAndDownloadUpdate {})
         assertEquals(2, gets.size)
     }
+
+    private fun sha256(csv: String) = MessageDigest.getInstance("SHA-256")
+        .digest(csv.toByteArray(Charsets.ISO_8859_1)).joinToString("") { "%02x".format(it) }
 
     @Test
     fun `isUpToDate needs both dates, equal to the recorded ones`() {

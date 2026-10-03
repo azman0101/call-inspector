@@ -23,6 +23,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.nio.charset.Charset
+import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -145,6 +146,10 @@ class ArcepUpdateManager internal constructor(
             majnumModified.isNotBlank() && ceModified.isNotBlank() &&
                 majnumModified == metadata[META_MAJNUM_DATE] && ceModified == metadata[META_CE_DATE]
 
+        /** Lowercase hex SHA-256, as `tools/update_arcep_db.py` records it. */
+        fun sha256Hex(bytes: ByteArray): String =
+            MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+
         // One update at a time: the automatic one at launch and a tap on the button share the temporary file.
         private val updateLock = Mutex()
 
@@ -176,6 +181,8 @@ class ArcepUpdateManager internal constructor(
             if (response.isSuccessful) response.header("Last-Modified").orEmpty() else ""
         }
     } catch (e: Exception) {
+        // A pinning failure is not a connectivity problem: let update() report it (Sentry) and wait a week.
+        if (e.hasTlsPinningFailure()) throw e
         Log.w(TAG, "HEAD request failed for $url: ${e.message}")
         null
     }
@@ -403,6 +410,8 @@ class ArcepUpdateManager internal constructor(
                 Pair("ranges_count", rangeCount.toString()),
                 Pair("operators_count", opCount.toString()),
                 Pair("latest_attribution_date", latestAttrDate),
+                Pair("majnum_sha256", sha256Hex(majBytes)),
+                Pair("ce_sha256", sha256Hex(ceBytes)),
                 Pair("source_majnum_url", MAJNUM_URL),
                 Pair("source_ce_url", CE_URL)
             )
