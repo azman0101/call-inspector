@@ -8,6 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,6 +45,10 @@ class MainActivity : ComponentActivity() {
                 // First launch, or terms changed since the version the user accepted.
                 val terms = remember { LegalTerms.load(this) }
                 var mustAcceptTerms by remember { mutableStateOf(LegalTerms.needsAcceptance(this, terms)) }
+                // The automatic ARCEP update is a connection the terms disclose: only once they are accepted.
+                LaunchedEffect(mustAcceptTerms) {
+                    if (!mustAcceptTerms) viewModel.updateArcepDatabaseIfDue()
+                }
                 if (mustAcceptTerms) {
                     LegalTermsDialog(
                         markdown = terms,
