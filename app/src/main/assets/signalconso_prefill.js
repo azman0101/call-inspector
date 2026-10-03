@@ -1,13 +1,39 @@
-// Prefills the SignalConso "Démarchage abusif" wizard from window.__icPlan, and step 4 ("Vos coordonnées")
-// from window.__icContact, the details the user saved on the phone. It only selects options and
-// fills empty fields, each at most once, and never clicks "Suivant", "Continuer" or the final submit:
-// the user reviews every step and moves on. The only button it presses is the company search
-// "Rechercher", which looks the company up without submitting anything; a SIRET search returning
-// exactly that company gets it selected.
-(function () {
+// Prefills the SignalConso "Démarchage abusif" wizard from the report plan, and step 4 ("Vos coordonnées")
+// from the details the user saved on the phone. It only selects options and fills empty fields, each at
+// most once, and never clicks "Suivant", "Continuer" or the final submit: the user reviews every step and
+// moves on. The only button it presses is the company search "Rechercher", which looks the company up
+// without submitting anything; a SIRET search returning exactly that company gets it selected.
+//
+// The page's own scripts must see as little of the user's data as possible (security review, SR-01):
+// - this file is a function expression the app calls with the plan, which stays in this closure, never
+//   in a global; it only works on the report form, over HTTPS;
+// - the contact details are not injected with it: the script raises window.__icNeedsContact once step 4
+//   shows, and the app then hands them to window.__icFillContact, kept in the closure while step 4 is
+//   displayed only (what is typed into the form is the page's anyway);
+// - everything is dropped once the report is sent or the page leaves the form.
+// The only globals are flags and that entry point: __icPrefillInstalled, __icNeedsContact, __icReportSent.
+(function (plan) {
+  var FORM_HOST = 'signal.conso.gouv.fr';
+  var FORM_PATH = '/fr/demarchage-abusif/faire-un-signalement';
   if (window.__icPrefillInstalled) return;
   window.__icPrefillInstalled = true;
   var done = {};
+  var contact = null;
+  var observer = null;
+  // Fields given a saved value, and that value: kept here rather than on the elements, where the page could
+  // still read a value the user erased.
+  var contactFilled = new WeakMap();
+
+  function onForm() {
+    var path = location.pathname;
+    return location.protocol === 'https:' && location.hostname === FORM_HOST &&
+      (path === FORM_PATH || path.indexOf(FORM_PATH + '/') === 0);
+  }
+
+  // Step 4 is on screen while its first name field is.
+  function contactStep() {
+    return document.querySelector('input[name="firstName"]');
+  }
 
   function norm(s) {
     return (s || '').replace(/[’]/g, "'").replace(/\s+/g, ' ').trim().toLowerCase();
@@ -80,7 +106,7 @@
 
   // Saved contact details go into empty fields only, and never twice into the same field: a value the
   // user erased stays erased. SignalConso rebuilds step 4 empty after "Précédent", which gets refilled.
-  function fillContact(contact) {
+  function fillContact() {
     var fields = {
       firstName: document.querySelector('input[name="firstName"]'),
       lastName: document.querySelector('input[name="lastName"]'),
@@ -90,8 +116,8 @@
     };
     for (var key in fields) {
       var el = fields[key], value = contact[key];
-      if (!el || !value || el.value || el.__icContactFilled === value) continue;
-      el.__icContactFilled = value;
+      if (!el || !value || el.value || contactFilled.get(el) === value) continue;
+      contactFilled.set(el, value);
       setValue(el, value);
     }
     if (contact.shareContact === true || contact.shareContact === false) {
@@ -106,10 +132,10 @@
     for (var i = 0; i < labels.length; i++) {
       if (norm(labels[i].innerText).indexOf(norm(title)) !== 0) continue;
       var input = labels[i].htmlFor ? document.getElementById(labels[i].htmlFor) : labels[i].querySelector('input');
-      if (!input || input.__icContactFilled) return;
+      if (!input || contactFilled.has(input)) return;
       var group = input.name ? document.querySelectorAll('input[type="radio"][name="' + input.name + '"]') : [input];
       for (var j = 0; j < group.length; j++) if (group[j].checked) return;
-      input.__icContactFilled = true;
+      contactFilled.set(input, true);
       labels[i].click();
       return;
     }
@@ -141,9 +167,26 @@
     }
   }
 
+  // Nothing of the user's is kept once it can no longer be needed.
+  function forget() {
+    plan = null;
+    contact = null;
+    window.__icNeedsContact = false;
+  }
+
   function run() {
     detectReportSent();
-    var plan = window.__icPlan;
+    if (window.__icReportSent) {
+      forget();
+      delete window.__icFillContact;
+      if (observer) observer.disconnect();
+      return;
+    }
+    if (!onForm()) { forget(); return; }
+    // The contact details only live here while step 4 is displayed; a step 4 shown again asks for them again.
+    if (!contactStep()) contact = null;
+    window.__icNeedsContact = !!contactStep() && !contact;
+    if (contact) fillContact();
     if (!plan) return;
     pickRadio(plan.problem);
     pickRadio(plan.subcategory);
@@ -158,11 +201,15 @@
       fillOnce('date:' + i, dates[i], plan.dates[i]);
     }
     fillOnce('description', document.querySelector('textarea'), plan.description);
-    if (window.__icContact) fillContact(window.__icContact);
   }
-  // Lets the app apply contact details saved while the form is open.
-  window.__icPrefillRun = run;
 
-  new MutationObserver(run).observe(document.documentElement, { childList: true, subtree: true });
+  // The app's way in for the contact details, at step 4 only (null drops them, after "Effacer").
+  window.__icFillContact = function (details) {
+    contact = details && contactStep() && onForm() ? details : null;
+    run();
+  };
+
+  observer = new MutationObserver(run);
+  observer.observe(document.documentElement, { childList: true, subtree: true });
   run();
-})();
+})
