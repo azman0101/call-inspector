@@ -37,6 +37,7 @@ class ArcepAutoUpdateTest {
     private var offline = false
     private var downloadsCut = false
     private var pinningFails = false
+    private var ceUnreachable = false
     private val requests = mutableListOf<String>()
 
     // Plausible volumes (ArcepUpdateManager.MIN_EXPECTED_*): 600 operators, 10 000 ranges.
@@ -58,6 +59,7 @@ class ArcepAutoUpdateTest {
         requests += "${request.method} $url"
         if (offline) throw IOException("offline")
         if (pinningFails) throw SSLPeerUnverifiedException("Certificate pinning failure!")
+        if (ceUnreachable && url == ArcepUpdateManager.CE_URL) throw IOException("timeout")
         if (downloadsCut && request.method == "GET") throw IOException("connection reset")
         val (date, body) = when (url) {
             ArcepUpdateManager.MAJNUM_URL -> majnumDate to majnumCsv
@@ -157,6 +159,36 @@ class ArcepAutoUpdateTest {
         assertTrue(gets.isEmpty())
         assertEquals(before, ArcepDatabaseManager.getInstance(context).metadata())
         assertTrue(policy.isDue())
+    }
+
+    @Test
+    fun `one file answering out of two is a failure that waits a week`() {
+        // ARCEP was reached: retrying both requests at every launch would ignore the weekly limit.
+        ceUnreachable = true
+
+        assertEquals(ArcepUpdateResult.FAILED, autoUpdate())
+        assertTrue(gets.isEmpty())
+        assertFalse(policy.isDue())
+    }
+
+    @Test
+    fun `an update swapping the file doesn't close the database under a reader`() {
+        val manager = ArcepDatabaseManager.getInstance(context)
+        val copy = File(context.cacheDir, "arcep_swap_copy.db")
+        context.assets.open("arcep_data.db").use { input -> copy.outputStream().use { input.copyTo(it) } }
+
+        val (before, after) = manager.withDatabase { database ->
+            val count = { database.rawQuery("SELECT COUNT(*) FROM number_ranges", null).use { it.moveToFirst(); it.getInt(0) } }
+            val before = count()
+            manager.replaceDatabaseFile(copy)
+            // Without the reference the reader holds, this query would hit a closed database.
+            before to count()
+        }
+        assertEquals(before, after)
+        // The new connection serves the next readers.
+        assertEquals(before, manager.withDatabase { db ->
+            db.rawQuery("SELECT COUNT(*) FROM number_ranges", null).use { it.moveToFirst(); it.getInt(0) }
+        })
     }
 
     @Test

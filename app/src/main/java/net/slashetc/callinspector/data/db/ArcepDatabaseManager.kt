@@ -63,6 +63,20 @@ class ArcepDatabaseManager private constructor(private val context: Context) : L
         return db!!
     }
 
+    /**
+     * Runs [block] on the active database and keeps that connection open until it returns, even if an update
+     * swaps the file meanwhile: [replaceDatabaseFile]'s close only takes effect once the last reader releases
+     * its reference. Readers that run several queries must go through it.
+     */
+    internal fun <T> withDatabase(block: (SQLiteDatabase) -> T): T {
+        val database = synchronized(this) { getReadableDb().apply { acquireReference() } }
+        try {
+            return block(database)
+        } finally {
+            database.releaseReference()
+        }
+    }
+
     suspend fun lookupNumber(rawNumber: String): ArcepLookupResult =
         lookupNumbers(listOf(rawNumber))[rawNumber] ?: ArcepLookupResult(
             queryNumber = rawNumber,
@@ -76,7 +90,10 @@ class ArcepDatabaseManager private constructor(private val context: Context) : L
 
     suspend fun lookupNumbers(rawNumbers: Collection<String>): Map<String, ArcepLookupResult> = withContext(Dispatchers.IO) {
         if (rawNumbers.isEmpty()) return@withContext emptyMap()
+        withDatabase { database -> lookupNumbers(database, rawNumbers) }
+    }
 
+    private fun lookupNumbers(database: SQLiteDatabase, rawNumbers: Collection<String>): Map<String, ArcepLookupResult> {
         val uniqueNumbers = rawNumbers.distinct()
         val parsedMap = uniqueNumbers.associateWith { rawNum ->
             val normalized = PhoneNumberFormatter.normalize(rawNum)
@@ -85,7 +102,6 @@ class ArcepDatabaseManager private constructor(private val context: Context) : L
             Triple(normalized, formatted, phoneType)
         }
 
-        val database = getReadableDb()
         val rangeMap = mutableMapOf<String, ArcepNumberRange>()
 
         // 1. Batched Direct Range Lookup
@@ -270,12 +286,16 @@ class ArcepDatabaseManager private constructor(private val context: Context) : L
             )
         }
 
-        resultMap
+        return resultMap
     }
 
     suspend fun searchPrefixesOrOperators(query: String): List<ArcepLookupResult> = withContext(Dispatchers.IO) {
+        withDatabase { database -> searchPrefixesOrOperators(database, query) }
+    }
+
+    private fun searchPrefixesOrOperators(database: SQLiteDatabase, query: String): List<ArcepLookupResult> {
         val cleanQuery = query.trim()
-        if (cleanQuery.isBlank()) return@withContext emptyList()
+        if (cleanQuery.isBlank()) return emptyList()
 
         // Sanitize LIKE wildcard characters ('\', '%', '_') to prevent wildcard injection
         val sanitizedQuery = cleanQuery
@@ -283,7 +303,6 @@ class ArcepDatabaseManager private constructor(private val context: Context) : L
             .replace("%", "\\%")
             .replace("_", "\\_")
 
-        val database = getReadableDb()
         val results = mutableListOf<ArcepLookupResult>()
 
         val cursor = database.rawQuery(
@@ -336,11 +355,14 @@ class ArcepDatabaseManager private constructor(private val context: Context) : L
             }
         }
 
-        return@withContext results
+        return results
     }
 
     suspend fun getStats(): DatabaseStats = withContext(Dispatchers.IO) {
-        val database = getReadableDb()
+        withDatabase { database -> getStats(database) }
+    }
+
+    private fun getStats(database: SQLiteDatabase): DatabaseStats {
         var totalRanges = 0
         var totalOperators = 0
         val topOperators = mutableListOf<Pair<String, Int>>()
@@ -395,7 +417,7 @@ class ArcepDatabaseManager private constructor(private val context: Context) : L
             // Table arcep_metadata might not exist on older versions
         }
 
-        return@withContext DatabaseStats(
+        return DatabaseStats(
             totalRanges = totalRanges,
             totalOperators = totalOperators,
             topOperators = topOperators,

@@ -48,7 +48,7 @@ enum class ArcepUpdateResult {
     REJECTED,
     /** Network or local error (download cut, TLS, disk full): the active database is kept. */
     FAILED,
-    /** Automatic check: ARCEP could not be reached (offline), nothing was downloaded. */
+    /** Automatic check: neither file's date could be asked (offline), nothing was downloaded. */
     UNREACHABLE,
 }
 
@@ -200,9 +200,14 @@ class ArcepUpdateManager internal constructor(
             val majnumModified = lastModified(MAJNUM_URL)
             val ceModified = lastModified(CE_URL)
             if (onlyIfChanged) {
-                if (majnumModified == null || ceModified == null) {
+                if (majnumModified == null && ceModified == null) {
                     onProgress(UpdateStatus.Error("Extranet ARCEP injoignable : la base actuelle est conservée."))
                     return@withContext ArcepUpdateResult.UNREACHABLE
+                }
+                // One answer out of two: ARCEP was reached, so this counts as a failed check (next one in a week).
+                if (majnumModified == null || ceModified == null) {
+                    onProgress(UpdateStatus.Error("Extranet ARCEP partiellement injoignable : la base actuelle est conservée."))
+                    return@withContext ArcepUpdateResult.FAILED
                 }
                 if (isUpToDate(majnumModified, ceModified, dbManager.metadata())) {
                     onProgress(UpdateStatus.Idle)
