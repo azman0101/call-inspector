@@ -41,7 +41,7 @@
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:theme="@style/Theme.MyApplication" />
 
-        <!-- singleTop: the widget and the quick settings tile reopen the running activity (onNewIntent). -->
+        <!-- singleTop: the quick settings tile reopens the running activity (onNewIntent). -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -55,19 +55,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <!-- Home screen widget: telemarketing calls today and this week. -->
-        <receiver
-            android:name=".ui.widget.DemarchageWidgetProvider"
-            android:exported="false"
-            android:label="@string/widget_demarchage_label">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/widget_demarchage_info" />
-        </receiver>
 
         <!-- Quick settings tile "Qui m'a appelé ?". Only the system UI can bind it (permission). -->
         <service

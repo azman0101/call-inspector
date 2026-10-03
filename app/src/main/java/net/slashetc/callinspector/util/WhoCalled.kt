@@ -30,7 +30,7 @@ object WhoCalled {
             call.cachedName?.takeIf { it.isNotBlank() }?.let { add("Contact : $it") }
             add("Opérateur : ${lookup.operatorDisplayName}" + if (lookup.operatorCode != "—") " (${lookup.operatorCode})" else "")
             add(lookup.numberType.label)
-            if (DemarchageStats.isDemarchage(call)) add("⚠️ Numéro de démarchage ou signalé comme spam")
+            if (call.isSpamFlagged || lookup.numberType.isDemarchage) add("⚠️ Numéro de démarchage ou signalé comme spam")
         }
         return Answer(call.formattedNumber, lines.joinToString("\n"))
     }

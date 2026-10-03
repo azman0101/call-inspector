@@ -5,11 +5,5 @@
     <string name="title_database_stats">Base &amp; Statistiques</string>
     <string name="desc_arcep_service">Identification de l\'opérateur et de l\'entreprise titulaire selon le plan officiel</string>
     <string name="permission_rationale">L\'accès au journal d\'appels est nécessaire pour analyser vos correspondants et identifier automatiquement leurs opérateurs via la base officielle.</string>
-    <string name="widget_demarchage_label">Appels de démarchage</string>
-    <string name="widget_demarchage_description">Appels de démarchage reçus aujourd\'hui et cette semaine</string>
-    <string name="widget_demarchage_title">Démarchage</string>
-    <string name="widget_today">aujourd\'hui</string>
-    <string name="widget_this_week">cette semaine</string>
-    <string name="widget_no_permission">Touchez pour autoriser l\'accès au journal d\'appels</string>
     <string name="tile_who_called_label">Qui m\'a appelé ?</string>
 </resources>

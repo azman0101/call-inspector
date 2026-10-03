@@ -21,7 +21,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.slashetc.callinspector.BuildConfig
 import net.slashetc.callinspector.data.repository.AppUpdateChecker
-import net.slashetc.callinspector.ui.widget.DemarchageWidgetProvider
 import net.slashetc.callinspector.util.AppRelease
 import net.slashetc.callinspector.util.PhoneLines
 import net.slashetc.callinspector.util.ReceivingLine
@@ -216,20 +215,6 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
                     isLoading = false
                 )
             }
-            // The home screen widget counts from the same call log and spam flags.
-            if (hasPerm) DemarchageWidgetProvider.requestUpdate(getApplication())
-        }
-    }
-
-    /** The history filtered on telemarketing calls (from the home screen widget). */
-    fun showDemarchageCalls() {
-        _uiState.update { state ->
-            state.copy(
-                currentTab = 0,
-                selectedFilter = CallFilter.DEMARCHAGE_SPAM,
-                callSearchQuery = "",
-                filteredCalls = applyFilter(state.calls, CallFilter.DEMARCHAGE_SPAM, "")
-            )
         }
     }
 
