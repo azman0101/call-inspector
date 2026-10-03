@@ -5,4 +5,5 @@
     <string name="title_database_stats">Base &amp; Statistiques</string>
     <string name="desc_arcep_service">Identification de l\'opérateur et de l\'entreprise titulaire selon le plan officiel</string>
     <string name="permission_rationale">L\'accès au journal d\'appels est nécessaire pour analyser vos correspondants et identifier automatiquement leurs opérateurs via la base officielle.</string>
+    <string name="tile_who_called_label">Qui m\'a appelé ?</string>
 </resources>

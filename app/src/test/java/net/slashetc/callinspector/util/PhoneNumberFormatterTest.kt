@@ -1,6 +1,8 @@
 package net.slashetc.callinspector.util
 
 import org.junit.Assert.assertEquals
+import java.util.Calendar
+import java.util.TimeZone
 import org.junit.Test
 
 class PhoneNumberFormatterTest {
@@ -157,5 +159,59 @@ class PhoneNumberFormatterTest {
         val tenDaysAgo = System.currentTimeMillis() - (10 * 1000 * 60 * 60 * 24 + 1000)
         val formatted = PhoneNumberFormatter.formatTimestamp(tenDaysAgo)
         assert(formatted.matches(Regex("""\d{2}/\d{2}/\d{4} \d{2}:\d{2}""")))
+    }
+
+    // --- formatTimestamp counts calendar days, not 24-hour periods ---
+
+    private val paris = TimeZone.getTimeZone("Europe/Paris")
+
+    private fun at(year: Int, month: Int, day: Int, hour: Int, minute: Int, zone: TimeZone = paris): Long =
+        Calendar.getInstance(zone).apply {
+            clear()
+            set(year, month - 1, day, hour, minute)
+        }.timeInMillis
+
+    @Test
+    fun formatTimestamp_yesterdayLessThan24HoursAgo_formatsHier() {
+        // The reported bug: 02/10 at 12:16 seen on 03/10 at 09:00 said "Aujourd'hui à 12:16".
+        val call = at(2026, 10, 2, 12, 16)
+        assertEquals("Hier à 12:16", PhoneNumberFormatter.formatTimestamp(call, at(2026, 10, 3, 9, 0), paris))
+    }
+
+    @Test
+    fun formatTimestamp_justBeforeAndAfterMidnight_switchesDay() {
+        val call = at(2026, 10, 2, 23, 59)
+        assertEquals("Aujourd'hui à 23:59", PhoneNumberFormatter.formatTimestamp(call, at(2026, 10, 2, 23, 59), paris))
+        assertEquals("Hier à 23:59", PhoneNumberFormatter.formatTimestamp(call, at(2026, 10, 3, 0, 1), paris))
+    }
+
+    @Test
+    fun formatTimestamp_twoCalendarDaysAgo_formatsDayAndMonthEvenUnder48Hours() {
+        val call = at(2026, 10, 1, 23, 0)
+        assertEquals("01 oct. à 23:00", PhoneNumberFormatter.formatTimestamp(call, at(2026, 10, 3, 8, 0), paris))
+    }
+
+    @Test
+    fun formatTimestamp_sixAndSevenCalendarDays_switchesToFullDate() {
+        val now = at(2026, 10, 9, 8, 0)
+        assertEquals("03 oct. à 20:00", PhoneNumberFormatter.formatTimestamp(at(2026, 10, 3, 20, 0), now, paris))
+        assertEquals("02/10/2026 20:00", PhoneNumberFormatter.formatTimestamp(at(2026, 10, 2, 20, 0), now, paris))
+    }
+
+    @Test
+    fun formatTimestamp_acrossDaylightSavingChange_countsCalendarDays() {
+        // 25 October 2026: clocks go back one hour in Paris, that day lasts 25 hours.
+        val call = at(2026, 10, 24, 23, 30)
+        assertEquals("Hier à 23:30", PhoneNumberFormatter.formatTimestamp(call, at(2026, 10, 25, 23, 45), paris))
+    }
+
+    @Test
+    fun formatTimestamp_usesThePhoneTimeZone() {
+        // 22:30 UTC is already the next day in Paris (00:30), and still the same day in New York (18:30).
+        val utc = TimeZone.getTimeZone("UTC")
+        val call = at(2026, 10, 2, 22, 30, utc)
+        val now = at(2026, 10, 3, 6, 0, utc)
+        assertEquals("Aujourd'hui à 00:30", PhoneNumberFormatter.formatTimestamp(call, now, paris))
+        assertEquals("Hier à 18:30", PhoneNumberFormatter.formatTimestamp(call, now, TimeZone.getTimeZone("America/New_York")))
     }
 }

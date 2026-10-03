@@ -9,3 +9,13 @@ updates:
     groups:
       github-actions:
         patterns: ["*"]
+    ignore:
+      # setup-gradle v6's default cache-provider ("enhanced") is the proprietary gradle-actions-caching
+      # component (Gradle Technologies Terms of Use), free for public repos but only a "Free Preview" for
+      # private ones; its open-source cache-provider: basic drops gradle-home-cache-includes (our NVD
+      # database cache) and restore keys. Stay on the MIT-licensed v5 line until that changes.
+      # The wildcard matters: Dependabot tracks this action as "gradle/actions/setup-gradle" (its path
+      # inside the gradle/actions repo), not "gradle/actions" — a bare "gradle/actions" here let #40
+      # through despite this rule.
+      - dependency-name: "gradle/actions*"
+        versions: [">=6.0.0"]

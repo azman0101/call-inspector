@@ -22,6 +22,11 @@ jobs:
     # run, pull requests included, uses 'production' and cannot read them. Both environments need
     # SENTRY_DSN and NVD_API_KEY (tools/setup-release-environment.sh).
     environment: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && 'release' || 'production' }}
+    # contents: write so that, on main, the VirusTotal badge step can commit the current report link and the
+    # release step can create the tag and the GitHub release (see those steps). The workflow-level
+    # permissions above stay read-only for every other job.
+    permissions:
+      contents: write
     env:
       # Goes into BuildConfig. Set for every Gradle step, not only the APK ones: a value that differs
       # between steps changes BuildConfig and recompiles all Kotlin.
@@ -29,16 +34,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up JDK 21
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           java-version: '21'
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2 (MIT-licensed cache; v6's default cache-provider is proprietary, see PR review)
         with:
           # Dependency-Check stores the NVD H2 database outside Gradle's
           # default caches; include it so cold runners do not redownload it.
@@ -135,7 +140,7 @@ jobs:
 
       - name: Upload dependency scan report
         if: ${{ always() && github.event_name == 'push' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dependency-check-report
           path: app/build/reports
@@ -152,7 +157,7 @@ jobs:
 
       - name: Upload Debug APK Artifact
         if: ${{ github.event_name == 'pull_request' || (github.ref != 'refs/heads/main' && github.event_name != 'push') }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: info-operateur-debug-v${{ env.VERSION_NAME }}
           path: app/build/outputs/apk/debug/*.apk
@@ -172,12 +177,82 @@ jobs:
 
       - name: Upload Release APK Artifact
         if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: info-operateur-release-v${{ env.VERSION_NAME }}
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 30
+
+      # Informational VirusTotal scan of the release APK, on pushes to main only: detections produce a
+      # warning and the report link in the job summary, never a failure (continue-on-error, and the
+      # script itself only warns). Needs the VIRUSTOTAL_API_KEY secret, else it is skipped.
+      - name: Scan APK with VirusTotal (non-blocking)
+        id: virustotal
+        if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+        continue-on-error: true
+        timeout-minutes: 15
+        env:
+          VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+        run: tools/virustotal_scan.sh "$(ls app/build/outputs/apk/release/*.apk | head -1)"
+
+      # The badge in the README links to shields.io, which links to VirusTotal — but the report URL is
+      # keyed by the APK's own SHA-256, so it changes on every release and can't be hard-coded. This
+      # step points the badge's link straight at the report just produced, and commits that one line
+      # back to main. contents: write below is scoped to this job only (the rest of the workflow stays
+      # read-only). GITHUB_TOKEN pushes don't trigger further workflow runs, so this can't loop.
+      - name: Point the VirusTotal badge at the latest report
+        if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.virustotal.outputs.report_url != '' }}
+        continue-on-error: true
+        env:
+          REPORT_URL: ${{ steps.virustotal.outputs.report_url }}
+        run: |
+          python3 - <<'EOF'
+          import os
+          import re
+
+          report_url = os.environ["REPORT_URL"]
+          path = "README.md"
+          content = open(path, encoding="utf-8").read()
+          new_content, count = re.subn(
+              r'(\[!\[VirusTotal\]\([^)]*\)\])\([^)]*\)',
+              lambda m: f"{m.group(1)}({report_url})",
+              content,
+              count=1,
+          )
+          if count == 0:
+              raise SystemExit("VirusTotal badge link not found in README.md")
+          if new_content != content:
+              open(path, "w", encoding="utf-8").write(new_content)
+              print("README.md updated with the current VirusTotal report link")
+          else:
+              print("README.md already links to the current report")
+          EOF
+          if ! git diff --quiet -- README.md; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add README.md
+            git commit -m "docs: point the VirusTotal badge at the latest release APK report [skip ci]"
+            git push
+          fi
+
+      # Every build on main becomes a GitHub release: tag v<version> on the built commit, the signed APK and
+      # its SHA-256 as assets, and notes listing the checksums, signing certificate, VirusTotal report, this
+      # run, and the pull requests merged since the previous release. The script refuses an APK that is not
+      # signed with the release key (a missing KEYSTORE_BASE64 secret makes the build fall back to a throwaway
+      # key): such an APK could not update any install. Tags made with GITHUB_TOKEN start no workflow run.
+      - name: Publish the GitHub release
+        if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_NAME: ${{ env.VERSION_NAME }}
+          # Release signing certificate, as published in the README ("Vérifier la signature").
+          EXPECTED_CERT_SHA256: 1f45c660f2385aee7bdd9aa05eaa562d8b4caf7fcfcb32c386a2f2fdd8ed793a
+          ARTIFACT_NAME: info-operateur-release-v${{ env.VERSION_NAME }}
+          VIRUSTOTAL_REPORT_URL: ${{ steps.virustotal.outputs.report_url }}
+          VIRUSTOTAL_MALICIOUS: ${{ steps.virustotal.outputs.malicious }}
+          VIRUSTOTAL_SUSPICIOUS: ${{ steps.virustotal.outputs.suspicious }}
+        run: tools/publish_release.sh "$(ls app/build/outputs/apk/release/*.apk | head -1)"
 
       # Pull requests build the debug APK, whose D8 dexing of every library took about 7 CPU-minutes per
       # run (mergeExtDexDebug waits on it): main only built the release APK (R8), so the Gradle cache it
@@ -195,7 +270,7 @@ jobs:
 
       - name: Upload Gradle profile
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: gradle-profile
           path: build/reports/profile
@@ -214,16 +289,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up JDK 21
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           java-version: '21'
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2 (MIT-licensed cache; v6's default cache-provider is proprietary, see PR review)
         with:
           gradle-home-cache-includes: |
             caches
@@ -252,7 +327,7 @@ jobs:
 
       - name: Upload dependency scan report
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dependency-check-report
           path: app/build/reports

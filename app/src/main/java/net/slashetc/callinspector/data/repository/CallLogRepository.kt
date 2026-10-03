@@ -12,9 +12,21 @@ import net.slashetc.callinspector.data.db.ReportStats
 import net.slashetc.callinspector.data.db.ReporterProfileStore
 import net.slashetc.callinspector.data.model.CallLogEntry
 import net.slashetc.callinspector.data.model.CallType
+import net.slashetc.callinspector.util.PhoneLines
 import net.slashetc.callinspector.util.PhoneNumberFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+private data class RawCallRecord(
+    val id: Long,
+    val rawNum: String,
+    val cachedName: String?,
+    val date: Long,
+    val duration: Long,
+    val callType: CallType,
+    val lineId: String?,
+    val viaNumber: String?
+)
 
 class CallLogRepository(private val context: Context) {
 
@@ -55,7 +67,10 @@ class CallLogRepository(private val context: Context) {
             CallLog.Calls.CACHED_NAME,
             CallLog.Calls.DATE,
             CallLog.Calls.DURATION,
-            CallLog.Calls.TYPE
+            CallLog.Calls.TYPE,
+            CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME,
+            CallLog.Calls.PHONE_ACCOUNT_ID,
+            CallLog.Calls.VIA_NUMBER
         )
 
         try {
@@ -68,6 +83,7 @@ class CallLogRepository(private val context: Context) {
                 "${CallLog.Calls.DATE} DESC"
             )
 
+            val rawRecords = mutableListOf<RawCallRecord>()
             cursor?.use {
                 val idIdx = it.getColumnIndex(CallLog.Calls._ID)
                 val numberIdx = it.getColumnIndex(CallLog.Calls.NUMBER)
@@ -75,8 +91,11 @@ class CallLogRepository(private val context: Context) {
                 val dateIdx = it.getColumnIndex(CallLog.Calls.DATE)
                 val durationIdx = it.getColumnIndex(CallLog.Calls.DURATION)
                 val typeIdx = it.getColumnIndex(CallLog.Calls.TYPE)
+                val accountComponentIdx = it.getColumnIndex(CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME)
+                val accountIdIdx = it.getColumnIndex(CallLog.Calls.PHONE_ACCOUNT_ID)
+                val viaNumberIdx = it.getColumnIndex(CallLog.Calls.VIA_NUMBER)
 
-                while (it.moveToNext() && entries.size < 100) {
+                while (it.moveToNext() && rawRecords.size < 100) {
                     val id = if (idIdx >= 0) it.getLong(idIdx) else 0L
                     val rawNum = if (numberIdx >= 0) it.getString(numberIdx) ?: "" else ""
                     val cachedName = if (nameIdx >= 0) it.getString(nameIdx) else null
@@ -93,28 +112,42 @@ class CallLogRepository(private val context: Context) {
                         else -> CallType.UNKNOWN
                     }
 
-                    val lookup = dbManager.lookupNumber(rawNum)
-                    val note = notes[lookup.normalizedNumber]
-
-                    entries.add(
-                        CallLogEntry(
-                            id = id,
-                            rawNumber = rawNum,
-                            normalizedNumber = lookup.normalizedNumber,
-                            formattedNumber = lookup.formattedNumber,
-                            cachedName = cachedName,
-                            timestamp = date,
-                            durationSeconds = duration,
-                            callType = callType,
-                            lookupResult = lookup,
-                            isSpamFlagged = note?.isSpam ?: lookup.numberType.isDemarchage,
-                            isFavorite = note?.isFavorite ?: false,
-                            userNote = note?.userNote,
-                            reportCount = reports[lookup.normalizedNumber]?.count ?: 0,
-                            lastReportedAt = reports[lookup.normalizedNumber]?.lastReportedAt
-                        )
+                    val lineId = PhoneLines.lineId(
+                        if (accountComponentIdx >= 0) it.getString(accountComponentIdx) else null,
+                        if (accountIdIdx >= 0) it.getString(accountIdIdx) else null
                     )
+                    val viaNumber = if (viaNumberIdx >= 0) it.getString(viaNumberIdx)?.takeIf { v -> v.isNotBlank() } else null
+
+                    rawRecords.add(RawCallRecord(id, rawNum, cachedName, date, duration, callType, lineId, viaNumber))
                 }
+            }
+
+            val lookups = dbManager.lookupNumbers(rawRecords.map { it.rawNum })
+
+            for (record in rawRecords) {
+                val lookup = lookups[record.rawNum] ?: dbManager.lookupNumber(record.rawNum)
+                val note = notes[lookup.normalizedNumber]
+
+                entries.add(
+                    CallLogEntry(
+                        id = record.id,
+                        rawNumber = record.rawNum,
+                        normalizedNumber = lookup.normalizedNumber,
+                        formattedNumber = lookup.formattedNumber,
+                        cachedName = record.cachedName,
+                        timestamp = record.date,
+                        durationSeconds = record.duration,
+                        callType = record.callType,
+                        lookupResult = lookup,
+                        isSpamFlagged = note?.isSpam ?: lookup.numberType.isDemarchage,
+                        isFavorite = note?.isFavorite ?: false,
+                        userNote = note?.userNote,
+                        reportCount = reports[lookup.normalizedNumber]?.count ?: 0,
+                        lastReportedAt = reports[lookup.normalizedNumber]?.lastReportedAt,
+                        lineId = record.lineId,
+                        viaNumber = record.viaNumber
+                    )
+                )
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to read the device call log", e)
@@ -125,6 +158,66 @@ class CallLogRepository(private val context: Context) {
         }
 
         return@withContext entries
+    }
+
+    /**
+     * The most recent call the user did not take (missed, rejected or blocked), with its operator: what the
+     * "Qui m'a appelé ?" quick settings tile shows. Reads the call log only, never the samples; null without
+     * the permission or such a call.
+     */
+    suspend fun lastUnansweredCall(): CallLogEntry? = withContext(Dispatchers.IO) {
+        if (!hasPermission()) return@withContext null
+        val unanswered = setOf(CallLog.Calls.MISSED_TYPE, CallLog.Calls.REJECTED_TYPE, CallLog.Calls.BLOCKED_TYPE)
+        val record = try {
+            context.contentResolver.query(
+                CallLog.Calls.CONTENT_URI,
+                arrayOf(CallLog.Calls._ID, CallLog.Calls.NUMBER, CallLog.Calls.CACHED_NAME, CallLog.Calls.DATE, CallLog.Calls.TYPE),
+                "${CallLog.Calls.TYPE} IN (${unanswered.joinToString(",")})",
+                null,
+                "${CallLog.Calls.DATE} DESC"
+            )?.use { cursor ->
+                val typeIdx = cursor.getColumnIndex(CallLog.Calls.TYPE)
+                // The selection already keeps unanswered calls; checked again in case a provider ignores it.
+                generateSequence { if (cursor.moveToNext()) cursor else null }
+                    .firstOrNull { it.getInt(typeIdx) in unanswered }
+                    ?.let {
+                        RawCallRecord(
+                            id = it.getLong(it.getColumnIndexOrThrow(CallLog.Calls._ID)),
+                            rawNum = it.getString(it.getColumnIndexOrThrow(CallLog.Calls.NUMBER)).orEmpty(),
+                            cachedName = it.getString(it.getColumnIndexOrThrow(CallLog.Calls.CACHED_NAME)),
+                            date = it.getLong(it.getColumnIndexOrThrow(CallLog.Calls.DATE)),
+                            duration = 0L,
+                            callType = when (it.getInt(typeIdx)) {
+                                CallLog.Calls.MISSED_TYPE -> CallType.MISSED
+                                CallLog.Calls.REJECTED_TYPE -> CallType.REJECTED
+                                else -> CallType.BLOCKED
+                            },
+                            lineId = null,
+                            viaNumber = null
+                        )
+                    }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read the last unanswered call", e)
+            null
+        } ?: return@withContext null
+
+        val lookup = dbManager.lookupNumber(record.rawNum)
+        val note = loadNotes()[lookup.normalizedNumber]
+        CallLogEntry(
+            id = record.id,
+            rawNumber = record.rawNum,
+            normalizedNumber = lookup.normalizedNumber,
+            formattedNumber = lookup.formattedNumber,
+            cachedName = record.cachedName,
+            timestamp = record.date,
+            durationSeconds = 0L,
+            callType = record.callType,
+            lookupResult = lookup,
+            isSpamFlagged = note?.isSpam ?: lookup.numberType.isDemarchage,
+            isFavorite = note?.isFavorite ?: false,
+            userNote = note?.userNote
+        )
     }
 
     suspend fun generateSampleCalls(): List<CallLogEntry> = withContext(Dispatchers.IO) {
@@ -145,12 +238,18 @@ class CallLogRepository(private val context: Context) {
             Triple("0590203040", CallType.MISSED, now - 150 * 3600 * 1000L)
         )
 
+        // Two lines, like a dual-SIM phone, so the export shows its line choice. Their numbers are in the
+        // fictional 06 39 98 range too.
+        val secondLineNumbers = setOf("0270334455", "0948123456", "0590203040")
+
         val results = mutableListOf<CallLogEntry>()
         val reports = loadReportStats()
         val notes = loadNotes()
+        val lookups = dbManager.lookupNumbers(sampleNumbers.map { it.first })
+
         for ((idx, item) in sampleNumbers.withIndex()) {
             val (rawNum, callType, timestamp) = item
-            val lookup = dbManager.lookupNumber(rawNum)
+            val lookup = lookups[rawNum] ?: dbManager.lookupNumber(rawNum)
             val note = notes[lookup.normalizedNumber]
 
             val cachedName = when (rawNum) {
@@ -181,7 +280,9 @@ class CallLogRepository(private val context: Context) {
                     isFavorite = note?.isFavorite ?: false,
                     userNote = note?.userNote,
                     reportCount = reports[lookup.normalizedNumber]?.count ?: 0,
-                    lastReportedAt = reports[lookup.normalizedNumber]?.lastReportedAt
+                    lastReportedAt = reports[lookup.normalizedNumber]?.lastReportedAt,
+                    lineId = if (rawNum in secondLineNumbers) SAMPLE_LINE_2 else SAMPLE_LINE_1,
+                    viaNumber = if (rawNum in secondLineNumbers) "0639980002" else "0639980001"
                 )
             )
         }
@@ -221,7 +322,9 @@ class CallLogRepository(private val context: Context) {
         )
     }
 
-    private companion object {
-        const val TAG = "CallLogRepository"
+    companion object {
+        private const val TAG = "CallLogRepository"
+        internal const val SAMPLE_LINE_1 = "sample|1"
+        internal const val SAMPLE_LINE_2 = "sample|2"
     }
 }

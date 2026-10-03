@@ -28,10 +28,10 @@ data class ReporterProfile(
 data class ReportStats(val count: Int, val lastReportedAt: Long)
 
 /**
- * Keeps [ReporterProfile], and the SignalConso reports sent from the app, in its own app-private database, separate from arcep_data.db (which is replaced
+ * Keeps [ReporterProfile], the SignalConso reports sent from the app and the numbers of the user's lines, in its own app-private database, separate from arcep_data.db (which is replaced
  * on every ARCEP update), encrypted with SQLCipher under a passphrase wrapped by an Android Keystore key
  * ([DatabaseKeyStore]). It is excluded from backups and device transfers (data_extraction_rules.xml):
- * it only ever leaves the phone when the user submits a SignalConso report.
+ * it only ever leaves the phone when the user submits a SignalConso report or copies a call export.
  */
 class ReporterProfileStore internal constructor(
     context: Context,
@@ -45,7 +45,7 @@ class ReporterProfileStore internal constructor(
         openDatabase(appContext, Schema)
     }
 
-    internal object Schema : SupportSQLiteOpenHelper.Callback(3) {
+    internal object Schema : SupportSQLiteOpenHelper.Callback(4) {
         override fun onCreate(db: SupportSQLiteDatabase) {
             db.execSQL(
                 """
@@ -77,6 +77,18 @@ class ReporterProfileStore internal constructor(
                     """.trimIndent()
                 )
                 db.execSQL("CREATE INDEX signalconso_reports_phone ON signalconso_reports (phone_number)")
+            }
+            if (oldVersion < 4) {
+                // The number of each of the user's lines (SIM...), which the call log only identifies.
+                db.execSQL(
+                    """
+                    CREATE TABLE phone_lines (
+                        line_id TEXT PRIMARY KEY,
+                        phone_number TEXT NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
             }
         }
     }
@@ -142,6 +154,31 @@ class ReporterProfileStore internal constructor(
                 while (it.moveToNext()) put(it.getString(0), ReportStats(it.getInt(1), it.getLong(2)))
             }
         }
+    }
+
+    /** The numbers the user gave for their lines, by line id (see CallLogEntry.lineId). */
+    suspend fun lineNumbers(): Map<String, String> = withContext(Dispatchers.IO) {
+        database.query("SELECT line_id, phone_number FROM phone_lines", emptyArray()).use {
+            buildMap { while (it.moveToNext()) put(it.getString(0), it.getString(1)) }
+        }
+    }
+
+    suspend fun saveLineNumber(lineId: String, phoneNumber: String) = withContext(Dispatchers.IO) {
+        database.insert(
+            "phone_lines",
+            SQLiteDatabase.CONFLICT_REPLACE,
+            ContentValues().apply {
+                put("line_id", lineId)
+                put("phone_number", phoneNumber.trim())
+                put("updated_at", System.currentTimeMillis())
+            }
+        )
+        Unit
+    }
+
+    internal suspend fun clearLineNumbers() = withContext(Dispatchers.IO) {
+        database.delete("phone_lines", null, null)
+        Unit
     }
 
     internal suspend fun clearReports() = withContext(Dispatchers.IO) {

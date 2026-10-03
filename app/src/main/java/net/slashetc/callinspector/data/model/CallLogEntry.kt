@@ -54,5 +54,12 @@ data class CallLogEntry(
     val userNote: String? = null,
     /** SignalConso reports the user sent from the app for this number. */
     val reportCount: Int = 0,
-    val lastReportedAt: Long? = null
+    val lastReportedAt: Long? = null,
+    /**
+     * The user's line that received the call (SIM or other phone account), as the call log identifies it:
+     * "<phone account component>|<phone account id>". Stable, but not the line's number.
+     */
+    val lineId: String? = null,
+    /** The receiving line's number, when the call log records it (CallLog.Calls.VIA_NUMBER). */
+    val viaNumber: String? = null
 )

@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import net.slashetc.callinspector.data.db.ArcepDatabaseManager
 import net.slashetc.callinspector.data.db.DatabaseStats
+import net.slashetc.callinspector.data.db.ReporterProfileStore
 import net.slashetc.callinspector.data.model.ArcepLookupResult
 import net.slashetc.callinspector.data.model.CallLogEntry
 import net.slashetc.callinspector.data.model.CallType
@@ -16,6 +17,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import net.slashetc.callinspector.BuildConfig
+import net.slashetc.callinspector.data.repository.AppUpdateChecker
+import net.slashetc.callinspector.util.AppRelease
+import net.slashetc.callinspector.util.PhoneLines
+import net.slashetc.callinspector.util.ReceivingLine
 import net.slashetc.callinspector.util.SearchQueries
 
 enum class CallFilter {
@@ -44,6 +52,15 @@ data class ArcepUiState(
     val userNotice: String? = null,
     val showPermissionDialog: Boolean = false,
     val permissionDeniedCount: Int = 0,
+    /** The call export being shown, by receiving line; null when closed. */
+    val exportLines: List<ReceivingLine>? = null,
+    /** A newer version published on GitHub, offered in a banner until downloaded or dismissed. */
+    val availableAppUpdate: AppRelease? = null,
+    /** The release whose notes are shown ("Nouveautés"); null when closed. */
+    val releaseNotes: AppRelease? = null,
+    val isUpdateCheckEnabled: Boolean = true,
+    /** Debug builds: offer newer releases automatically too (off by default). */
+    val isUpdateCheckEnabledInDebug: Boolean = false,
     val updateStatus: net.slashetc.callinspector.data.repository.UpdateStatus = net.slashetc.callinspector.data.repository.UpdateStatus.Idle
 ) {
     val isPermanentlyDenied: Boolean
@@ -55,6 +72,9 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = CallLogRepository(application)
     private val dbManager = ArcepDatabaseManager.getInstance(application)
     private val updateManager = net.slashetc.callinspector.data.repository.ArcepUpdateManager(application)
+    private val profileStore = ReporterProfileStore.getInstance(application)
+    private val lineDetector = net.slashetc.callinspector.data.repository.PhoneLineDetector(application)
+    private val appUpdateChecker = AppUpdateChecker(application)
 
     private val _uiState = MutableStateFlow(ArcepUiState())
     val uiState: StateFlow<ArcepUiState> = _uiState.asStateFlow()
@@ -64,6 +84,79 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
     init {
         checkPermissionAndLoad()
         loadStats()
+        _uiState.update {
+            it.copy(
+                isUpdateCheckEnabled = appUpdateChecker.isEnabled,
+                isUpdateCheckEnabledInDebug = appUpdateChecker.isEnabledInDebug
+            )
+        }
+        // Debug builds are another app (.debug): a release APK would install next to them, not update them,
+        // so they only look for releases when the user turned that on ("Signaler les releases").
+        if (BuildConfig.BUILD_TYPE == "release") {
+            checkAppUpdate()
+        } else if (appUpdateChecker.isEnabledInDebug) {
+            viewModelScope.launch {
+                val update = appUpdateChecker.availableUpdate()
+                _uiState.update { it.copy(availableAppUpdate = update) }
+            }
+        }
+    }
+
+    /** Looks for a newer release (at most daily) and, right after an update, shows what it brings. */
+    private fun checkAppUpdate() {
+        viewModelScope.launch {
+            val whatsNew = appUpdateChecker.whatsNewAfterUpdate()
+            val update = appUpdateChecker.availableUpdate()
+            _uiState.update { it.copy(availableAppUpdate = update, releaseNotes = whatsNew ?: it.releaseNotes) }
+        }
+    }
+
+    fun checkAppUpdateNow() {
+        viewModelScope.launch {
+            val update = appUpdateChecker.availableUpdate(force = true)
+            _uiState.update {
+                it.copy(
+                    availableAppUpdate = update,
+                    userNotice = if (update == null) "Vous avez la dernière version (${BuildConfig.VERSION_NAME})" else null
+                )
+            }
+        }
+    }
+
+    fun dismissAppUpdate() {
+        _uiState.value.availableAppUpdate?.let { appUpdateChecker.dismiss(it) }
+        _uiState.update { it.copy(availableAppUpdate = null) }
+    }
+
+    fun setUpdateCheckEnabled(enabled: Boolean) {
+        appUpdateChecker.isEnabled = enabled
+        _uiState.update { it.copy(isUpdateCheckEnabled = enabled, availableAppUpdate = null) }
+        if (enabled) checkAppUpdateNow()
+    }
+
+    fun setUpdateCheckEnabledInDebug(enabled: Boolean) {
+        appUpdateChecker.isEnabledInDebug = enabled
+        _uiState.update { it.copy(isUpdateCheckEnabledInDebug = enabled, availableAppUpdate = if (enabled) it.availableAppUpdate else null) }
+        if (enabled) checkAppUpdateNow()
+    }
+
+    fun showReleaseNotes(release: AppRelease) {
+        _uiState.update { it.copy(releaseNotes = release) }
+    }
+
+    /** The installed version's notes, fetched on demand. */
+    fun showInstalledReleaseNotes() {
+        viewModelScope.launch {
+            val release = appUpdateChecker.installedRelease()
+            _uiState.update {
+                if (release != null) it.copy(releaseNotes = release)
+                else it.copy(userNotice = "Notes de la version ${BuildConfig.VERSION_NAME} indisponibles (hors ligne ou version non publiée)")
+            }
+        }
+    }
+
+    fun closeReleaseNotes() {
+        _uiState.update { it.copy(releaseNotes = null) }
     }
 
     fun checkPermissionAndLoad() {
@@ -122,6 +215,18 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
                     isLoading = false
                 )
             }
+        }
+    }
+
+    /** The history searched on one caller's number (from the quick settings tile). */
+    fun showCallsFrom(number: String) {
+        _uiState.update { state ->
+            state.copy(
+                currentTab = 0,
+                selectedFilter = CallFilter.TOUS,
+                callSearchQuery = number,
+                filteredCalls = applyFilter(state.calls, CallFilter.TOUS, number)
+            )
         }
     }
 
@@ -215,6 +320,32 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
                 state.copy(selectedCallDetail = updatedCall)
             }
         }
+    }
+
+    /**
+     * Opens the export of [calls]: groups them by the line (SIM...) that received them, with each line's
+     * number from the user's saved lines, the call log or the system.
+     */
+    fun openExport(calls: List<CallLogEntry>) {
+        viewModelScope.launch {
+            val stored = runCatching { profileStore.lineNumbers() }.getOrDefault(emptyMap())
+            val detected = withContext(Dispatchers.IO) {
+                runCatching { lineDetector.detect(calls.mapNotNull { it.lineId }.toSet()) }.getOrDefault(emptyMap())
+            }
+            _uiState.update { it.copy(exportLines = PhoneLines.linesOf(calls, stored, detected)) }
+        }
+    }
+
+    /** Remembers the number of one of the user's lines, asked once, and refreshes the open export. */
+    fun saveLineNumber(lineKey: String, number: String) {
+        viewModelScope.launch {
+            profileStore.saveLineNumber(lineKey, number)
+            _uiState.value.exportLines?.let { lines -> openExport(lines.flatMap { it.calls }.sortedByDescending { it.timestamp }) }
+        }
+    }
+
+    fun closeExport() {
+        _uiState.update { it.copy(exportLines = null) }
     }
 
     fun onManualSearchInput(input: String) {
