@@ -1,8 +1,10 @@
 package net.slashetc.callinspector.util
 
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 object PhoneNumberFormatter {
 
@@ -51,13 +53,18 @@ object PhoneNumberFormatter {
         }
     }
 
-    fun formatTimestamp(epochMillis: Long): String {
-        val now = System.currentTimeMillis()
-        val diffDays = (now - epochMillis) / (1000 * 60 * 60 * 24)
+    fun formatTimestamp(
+        epochMillis: Long,
+        now: Long = System.currentTimeMillis(),
+        timeZone: TimeZone = TimeZone.getDefault()
+    ): String {
+        // Calendar days in the phone's time zone, not 24-hour periods: a call yesterday at 12:16 is "Hier"
+        // even when less than 24 hours have passed.
+        val diffDays = calendarDaysBetween(epochMillis, now, timeZone)
 
-        val timeFormat = SimpleDateFormat("HH:mm", Locale.FRENCH)
-        val dateFormat = SimpleDateFormat("dd MMM", Locale.FRENCH)
-        val fullDateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRENCH)
+        val timeFormat = SimpleDateFormat("HH:mm", Locale.FRENCH).apply { this.timeZone = timeZone }
+        val dateFormat = SimpleDateFormat("dd MMM", Locale.FRENCH).apply { this.timeZone = timeZone }
+        val fullDateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRENCH).apply { this.timeZone = timeZone }
 
         val callDate = Date(epochMillis)
 
@@ -67,6 +74,15 @@ object PhoneNumberFormatter {
             diffDays < 7L -> "${dateFormat.format(callDate)} à ${timeFormat.format(callDate)}"
             else -> fullDateFormat.format(callDate)
         }
+    }
+
+    // Days between the two dates' midnights, so daylight saving changes (23- or 25-hour days) do not count.
+    private fun calendarDaysBetween(from: Long, to: Long, timeZone: TimeZone): Long {
+        fun dayNumber(millis: Long): Long {
+            val calendar = Calendar.getInstance(timeZone).apply { timeInMillis = millis }
+            return Math.floorDiv(millis + calendar.get(Calendar.ZONE_OFFSET) + calendar.get(Calendar.DST_OFFSET), 86_400_000L)
+        }
+        return dayNumber(to) - dayNumber(from)
     }
 
     fun formatDuration(seconds: Long): String {
