@@ -70,9 +70,8 @@ Follow-ups collected from the descriptions of PRs #11 to #36 and from direct com
 - [ ] **Find the audit items M4 and M5.** Commits exist for M1 (build hardening), M2 (encrypted storage,
   #27 and #30), M3 (TLS pinning and update hardening, #22 and #23) and M6 (dependency scan), but none for
   M4 and M5. The source audit document isn't in the repo.
-- [ ] **Biometric app lock: intent not found.** No branch, commit, PR or issue mentions biometric
-  authentication (searched "biometric", "BiometricPrompt", "empreinte", "fingerprint",
-  "authentification"). If it was planned, it may be one of M4/M5; it needs its own issue or PR.
+- [x] ~~**Biometric app lock.**~~ Dropped on 2026-10-03 by the maintainer: the phone app already shows the
+  call log without authentication, so locking this app would not protect it.
 - [ ] **Renew the ARCEP TLS pins before 2027-09-25** (from #22). After that date Android ignores the
   pin-set and updates keep working without pinning (fail-open by design).
 - [ ] **Check an ARCEP update on a device** (from #23): "Vérifier et actualiser la base ARCEP" still
