@@ -154,6 +154,29 @@
     }
   }
 
+  // "C'est une entreprise étrangère" opens a form of its own: company name, country, postal code. The name
+  // is the plan's; the country and the postal code are left to the user (SignalConso wants a French postal
+  // code even there, and the company's country can't be told reliably from the plan).
+  var foreignNameFilled = new WeakSet();
+
+  function foreignCompanyChosen() {
+    var labels = document.querySelectorAll('label');
+    for (var i = 0; i < labels.length; i++) {
+      if (norm(labels[i].innerText).indexOf("c'est une entreprise étrangère") !== 0) continue;
+      var input = labels[i].htmlFor ? document.getElementById(labels[i].htmlFor) : labels[i].querySelector('input');
+      return !!(input && input.checked);
+    }
+    return false;
+  }
+
+  function fillForeignCompanyName(name) {
+    if (!name || !foreignCompanyChosen()) return;
+    var input = document.querySelector('input[name="name"]');
+    if (!input || input.value || foreignNameFilled.has(input)) return;
+    foreignNameFilled.add(input);
+    setValue(input, name);
+  }
+
   // A SIRET/SIREN search returns the matching establishment(s): select it only when there is a single
   // one carrying that number. A name search is left to the user, its results are too loose.
   function selectSiretResult(siret) {
@@ -213,6 +236,7 @@
       selectSiretResult(plan.company.siret);
     }
     else if (plan.company) searchCompany('Par son nom', 'name', plan.company.name);
+    if (plan.company) fillForeignCompanyName(plan.company.name);
     var dates = document.querySelectorAll('input[type="date"]');
     for (var i = 0; i < dates.length && plan.dates && i < plan.dates.length; i++) {
       fillOnce('date:' + i, dates[i], plan.dates[i]);
