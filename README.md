@@ -1,7 +1,7 @@
 # Info Opérateur
 
 [![Build](https://github.com/azman0101/call-inspector/actions/workflows/build_apk.yml/badge.svg?branch=main&event=push)](https://github.com/azman0101/call-inspector/actions/workflows/build_apk.yml?query=branch%3Amain+event%3Apush)
-[![VirusTotal](https://img.shields.io/badge/VirusTotal-rapport%20de%20l%27APK%20release-394EFF?logo=virustotal&logoColor=white)](https://www.virustotal.com/gui/file/a319b333cbad0ca0c8a0af02356891d39a054156064c1533796809b1ef9f6012)
+[![VirusTotal](https://img.shields.io/badge/VirusTotal-rapport%20de%20l%27APK%20release-394EFF?logo=virustotal&logoColor=white)](https://www.virustotal.com/gui/file/71d01f98783e42b17f0557ebd3cdd29c78ab787d342cf6a3b4a28bf42291d131)
 [![Dernière release](https://img.shields.io/github/v/release/azman0101/call-inspector?label=t%C3%A9l%C3%A9charger%20l%27APK)](https://github.com/azman0101/call-inspector/releases/latest)
 [![Licence MIT](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
 
