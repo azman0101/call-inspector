@@ -113,6 +113,15 @@ class SignalConsoActivityTest {
         assertEquals(FormStep.OTHER, parsePageState("{\"sent\":false,\"needsContact\":false}").step)
     }
 
+    @Test
+    fun `the page remembers that step 1 is behind, even at a step sampled as other`() {
+        // Step 2 passed between two polls: the app sees step 3 as "other", the page still says step 1 is done.
+        val state = parsePageState("{\"sent\":false,\"needsContact\":false,\"step\":\"other\",\"pastFirstStep\":true}")
+        assertEquals(FormStep.OTHER, state.step)
+        assertTrue(state.pastFirstStep)
+        assertFalse(parsePageState("{\"sent\":false,\"needsContact\":false,\"step\":\"other\"}").pastFirstStep)
+    }
+
     // --- Notes above the form: short, at the step they are about, never under the keyboard ---
 
     private fun notes(

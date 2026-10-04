@@ -12,7 +12,8 @@
 //   displayed only (what is typed into the form is the page's anyway);
 // - everything is dropped once the report is sent or the page leaves the form.
 // The only globals are flags and that entry point: __icPrefillInstalled, __icNeedsContact, __icReportSent,
-// and __icStep (which step shows, so the app only displays the notes that step needs).
+// __icStep (which step shows, so the app only displays the notes that step needs) and __icPastFirstStep
+// (step 2 or later was reached: kept here, since the app only samples the step every 1.5 s).
 (function (plan) {
   var FORM_HOST = 'signal.conso.gouv.fr';
   var FORM_PATH = '/fr/demarchage-abusif/faire-un-signalement';
@@ -197,6 +198,8 @@
     }
     if (!onForm()) { forget(); return; }
     window.__icStep = contactStep() ? 'contact' : companyStep() ? 'company' : 'other';
+    // Step 3 shows the field for the number that called: reaching it also means step 1 is behind.
+    if (window.__icStep !== 'other' || callerPhoneInput()) window.__icPastFirstStep = true;
     // The contact details only live here while step 4 is displayed; a step 4 shown again asks for them again.
     if (!contactStep()) contact = null;
     window.__icNeedsContact = !!contactStep() && !contact;

@@ -82,12 +82,19 @@ class SignalConsoActivity : ComponentActivity() {
 
         /** What the prefill script tells the app; flags only, never the user's data. */
         internal const val PAGE_STATE_QUERY =
-            "({sent: !!window.__icReportSent, needsContact: !!window.__icNeedsContact, step: String(window.__icStep || 'other')})"
+            "({sent: !!window.__icReportSent, needsContact: !!window.__icNeedsContact, step: String(window.__icStep || 'other'), " +
+                "pastFirstStep: !!window.__icPastFirstStep})"
 
         /** The form's step, as far as the app needs it: which notes to show. */
         internal enum class FormStep { COMPANY, CONTACT, OTHER }
 
-        internal data class PageState(val sent: Boolean, val needsContact: Boolean, val step: FormStep = FormStep.OTHER)
+        internal data class PageState(
+            val sent: Boolean,
+            val needsContact: Boolean,
+            val step: FormStep = FormStep.OTHER,
+            /** Step 2 or later was reached, as the page remembers it: a step passed between two polls counts. */
+            val pastFirstStep: Boolean = false,
+        )
 
         /** Reads [PAGE_STATE_QUERY]'s result; anything else (page without the script, error) is an empty state. */
         internal fun parsePageState(json: String?): PageState =
@@ -98,7 +105,7 @@ class SignalConsoActivity : ComponentActivity() {
                         "contact" -> FormStep.CONTACT
                         else -> FormStep.OTHER
                     }
-                    PageState(it.optBoolean("sent"), it.optBoolean("needsContact"), step)
+                    PageState(it.optBoolean("sent"), it.optBoolean("needsContact"), step, it.optBoolean("pastFirstStep"))
                 }
                 ?: PageState(sent = false, needsContact = false)
 
@@ -223,7 +230,7 @@ class SignalConsoActivity : ComponentActivity() {
                         webView.evaluateJavascript(PAGE_STATE_QUERY) { json ->
                             val state = parsePageState(json)
                             formStep = state.step
-                            if (state.step != FormStep.OTHER) pastFirstStep = true
+                            if (state.pastFirstStep || state.step != FormStep.OTHER) pastFirstStep = true
                             if (state.needsContact && contactJson != "null" && SignalConsoReport.isFormUrl(webView.url)) {
                                 webView.evaluateJavascript(contactDelivery(contactJson), null)
                             }
