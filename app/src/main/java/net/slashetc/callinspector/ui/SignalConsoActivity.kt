@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -25,6 +26,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.AlertDialog
@@ -40,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,11 +51,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.slashetc.callinspector.data.db.ReporterProfile
@@ -75,15 +81,58 @@ class SignalConsoActivity : ComponentActivity() {
         private const val PAGE_POLL_MS = 1500L
 
         /** What the prefill script tells the app; flags only, never the user's data. */
-        internal const val PAGE_STATE_QUERY = "({sent: !!window.__icReportSent, needsContact: !!window.__icNeedsContact})"
+        internal const val PAGE_STATE_QUERY =
+            "({sent: !!window.__icReportSent, needsContact: !!window.__icNeedsContact, step: String(window.__icStep || 'other'), " +
+                "pastFirstStep: !!window.__icPastFirstStep})"
 
-        internal data class PageState(val sent: Boolean, val needsContact: Boolean)
+        /** The form's step, as far as the app needs it: which notes to show. */
+        internal enum class FormStep { COMPANY, CONTACT, OTHER }
+
+        internal data class PageState(
+            val sent: Boolean,
+            val needsContact: Boolean,
+            val step: FormStep = FormStep.OTHER,
+            /** Step 2 or later was reached, as the page remembers it: a step passed between two polls counts. */
+            val pastFirstStep: Boolean = false,
+        )
 
         /** Reads [PAGE_STATE_QUERY]'s result; anything else (page without the script, error) is an empty state. */
         internal fun parsePageState(json: String?): PageState =
             runCatching { JSONObject(json ?: "") }.getOrNull()
-                ?.let { PageState(it.optBoolean("sent"), it.optBoolean("needsContact")) }
+                ?.let {
+                    val step = when (it.optString("step")) {
+                        "company" -> FormStep.COMPANY
+                        "contact" -> FormStep.CONTACT
+                        else -> FormStep.OTHER
+                    }
+                    PageState(it.optBoolean("sent"), it.optBoolean("needsContact"), step, it.optBoolean("pastFirstStep"))
+                }
                 ?: PageState(sent = false, needsContact = false)
+
+        /** The notes above the form. Each is short, shown at the step it is about, and can be closed. */
+        internal enum class Note { PREFILLED, DEFAULT_REASON, OPERATOR, PROFILE }
+
+        /**
+         * The notes to show. While the keyboard is open none is: the form needs the whole height to type in.
+         * The general note and the default reason are about step 1, so they go once the form reached step 2.
+         */
+        internal fun visibleNotes(
+            step: FormStep,
+            pastFirstStep: Boolean,
+            keyboardOpen: Boolean,
+            isDefaultReason: Boolean,
+            hasOperator: Boolean,
+            hasProfile: Boolean,
+            closed: Set<Note>,
+        ): List<Note> {
+            if (keyboardOpen) return emptyList()
+            return buildList {
+                if (!pastFirstStep) add(Note.PREFILLED)
+                if (!pastFirstStep && isDefaultReason) add(Note.DEFAULT_REASON)
+                if (step == FormStep.COMPANY && hasOperator) add(Note.OPERATOR)
+                if (step == FormStep.CONTACT && !hasProfile) add(Note.PROFILE)
+            }.filterNot { it in closed }
+        }
 
         /** The prefill script, called with the plan: the plan stays in its closure, never in a global. */
         internal fun prefillInjection(script: String, planJson: String): String =
@@ -161,6 +210,10 @@ class SignalConsoActivity : ComponentActivity() {
                 val scope = rememberCoroutineScope()
                 var profile by remember { mutableStateOf<ReporterProfile?>(null) }
                 var editingProfile by remember { mutableStateOf(false) }
+                var formStep by remember { mutableStateOf(FormStep.OTHER) }
+                var pastFirstStep by remember { mutableStateOf(false) }
+                var closedNotes by remember { mutableStateOf(emptySet<Note>()) }
+                val keyboardOpen = rememberKeyboardOpen()
                 fun useProfile(saved: ReporterProfile?) {
                     profile = saved
                     contactJson = saved.toContactJson()
@@ -176,6 +229,8 @@ class SignalConsoActivity : ComponentActivity() {
                         if (!SignalConsoReport.isSignalConsoUrl(webView.url)) continue
                         webView.evaluateJavascript(PAGE_STATE_QUERY) { json ->
                             val state = parsePageState(json)
+                            formStep = state.step
+                            if (state.pastFirstStep || state.step != FormStep.OTHER) pastFirstStep = true
                             if (state.needsContact && contactJson != "null" && SignalConsoReport.isFormUrl(webView.url)) {
                                 webView.evaluateJavascript(contactDelivery(contactJson), null)
                             }
@@ -235,52 +290,29 @@ class SignalConsoActivity : ComponentActivity() {
                     }
                 ) { padding ->
                     Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-                        Surface(color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
-                            Text(
-                                text = "Les champs connus sont préremplis depuis votre journal d'appels. " +
-                                    "Vérifiez chaque étape : rien n'est envoyé tant que vous ne validez pas le signalement." +
-                                    if (profile == null) {
-                                        " Vos coordonnées (étape 4) peuvent être mémorisées sur ce téléphone via l'icône en haut à droite."
-                                    } else {
-                                        ""
-                                    },
-                                fontSize = 12.sp,
-                                lineHeight = 16.sp,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        val notes = visibleNotes(
+                            step = formStep,
+                            pastFirstStep = pastFirstStep,
+                            keyboardOpen = keyboardOpen,
+                            isDefaultReason = isDefaultReason,
+                            hasOperator = operatorName != null,
+                            hasProfile = profile != null,
+                            closed = closedNotes,
+                        )
+                        notes.forEach { note ->
+                            FormNote(
+                                text = when (note) {
+                                    Note.PREFILLED -> "Champs préremplis depuis votre journal d'appels. Vérifiez chaque étape : " +
+                                        "rien n'est envoyé sans votre validation."
+                                    Note.DEFAULT_REASON -> "Motif par défaut : démarché moins de 60 jours après votre refus. " +
+                                        "Changez-le à l'étape 1 s'il ne correspond pas."
+                                    Note.OPERATOR -> "Entreprise : $operatorName, l'opérateur du numéro, pas forcément l'appelant. " +
+                                        "Si vous connaissez l'appelant, choisissez « Par son nom »."
+                                    Note.PROFILE -> "Mémorisez vos coordonnées sur ce téléphone avec l'icône en haut à droite."
+                                },
+                                highlighted = note != Note.PREFILLED,
+                                onClose = { closedNotes = closedNotes + note }
                             )
-                        }
-                        if (isDefaultReason) {
-                            Surface(color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
-                                Text(
-                                    text = "Aucun motif ne ressort de l'appel (en semaine, aux heures autorisées) : motif par défaut " +
-                                        "« demandé à ne pas être démarché, moins de 60 jours après mon refus ». Vérifiez qu'il " +
-                                        "correspond à votre situation, sinon choisissez-en un autre à l'étape 1 ou ajoutez une note " +
-                                        "à l'appel (ex. « isolation », « CPF », « se fait passer pour la CAF »).",
-                                    fontSize = 12.sp,
-                                    lineHeight = 16.sp,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                                )
-                            }
-                        }
-                        if (operatorName != null) {
-                            Surface(color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
-                                Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                                    Icon(
-                                        Icons.Outlined.Info,
-                                        contentDescription = null,
-                                        modifier = Modifier.padding(end = 8.dp).size(18.dp)
-                                    )
-                                    Text(
-                                        text = "Entreprise préremplie : $operatorName, l'opérateur auquel l'ARCEP a attribué ce numéro. " +
-                                            "L'entreprise qui vous a appelé n'est pas identifiable depuis le numéro : elle utilise un numéro " +
-                                            "fourni par cet opérateur (directement ou via un revendeur), qui est tenu de veiller à l'usage " +
-                                            "qu'en font ses clients. Si vous connaissez le nom de " +
-                                            "l'appelant, choisissez plutôt « Par son nom ».",
-                                        fontSize = 12.sp,
-                                        lineHeight = 16.sp
-                                    )
-                                }
-                            }
                         }
                         AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
                     }
@@ -321,6 +353,43 @@ class SignalConsoActivity : ComponentActivity() {
         }
         loadUrl(SignalConsoReport.URL)
     }
+}
+
+/** One short note above the form, closable. */
+@Composable
+private fun FormNote(text: String, highlighted: Boolean, onClose: () -> Unit) {
+    Surface(
+        color = if (highlighted) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 16.dp, end = 4.dp)) {
+            Icon(Icons.Outlined.Info, contentDescription = null, modifier = Modifier.padding(end = 8.dp).size(16.dp))
+            Text(
+                text = text,
+                fontSize = 12.sp,
+                lineHeight = 15.sp,
+                modifier = Modifier.weight(1f).padding(vertical = 6.dp)
+            )
+            IconButton(onClick = onClose, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Default.Close, contentDescription = "Masquer", modifier = Modifier.size(16.dp))
+            }
+        }
+    }
+}
+
+/** Whether the soft keyboard is open, from the window insets (works with and without edge-to-edge). */
+@Composable
+private fun rememberKeyboardOpen(): Boolean {
+    val view = LocalView.current
+    var open by remember { mutableStateOf(false) }
+    DisposableEffect(view) {
+        val listener = ViewTreeObserver.OnGlobalLayoutListener {
+            open = ViewCompat.getRootWindowInsets(view)?.isVisible(WindowInsetsCompat.Type.ime()) == true
+        }
+        view.viewTreeObserver.addOnGlobalLayoutListener(listener)
+        onDispose { view.viewTreeObserver.removeOnGlobalLayoutListener(listener) }
+    }
+    return open
 }
 
 @Composable

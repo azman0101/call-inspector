@@ -11,7 +11,9 @@
 //   shows, and the app then hands them to window.__icFillContact, kept in the closure while step 4 is
 //   displayed only (what is typed into the form is the page's anyway);
 // - everything is dropped once the report is sent or the page leaves the form.
-// The only globals are flags and that entry point: __icPrefillInstalled, __icNeedsContact, __icReportSent.
+// The only globals are flags and that entry point: __icPrefillInstalled, __icNeedsContact, __icReportSent,
+// __icStep (which step shows, so the app only displays the notes that step needs) and __icPastFirstStep
+// (step 2 or later was reached: kept here, since the app only samples the step every 1.5 s).
 (function (plan) {
   var FORM_HOST = 'signal.conso.gouv.fr';
   var FORM_PATH = '/fr/demarchage-abusif/faire-un-signalement';
@@ -33,6 +35,17 @@
   // Step 4 is on screen while its first name field is.
   function contactStep() {
     return document.querySelector('input[name="firstName"]');
+  }
+
+  // Step 2 asks how to identify the company: "Par son numéro SIRET" / "Par son nom", then its results.
+  function companyStep() {
+    if (document.getElementById('CompanySearchResult')) return true;
+    var labels = document.querySelectorAll('label');
+    for (var i = 0; i < labels.length; i++) {
+      var text = norm(labels[i].innerText);
+      if (text.indexOf('par son numéro siret') === 0 || text.indexOf('par son nom') === 0) return true;
+    }
+    return false;
   }
 
   function norm(s) {
@@ -141,6 +154,29 @@
     }
   }
 
+  // "C'est une entreprise étrangère" opens a form of its own: company name, country, postal code. The name
+  // is the plan's; the country and the postal code are left to the user (SignalConso wants a French postal
+  // code even there, and the company's country can't be told reliably from the plan).
+  var foreignNameFilled = new WeakSet();
+
+  function foreignCompanyChosen() {
+    var labels = document.querySelectorAll('label');
+    for (var i = 0; i < labels.length; i++) {
+      if (norm(labels[i].innerText).indexOf("c'est une entreprise étrangère") !== 0) continue;
+      var input = labels[i].htmlFor ? document.getElementById(labels[i].htmlFor) : labels[i].querySelector('input');
+      return !!(input && input.checked);
+    }
+    return false;
+  }
+
+  function fillForeignCompanyName(name) {
+    if (!name || !foreignCompanyChosen()) return;
+    var input = document.querySelector('input[name="name"]');
+    if (!input || input.value || foreignNameFilled.has(input)) return;
+    foreignNameFilled.add(input);
+    setValue(input, name);
+  }
+
   // A SIRET/SIREN search returns the matching establishment(s): select it only when there is a single
   // one carrying that number. A name search is left to the user, its results are too loose.
   function selectSiretResult(siret) {
@@ -172,6 +208,7 @@
     plan = null;
     contact = null;
     window.__icNeedsContact = false;
+    window.__icStep = 'other';
   }
 
   function run() {
@@ -183,6 +220,9 @@
       return;
     }
     if (!onForm()) { forget(); return; }
+    window.__icStep = contactStep() ? 'contact' : companyStep() ? 'company' : 'other';
+    // Step 3 shows the field for the number that called: reaching it also means step 1 is behind.
+    if (window.__icStep !== 'other' || callerPhoneInput()) window.__icPastFirstStep = true;
     // The contact details only live here while step 4 is displayed; a step 4 shown again asks for them again.
     if (!contactStep()) contact = null;
     window.__icNeedsContact = !!contactStep() && !contact;
@@ -196,6 +236,7 @@
       selectSiretResult(plan.company.siret);
     }
     else if (plan.company) searchCompany('Par son nom', 'name', plan.company.name);
+    if (plan.company) fillForeignCompanyName(plan.company.name);
     var dates = document.querySelectorAll('input[type="date"]');
     for (var i = 0; i < dates.length && plan.dates && i < plan.dates.length; i++) {
       fillOnce('date:' + i, dates[i], plan.dates[i]);
