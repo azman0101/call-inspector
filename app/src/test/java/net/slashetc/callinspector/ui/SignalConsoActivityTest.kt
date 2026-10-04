@@ -2,11 +2,14 @@ package net.slashetc.callinspector.ui
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.FormStep
+import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.Note
 import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.PageState
 import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.contactDelivery
 import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.parsePageState
 import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.prefillInjection
 import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.toJsExpression
+import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.visibleNotes
 import org.json.JSONObject
 import org.json.JSONTokener
 import org.junit.Assert.assertEquals
@@ -100,5 +103,56 @@ class SignalConsoActivityTest {
         // A page without the script answers null; an error is no state either.
         assertEquals(PageState(sent = false, needsContact = false), parsePageState("null"))
         assertEquals(PageState(sent = false, needsContact = false), parsePageState(null))
+    }
+
+    @Test
+    fun `the page state carries the form step`() {
+        assertEquals(FormStep.COMPANY, parsePageState("{\"sent\":false,\"needsContact\":false,\"step\":\"company\"}").step)
+        assertEquals(FormStep.CONTACT, parsePageState("{\"sent\":false,\"needsContact\":true,\"step\":\"contact\"}").step)
+        assertEquals(FormStep.OTHER, parsePageState("{\"sent\":false,\"needsContact\":false,\"step\":\"autre\"}").step)
+        assertEquals(FormStep.OTHER, parsePageState("{\"sent\":false,\"needsContact\":false}").step)
+    }
+
+    // --- Notes above the form: short, at the step they are about, never under the keyboard ---
+
+    private fun notes(
+        step: FormStep = FormStep.OTHER,
+        pastFirstStep: Boolean = false,
+        keyboardOpen: Boolean = false,
+        closed: Set<Note> = emptySet(),
+        hasProfile: Boolean = false,
+    ) = visibleNotes(step, pastFirstStep, keyboardOpen, isDefaultReason = true, hasOperator = true, hasProfile = hasProfile, closed = closed)
+
+    @Test
+    fun `step 1 shows the general note and the default reason only`() {
+        assertEquals(listOf(Note.PREFILLED, Note.DEFAULT_REASON), notes())
+    }
+
+    @Test
+    fun `step 2 shows the operator note only, and step 1's notes are gone for good`() {
+        assertEquals(listOf(Note.OPERATOR), notes(step = FormStep.COMPANY, pastFirstStep = true))
+        // Step 3 (description): nothing above the form.
+        assertEquals(emptyList<Note>(), notes(step = FormStep.OTHER, pastFirstStep = true))
+    }
+
+    @Test
+    fun `step 4 suggests saving the contact details only when none are saved`() {
+        assertEquals(listOf(Note.PROFILE), notes(step = FormStep.CONTACT, pastFirstStep = true))
+        assertEquals(emptyList<Note>(), notes(step = FormStep.CONTACT, pastFirstStep = true, hasProfile = true))
+    }
+
+    @Test
+    fun `no note while the keyboard is open, and a closed note stays closed`() {
+        assertEquals(emptyList<Note>(), notes(keyboardOpen = true))
+        assertEquals(emptyList<Note>(), notes(step = FormStep.COMPANY, pastFirstStep = true, keyboardOpen = true))
+        assertEquals(listOf(Note.DEFAULT_REASON), notes(closed = setOf(Note.PREFILLED)))
+    }
+
+    @Test
+    fun `no note is shown when nothing applies`() {
+        assertEquals(
+            listOf(Note.PREFILLED),
+            visibleNotes(FormStep.OTHER, false, false, isDefaultReason = false, hasOperator = false, hasProfile = true, closed = emptySet())
+        )
     }
 }

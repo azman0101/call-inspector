@@ -11,7 +11,8 @@
 //   shows, and the app then hands them to window.__icFillContact, kept in the closure while step 4 is
 //   displayed only (what is typed into the form is the page's anyway);
 // - everything is dropped once the report is sent or the page leaves the form.
-// The only globals are flags and that entry point: __icPrefillInstalled, __icNeedsContact, __icReportSent.
+// The only globals are flags and that entry point: __icPrefillInstalled, __icNeedsContact, __icReportSent,
+// and __icStep (which step shows, so the app only displays the notes that step needs).
 (function (plan) {
   var FORM_HOST = 'signal.conso.gouv.fr';
   var FORM_PATH = '/fr/demarchage-abusif/faire-un-signalement';
@@ -33,6 +34,17 @@
   // Step 4 is on screen while its first name field is.
   function contactStep() {
     return document.querySelector('input[name="firstName"]');
+  }
+
+  // Step 2 asks how to identify the company: "Par son numéro SIRET" / "Par son nom", then its results.
+  function companyStep() {
+    if (document.getElementById('CompanySearchResult')) return true;
+    var labels = document.querySelectorAll('label');
+    for (var i = 0; i < labels.length; i++) {
+      var text = norm(labels[i].innerText);
+      if (text.indexOf('par son numéro siret') === 0 || text.indexOf('par son nom') === 0) return true;
+    }
+    return false;
   }
 
   function norm(s) {
@@ -172,6 +184,7 @@
     plan = null;
     contact = null;
     window.__icNeedsContact = false;
+    window.__icStep = 'other';
   }
 
   function run() {
@@ -183,6 +196,7 @@
       return;
     }
     if (!onForm()) { forget(); return; }
+    window.__icStep = contactStep() ? 'contact' : companyStep() ? 'company' : 'other';
     // The contact details only live here while step 4 is displayed; a step 4 shown again asks for them again.
     if (!contactStep()) contact = null;
     window.__icNeedsContact = !!contactStep() && !contact;
