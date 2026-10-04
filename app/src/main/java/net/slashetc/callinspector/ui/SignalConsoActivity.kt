@@ -3,8 +3,8 @@ package net.slashetc.callinspector.ui
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
+import android.view.ViewGroup
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -72,7 +72,26 @@ class SignalConsoActivity : ComponentActivity() {
     companion object {
         private const val EXTRA_PLAN_JSON = "plan_json"
         private const val EXTRA_REPORTED_NUMBER = "reported_number"
-        private const val REPORT_SENT_POLL_MS = 1500L
+        private const val PAGE_POLL_MS = 1500L
+
+        /** What the prefill script tells the app; flags only, never the user's data. */
+        internal const val PAGE_STATE_QUERY = "({sent: !!window.__icReportSent, needsContact: !!window.__icNeedsContact})"
+
+        internal data class PageState(val sent: Boolean, val needsContact: Boolean)
+
+        /** Reads [PAGE_STATE_QUERY]'s result; anything else (page without the script, error) is an empty state. */
+        internal fun parsePageState(json: String?): PageState =
+            runCatching { JSONObject(json ?: "") }.getOrNull()
+                ?.let { PageState(it.optBoolean("sent"), it.optBoolean("needsContact")) }
+                ?: PageState(sent = false, needsContact = false)
+
+        /** The prefill script, called with the plan: the plan stays in its closure, never in a global. */
+        internal fun prefillInjection(script: String, planJson: String): String =
+            script.trimEnd().removeSuffix(";") + "(" + planJson.toJsExpression() + ");"
+
+        /** Hands the contact details (or null, to drop them) to the script, which keeps them for step 4 only. */
+        internal fun contactDelivery(contactJson: String): String =
+            "if (window.__icFillContact) window.__icFillContact(${contactJson.toJsExpression()});"
 
         /** Opens the form for [call]; the activity result is RESULT_OK once a report was sent and counted. */
         fun intent(context: Context, call: CallLogEntry, history: List<CallLogEntry>): Intent {
@@ -115,8 +134,10 @@ class SignalConsoActivity : ComponentActivity() {
                 .replace("\u2029", "\\u2029") + ")"
     }
 
-    // The saved contact details, as a JS literal, injected with the plan on every page load.
+    // The saved contact details as JSON, handed to the page only when its step 4 asks for them.
     private var contactJson = "null"
+
+    private var webView: WebView? = null
 
     // A form opened from the app counts as one report at most.
     private var reportRecorded = false
@@ -126,8 +147,7 @@ class SignalConsoActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val planJson = intent.getStringExtra(EXTRA_PLAN_JSON) ?: run { finish(); return }
         val prefillScript = assets.open("signalconso_prefill.js").bufferedReader().use { it.readText() }
-        // Safely pass JSON strings as parsed JS expressions via JSON.parse(quote(...)).
-        val injection = { "window.__icPlan = ${planJson.toJsExpression()};\nwindow.__icContact = ${contactJson.toJsExpression()};\n$prefillScript" }
+        val injection = prefillInjection(prefillScript, planJson)
         val profileStore = ReporterProfileStore.getInstance(this)
         val operatorName = JSONObject(planJson).optJSONObject("company")
             ?.takeIf { it.optString("source") == ReportedCompany.Source.OPERATOR.name }
@@ -137,27 +157,31 @@ class SignalConsoActivity : ComponentActivity() {
 
         setContent {
             MyApplicationTheme {
-                val webView = remember { createWebView(injection) }
+                val webView = remember { createWebView(injection).also { this@SignalConsoActivity.webView = it } }
                 val scope = rememberCoroutineScope()
                 var profile by remember { mutableStateOf<ReporterProfile?>(null) }
                 var editingProfile by remember { mutableStateOf(false) }
                 fun useProfile(saved: ReporterProfile?) {
                     profile = saved
                     contactJson = saved.toContactJson()
-                    if (Uri.parse(webView.url ?: "").host == SignalConsoReport.HOST) {
-                        webView.evaluateJavascript(
-                            "window.__icContact = ${contactJson.toJsExpression()}; if (window.__icPrefillRun) window.__icPrefillRun();", null
-                        )
-                    }
+                    // Saved or erased while the form is open: the script takes them at step 4 only.
+                    if (SignalConsoReport.isFormUrl(webView.url)) webView.evaluateJavascript(contactDelivery(contactJson), null)
                 }
                 LaunchedEffect(Unit) { useProfile(profileStore.load()) }
-                // No JS bridge: the prefill script flags SignalConso's acknowledgment page and the app reads the flag.
+                // No JS bridge: the prefill script raises flags (step 4 shown, report sent) and the app polls them.
                 LaunchedEffect(Unit) {
-                    while (!reportRecorded && reportedNumber != null) {
-                        delay(REPORT_SENT_POLL_MS)
-                        if (Uri.parse(webView.url ?: "").host != SignalConsoReport.HOST) continue
-                        webView.evaluateJavascript("!!window.__icReportSent") { sent ->
-                            if (sent != "true" || reportRecorded) return@evaluateJavascript
+                    var reportSent = false
+                    while (!reportSent) {
+                        delay(PAGE_POLL_MS)
+                        if (!SignalConsoReport.isSignalConsoUrl(webView.url)) continue
+                        webView.evaluateJavascript(PAGE_STATE_QUERY) { json ->
+                            val state = parsePageState(json)
+                            if (state.needsContact && contactJson != "null" && SignalConsoReport.isFormUrl(webView.url)) {
+                                webView.evaluateJavascript(contactDelivery(contactJson), null)
+                            }
+                            if (!state.sent) return@evaluateJavascript
+                            reportSent = true
+                            if (reportRecorded || reportedNumber == null) return@evaluateJavascript
                             reportRecorded = true
                             scope.launch {
                                 runCatching { profileStore.recordReport(reportedNumber, System.currentTimeMillis()) }
@@ -265,8 +289,20 @@ class SignalConsoActivity : ComponentActivity() {
         }
     }
 
+    // The form's document, and whatever the page kept of the user's data, goes with the screen.
+    override fun onDestroy() {
+        webView?.apply {
+            stopLoading()
+            // WebView.destroy() must come after the view leaves the hierarchy (still the AndroidView's here).
+            (parent as? ViewGroup)?.removeView(this)
+            destroy()
+        }
+        webView = null
+        super.onDestroy()
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
-    private fun createWebView(injection: () -> String) = WebView(this).apply {
+    private fun createWebView(injection: String) = WebView(this).apply {
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         webViewClient = object : WebViewClient() {
@@ -278,8 +314,9 @@ class SignalConsoActivity : ComponentActivity() {
                 return true
             }
 
+            // Only the report form gets the script and the plan: no other page of the site, no look-alike host.
             override fun onPageFinished(view: WebView, url: String) {
-                if (Uri.parse(url).host == SignalConsoReport.HOST) view.evaluateJavascript(injection(), null)
+                if (SignalConsoReport.isFormUrl(url)) view.evaluateJavascript(injection, null)
             }
         }
         loadUrl(SignalConsoReport.URL)

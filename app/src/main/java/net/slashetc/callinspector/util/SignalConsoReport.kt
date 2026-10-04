@@ -2,6 +2,7 @@ package net.slashetc.callinspector.util
 
 import net.slashetc.callinspector.data.model.CallLogEntry
 import net.slashetc.callinspector.data.model.CallType
+import java.net.URI
 import java.text.Normalizer
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -46,6 +47,25 @@ object SignalConsoReport {
     const val URL = "https://signal.conso.gouv.fr/fr/demarchage-abusif/faire-un-signalement"
     const val PROBLEM = "Problème de démarchage téléphonique"
     const val HOST = "signal.conso.gouv.fr"
+    const val FORM_PATH = "/fr/demarchage-abusif/faire-un-signalement"
+
+    /** A page of SignalConso itself, over HTTPS: where the "report sent" flag may be read (no user data). */
+    fun isSignalConsoUrl(url: String?): Boolean {
+        val uri = url?.let { runCatching { URI(it).normalize() }.getOrNull() } ?: return false
+        return uri.scheme == "https" && uri.host == HOST && (uri.port == -1 || uri.port == 443)
+    }
+
+    /**
+     * The report form itself: the only page the app hands the user's data to (security review, SR-01).
+     * Exact host, HTTPS, and the form's path as sent, resolved first so that "../" can't lead elsewhere. An
+     * encoded character ("%2F..%2F") or a backslash is refused rather than decoded: the form's path has none.
+     */
+    fun isFormUrl(url: String?): Boolean {
+        if (!isSignalConsoUrl(url)) return false
+        val path = URI(url).normalize().rawPath ?: return false
+        if ('%' in path || '\\' in path) return false
+        return path == FORM_PATH || path.startsWith("$FORM_PATH/")
+    }
 
     /**
      * Reason selected when the call itself shows none: reporting the call means the user holds it unlawful,

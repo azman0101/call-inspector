@@ -206,4 +206,44 @@ class SignalConsoReportTest {
         assertEquals("Signalé 1 fois · dernier le 26/09/2026", SignalConsoReport.reportSummary(1, at(2026, 9, 26, 23, 30), paris))
         assertEquals("Signalé 3 fois · dernier le 22/09/2026", SignalConsoReport.reportSummary(3, at(2026, 9, 22, 11), paris))
     }
+
+    // --- Where the app hands the user's data (security review, SR-01) ---
+
+    @Test
+    fun `the form URL the app opens is the form`() {
+        assertTrue(SignalConsoReport.isFormUrl(SignalConsoReport.URL))
+        assertTrue(SignalConsoReport.isFormUrl(SignalConsoReport.URL + "?step=2#top"))
+        assertTrue(SignalConsoReport.isFormUrl(SignalConsoReport.URL + "/etape-4"))
+    }
+
+    @Test
+    fun `no other page, scheme or host is the form`() {
+        listOf(
+            null,
+            "",
+            "pas une url",
+            "http://signal.conso.gouv.fr/fr/demarchage-abusif/faire-un-signalement",
+            "https://signal.conso.gouv.fr/fr/mes-signalements",
+            "https://signal.conso.gouv.fr/fr/demarchage-abusif",
+            "https://signal.conso.gouv.fr/fr/demarchage-abusif/faire-un-signalement-bis",
+            "https://signal.conso.gouv.fr/fr/demarchage-abusif/faire-un-signalement/../../autre-page",
+            "https://signal.conso.gouv.fr/fr/demarchage-abusif/faire-un-signalement%2F..%2F..%2Fautre-page",
+            "https://signal.conso.gouv.fr/fr/demarchage-abusif/faire-un-signalement/%2E%2E/%2E%2E/autre-page",
+            "https://signal.conso.gouv.fr/fr/demarchage-abusif/faire-un-signalement/..%5C..%5Cautre-page",
+            "https://signal.conso.gouv.fr:8443/fr/demarchage-abusif/faire-un-signalement",
+            "https://signal.conso.gouv.fr.example.com/fr/demarchage-abusif/faire-un-signalement",
+            "https://entreprise.signal.conso.gouv.fr/fr/demarchage-abusif/faire-un-signalement",
+            "https://signal.conso.gouv.fr@example.com/fr/demarchage-abusif/faire-un-signalement",
+            "https://example.com/fr/demarchage-abusif/faire-un-signalement?u=https://signal.conso.gouv.fr",
+            "file:///android_asset/signalconso_prefill.js",
+            "javascript:alert(1)",
+        ).forEach { url -> assertFalse(url.toString(), SignalConsoReport.isFormUrl(url)) }
+    }
+
+    @Test
+    fun `any HTTPS page of SignalConso may be asked whether a report was sent`() {
+        assertTrue(SignalConsoReport.isSignalConsoUrl("https://signal.conso.gouv.fr/fr/merci"))
+        assertFalse(SignalConsoReport.isSignalConsoUrl("http://signal.conso.gouv.fr/fr/merci"))
+        assertFalse(SignalConsoReport.isSignalConsoUrl("https://signal.conso.gouv.fr.example.com/"))
+    }
 }
