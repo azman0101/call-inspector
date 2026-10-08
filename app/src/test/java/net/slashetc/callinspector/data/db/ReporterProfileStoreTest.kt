@@ -93,8 +93,10 @@ class ReporterProfileStoreTest {
 
     @Test
     fun `alerts sent to the Arcep are counted per number they covered`() = runBlocking {
-        store.recordArcepAlert(listOf("0162000000", "0270000000", "0162000000", ""), 1_000L)
-        store.recordArcepAlert(listOf("0162000000"), 2_000L)
+        assertEquals(2, store.recordArcepAlert(listOf("0162000000", "0270000000", "0162000000", ""), 1_000L))
+        assertEquals(1, store.recordArcepAlert(listOf("0162000000"), 2_000L))
+        // A hidden number has nothing to count the alert against.
+        assertEquals(0, store.recordArcepAlert(listOf(""), 3_000L))
         val stats = store.arcepAlertStats()
         assertEquals(ReportStats(2, 2_000L), stats["0162000000"])
         assertEquals(ReportStats(1, 1_000L), stats["0270000000"])

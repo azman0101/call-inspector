@@ -202,11 +202,14 @@ class ArcepAlertActivity : ComponentActivity() {
                             step = 0
                             webView.evaluateJavascript(PROFILE_CHANGED_SCRIPT, null)
                             scope.launch {
-                                runCatching { profileStore.recordArcepAlert(numbers, System.currentTimeMillis()) }
-                                    .onSuccess {
-                                        setResult(RESULT_OK)
-                                        Toast.makeText(this@ArcepAlertActivity, "Alerte Arcep comptabilisée", Toast.LENGTH_SHORT).show()
-                                    }
+                                // A hidden number has nothing to count the alert against: J'alerte l'Arcep's own
+                                // confirmation is all there is then.
+                                val counted = runCatching { profileStore.recordArcepAlert(numbers, System.currentTimeMillis()) }
+                                    .getOrDefault(0)
+                                if (counted > 0) {
+                                    setResult(RESULT_OK)
+                                    Toast.makeText(this@ArcepAlertActivity, "Alerte Arcep comptabilisée", Toast.LENGTH_SHORT).show()
+                                }
                             }
                         }
                         if (!ArcepAlert.isFormUrl(webView.url)) continue

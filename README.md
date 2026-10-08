@@ -83,7 +83,7 @@ Application Android Kotlin / Jetpack Compose qui analyse l'historique d'appels d
     - Compléments : les numéros, dates et heures des appels, la tranche et l'opérateur (code ARCEP, SIRET), les notes.
     - Validation : email, nom, prénom et téléphone des coordonnées enregistrées. Les consentements et l'envoi restent à l'utilisateur.
   - Comme pour SignalConso, le script (`jalerte_prefill.js`) n'est injecté que sur le formulaire, en HTTPS ; les données restent dans sa fermeture, la commune n'est transmise qu'à l'étape 3 et les coordonnées qu'à l'étape 5.
-  - Alertes envoyées comptabilisées par numéro, quand J'alerte l'Arcep affiche « Votre alerte a été soumise » : une alerte compte pour chacun des numéros qu'elle regroupe, et la fiche rappelle sous le bouton le nombre d'alertes et la date de la dernière. Elles sont stockées dans la même base chiffrée. Le script s'arrête alors et oublie la commune et les coordonnées ; une nouvelle alerte ouverte depuis cette page n'est plus préremplie.
+  - Alertes envoyées comptabilisées par numéro, quand J'alerte l'Arcep affiche « Votre alerte a été soumise » : une alerte compte pour chacun des numéros qu'elle regroupe (un numéro masqué n'a rien sur quoi la compter), et la fiche rappelle sous le bouton le nombre d'alertes et la date de la dernière. Elles sont stockées dans la même base chiffrée. Le script s'arrête alors et oublie la commune et les coordonnées ; une nouvelle alerte ouverte depuis cette page n'est plus préremplie.
 - **Gestion des annotations locales** :
   - Marquage de numéros en favoris ou comme indésirables / démarchage.
   - Ajout de notes personnelles locales associées aux numéros, chiffrées sur le téléphone (SQLCipher, clé Android Keystore).

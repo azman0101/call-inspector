@@ -185,11 +185,16 @@ class ReporterProfileStore internal constructor(
         }
     }
 
-    /** Records an alert the user sent on J'alerte l'Arcep, for each (normalized) number it covered. */
-    suspend fun recordArcepAlert(phoneNumbers: Collection<String>, sentAt: Long) = withContext(Dispatchers.IO) {
+    /**
+     * Records an alert the user sent on J'alerte l'Arcep, for each (normalized) number it covered, and returns
+     * how many numbers that is: none for a hidden number, which has nothing to count it against.
+     */
+    suspend fun recordArcepAlert(phoneNumbers: Collection<String>, sentAt: Long): Int = withContext(Dispatchers.IO) {
+        val numbers = phoneNumbers.filter { it.isNotBlank() }.distinct()
+        if (numbers.isEmpty()) return@withContext 0
         database.beginTransaction()
         try {
-            phoneNumbers.filter { it.isNotBlank() }.distinct().forEach { number ->
+            numbers.forEach { number ->
                 database.insert(
                     "arcep_alerts",
                     SQLiteDatabase.CONFLICT_ABORT,
@@ -203,6 +208,7 @@ class ReporterProfileStore internal constructor(
         } finally {
             database.endTransaction()
         }
+        numbers.size
     }
 
     /** Alerts sent on J'alerte l'Arcep, per normalized phone number. */
