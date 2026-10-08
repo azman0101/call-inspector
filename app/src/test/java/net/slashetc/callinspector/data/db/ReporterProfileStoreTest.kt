@@ -85,6 +85,10 @@ class ReporterProfileStoreTest {
         assertEquals(ReporterProfile(firstName = "Camille", postalCode = "69003", city = "Lyon"), store.load())
         assertFalse(ReporterProfile(postalCode = "69003").isEmpty())
         assertFalse(ReporterProfile(city = "Lyon").isEmpty())
+        // Not SignalConso contact details, though: its step 4 still asks for them.
+        assertFalse(ReporterProfile(postalCode = "69003", city = "Lyon").hasSignalConsoContact())
+        assertTrue(ReporterProfile(email = "camille@example.invalid").hasSignalConsoContact())
+        assertTrue(ReporterProfile(shareContact = false).hasSignalConsoContact())
     }
 
     @Test

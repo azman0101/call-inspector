@@ -24,8 +24,11 @@ data class ReporterProfile(
     val postalCode: String = "",
     val city: String = "",
 ) {
-    fun isEmpty() = firstName.isBlank() && lastName.isBlank() && email.isBlank() && phone.isBlank() &&
-        referenceNumber.isBlank() && shareContact == null && postalCode.isBlank() && city.isBlank()
+    fun isEmpty() = !hasSignalConsoContact() && postalCode.isBlank() && city.isBlank()
+
+    /** Something to prefill in SignalConso's step 4: the postal code and city alone are only J'alerte l'Arcep's. */
+    fun hasSignalConsoContact() = firstName.isNotBlank() || lastName.isNotBlank() || email.isNotBlank() ||
+        phone.isNotBlank() || referenceNumber.isNotBlank() || shareContact != null
 }
 
 /** SignalConso reports the user sent for one number. */

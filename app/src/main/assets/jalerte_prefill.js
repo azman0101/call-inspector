@@ -281,6 +281,8 @@
 
   // The app's ways in for the user's details (null drops them).
   window.__iaFillCommune = function (details) {
+    // Dropped (the profile changed): a new postal code gets a new search, even after a failed one.
+    if (!details) done.commune = false;
     where = details && currentStep() === 3 && onForm() ? details : null;
     run();
   };

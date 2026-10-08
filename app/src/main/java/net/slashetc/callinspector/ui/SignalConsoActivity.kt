@@ -142,7 +142,7 @@ class SignalConsoActivity : ComponentActivity() {
             put("description", description)
         }
 
-        private fun ReporterProfile?.toContactJson(): String = this?.takeUnless { it.isEmpty() }?.let {
+        internal fun ReporterProfile?.toContactJson(): String = this?.takeIf { it.hasSignalConsoContact() }?.let {
             JSONObject()
                 .put("firstName", it.firstName)
                 .put("lastName", it.lastName)
@@ -269,7 +269,7 @@ class SignalConsoActivity : ComponentActivity() {
                             keyboardOpen = keyboardOpen,
                             isDefaultReason = isDefaultReason,
                             hasOperator = operatorName != null,
-                            hasProfile = profile != null,
+                            hasProfile = profile?.hasSignalConsoContact() == true,
                             closed = closedNotes,
                         )
                         notes.forEach { note ->

@@ -2,12 +2,14 @@ package net.slashetc.callinspector.ui
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import net.slashetc.callinspector.data.db.ReporterProfile
 import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.FormStep
 import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.Note
 import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.PageState
 import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.contactDelivery
 import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.parsePageState
 import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.prefillInjection
+import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.toContactJson
 import net.slashetc.callinspector.util.toJsExpression
 import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.visibleNotes
 import org.json.JSONObject
@@ -163,5 +165,12 @@ class SignalConsoActivityTest {
             listOf(Note.PREFILLED),
             visibleNotes(FormStep.OTHER, false, false, isDefaultReason = false, hasOperator = false, hasProfile = true, closed = emptySet())
         )
+    }
+
+    @Test
+    fun `a profile with only J'alerte l'Arcep's commune gives SignalConso no contact`() {
+        assertEquals("null", ReporterProfile(postalCode = "69003", city = "Lyon").toContactJson())
+        assertTrue(ReporterProfile(email = "camille@example.invalid", postalCode = "69003").toContactJson().contains("camille@"))
+        assertFalse(ReporterProfile(email = "camille@example.invalid", postalCode = "69003").toContactJson().contains("69003"))
     }
 }
