@@ -126,6 +126,11 @@ class ReporterProfileStoreTest {
             ReporterProfileStore.open(ctx, FrameworkSQLiteOpenHelperFactory(), callback)
         }
         assertEquals(ReporterProfile("Camille", "Test", "camille@example.invalid", ""), migrated.load())
+        // The report and alert tables added since are there too.
+        migrated.recordReport("0612345678", 1_000L)
+        migrated.recordArcepAlert(listOf("0612345678"), 2_000L)
+        assertEquals(ReportStats(1, 1_000L), migrated.reportStats()["0612345678"])
+        assertEquals(ReportStats(1, 2_000L), migrated.arcepAlertStats()["0612345678"])
     }
 
     @Test
