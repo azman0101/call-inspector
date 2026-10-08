@@ -7,7 +7,10 @@
 //
 // The site is a Wicket application: every choice is sent to the server, which redraws the form. The script
 // makes one such change per pass, then runs again on the redraw (MutationObserver) or, for a change the
-// server does not redraw anything for, shortly after.
+// server does not redraw anything for, shortly after. It changes nothing while a Wicket request is under
+// way: Wicket queues a request made meanwhile and only reads the form when sending it, after the answer to
+// the previous one has redrawn the form and wiped the change (a slow network lost "Non" to the
+// third-party question that way).
 //
 // The page's own scripts see as little of the user's data as possible (as for SignalConso, SR-01):
 // - this file is a function expression the app calls with the plan, which stays in this closure;
@@ -34,8 +37,12 @@
   // The commune the script selected (its value), and one the profile change made stale, to be dropped at step 3.
   var picked = null;
   var stalePick = null;
+  // The profile changed while step 5 is shown: the contact details put in are to be emptied.
+  var staleContact = false;
   // The commune search under way; an answer to an earlier one (made before a profile change) is dropped.
   var search = 0;
+  // The commune it found, selected on the next pass the server is idle for.
+  var found = null;
 
   function onForm() {
     var path = location.pathname;
@@ -85,6 +92,18 @@
 
   function field(selector) {
     return document.querySelector(selector);
+  }
+
+  // Whether a Wicket request is being sent or its answer applied (Wicket.channelManager's busy channels).
+  function wicketBusy() {
+    var channels = window.Wicket && window.Wicket.channelManager && window.Wicket.channelManager.channels;
+    if (!channels) return false;
+    for (var name in channels) if (channels[name] && channels[name].busy) return true;
+    return false;
+  }
+
+  function runLater() {
+    if (!pending) pending = setTimeout(function () { pending = null; run(); }, NEXT_PASS_MS);
   }
 
   // Each step is recognized by a field only it has.
@@ -207,15 +226,24 @@
         var current = communeSelect();
         if (!current || current.value) return;
         if (!item) { openSearch(current); return; }
-        var option = document.createElement('option');
-        option.value = item.id;
-        option.textContent = item.text;
-        current.appendChild(option);
-        current.value = item.id;
-        picked = current.value;
-        changed(current);
+        found = item;
+        run();
       })
       .catch(function () { if (id === search) openSearch(communeSelect()); });
+  }
+
+  function selectFound() {
+    var item = found, select = communeSelect();
+    found = null;
+    if (!select || select.value) return false;
+    var option = document.createElement('option');
+    option.value = item.id;
+    option.textContent = item.text;
+    select.appendChild(option);
+    select.value = item.id;
+    picked = select.value;
+    changed(select);
+    return true;
   }
 
   function searchUrl(select) {
@@ -333,15 +361,22 @@
     window.__iaStep = step;
     // The user's details only live here while the step that needs them is shown.
     if (step !== 5) contact = null;
-    if (step !== 3) where = null;
-    if (step === 3 && stalePick !== null) dropStaleCommune();
+    if (step !== 3) { where = null; found = null; }
     var commune = communeSelect();
-    window.__iaNeedsCommune = step === 3 && !!commune && !commune.value && !where && !done.commune;
+    window.__iaNeedsCommune = step === 3 && !!commune && !commune.value && !where && !done.commune && stalePick === null;
     window.__iaNeedsContact = step === 5 && !contact;
+    // Nothing is changed until the server has answered the last change and redrawn the form.
+    if (wicketBusy()) { runLater(); return; }
+    if (staleContact) {
+      staleContact = false;
+      if (step === 5) { dropContact(); runLater(); return; }
+    }
+    if (step === 3 && stalePick !== null) { dropStaleCommune(); runLater(); return; }
+    if (step === 3 && found && selectFound()) { runLater(); return; }
     if (step === 5 && contact) fillContact();
     if (!plan) return;
     var acted = step === 1 ? step1() : step === 2 ? step2() : step === 3 ? step3() : step === 4 ? step4() : step === 5 ? step5() : false;
-    if (acted && !pending) pending = setTimeout(function () { pending = null; run(); }, NEXT_PASS_MS);
+    if (acted) runLater();
   }
 
   // The app's ways in for the user's details (null drops them).
@@ -351,14 +386,15 @@
     if (!details) {
       done.commune = false;
       search++;
+      found = null;
       if (picked !== null) { stalePick = picked; picked = null; }
     }
     where = details && currentStep() === 3 && onForm() ? details : null;
     run();
   };
   window.__iaFillContact = function (details) {
-    // Dropped (the profile changed): what the script put in the fields shown goes too.
-    if (!details && currentStep() === 5 && onForm() && !sent()) dropContact();
+    // Dropped (the profile changed): what the script put in the fields shown goes too, on the next pass.
+    if (!details && currentStep() === 5) staleContact = true;
     contact = details && currentStep() === 5 && onForm() ? details : null;
     run();
   };
