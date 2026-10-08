@@ -36,6 +36,12 @@
 
         <!-- configChanges: keep the WebView (and the half-filled form) across rotations. -->
         <activity
+            android:name=".ui.ArcepAlertActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@style/Theme.MyApplication" />
+
+        <activity
             android:name=".ui.SignalConsoActivity"
             android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"

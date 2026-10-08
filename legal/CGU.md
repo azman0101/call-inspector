@@ -1,6 +1,6 @@
 # Conditions générales d'utilisation et confidentialité
 
-*Dernière mise à jour : 3 octobre 2026*
+*Dernière mise à jour : 8 octobre 2026*
 
 **Info Opérateur** identifie l'opérateur d'un numéro de téléphone à partir des données publiques de l'ARCEP et aide à signaler le démarchage abusif sur SignalConso. L'application vous demande d'accepter ces conditions à sa première ouverture, puis à chaque modification.
 
@@ -18,8 +18,8 @@ L'application n'est ni éditée, ni approuvée par l'ARCEP, la DGCCRF (SignalCon
 
 ## 3. Vos données restent sur votre téléphone
 
-1. Votre journal d'appels, vos notes, favoris et recherches sont traités sur votre téléphone. L'application ne les envoie nulle part, sauf dans un signalement que vous validez (article 5).
-2. Vos notes, favoris et marquages spam, ainsi que vos coordonnées pour SignalConso et l'historique de vos signalements si vous les enregistrez, sont stockés chiffrés sur le téléphone et exclus des sauvegardes.
+1. Votre journal d'appels, vos notes, favoris et recherches sont traités sur votre téléphone. L'application ne les envoie nulle part, sauf dans un signalement ou une alerte que vous validez (article 5).
+2. Vos notes, favoris et marquages spam, ainsi que vos coordonnées pour SignalConso et J'alerte l'Arcep (dont votre code postal et votre commune) et l'historique de vos signalements et alertes si vous les enregistrez, sont stockés chiffrés sur le téléphone et exclus des sauvegardes.
 3. Aucun compte, aucun identifiant publicitaire, aucun profilage.
 
 ## 4. Connexions réseau
@@ -28,16 +28,19 @@ L'application n'a pas de serveur. Elle se connecte uniquement à :
 
 1. `extranet.arcep.fr`, pour mettre à jour la base de numérotation : au premier démarrage, puis au plus une fois par semaine, et à votre demande (HTTPS avec vérification du certificat). L'application demande d'abord la date des fichiers publics de l'ARCEP et ne les télécharge que s'ils ont changé. Aucune donnée vous concernant n'est envoyée ;
 2. `signal.conso.gouv.fr`, quand vous ouvrez le formulaire de signalement, et `entreprise.signal.conso.gouv.fr`, pour y rechercher l'opérateur par son SIRET ou son nom ;
-3. Sentry (`sentry.io`, hébergé dans l'Union européenne), seulement si vous activez les rapports d'anomalies (article 6) ;
-4. `api.github.com`, pour savoir si une nouvelle version de l'application est publiée et afficher ses nouveautés : au plus une fois par jour, et à votre demande. Seule la liste publique des versions est consultée ; aucune donnée vous concernant n'est envoyée. Vous pouvez le désactiver dans *Observatoire* > *Confidentialité & Données* > *Vérifier les mises à jour*.
+3. `jalerte.arcep.fr`, quand vous ouvrez le formulaire d'alerte de l'Arcep, y compris pour y chercher votre commune à partir de votre code postal ;
+4. Sentry (`sentry.io`, hébergé dans l'Union européenne), seulement si vous activez les rapports d'anomalies (article 6) ;
+5. `api.github.com`, pour savoir si une nouvelle version de l'application est publiée et afficher ses nouveautés : au plus une fois par jour, et à votre demande. Seule la liste publique des versions est consultée ; aucune donnée vous concernant n'est envoyée. Vous pouvez le désactiver dans *Observatoire* > *Confidentialité & Données* > *Vérifier les mises à jour*.
 
-Les liens vers `arcep.fr` et `jalerte.arcep.fr`, ainsi que le téléchargement d'une nouvelle version (`github.com`), s'ouvrent dans votre navigateur.
+Les liens vers `arcep.fr`, ainsi que le téléchargement d'une nouvelle version (`github.com`), s'ouvrent dans votre navigateur.
 
-## 5. Signalement sur SignalConso
+## 5. Signalement sur SignalConso et alerte à l'Arcep
 
 1. L'application pré-remplit le formulaire officiel. Rien n'est envoyé tant que vous ne validez pas la dernière étape.
 2. Le signalement est transmis au service public SignalConso (DGCCRF) : numéro appelant, date(s), description (avec votre note sur l'appel), entreprise signalée et vos coordonnées. Leur traitement relève de la politique de confidentialité de SignalConso, et le site peut utiliser ses propres outils de mesure.
 3. Vérifiez chaque pré-remplissage : faute d'identifier l'appelant, l'entreprise proposée est l'opérateur du numéro, et le motif peut être un motif par défaut. Vous êtes responsable de l'exactitude de votre signalement.
+4. *Alerter l'Arcep* pré-remplit de la même façon J'alerte l'Arcep, la plateforme d'alerte de l'Arcep, pour un appel ou pour tous les appels de démarchage reçus de numéros d'un même opérateur. Sont pré-remplis : le type de numéro, la technologie (5G), l'opérateur auquel l'Arcep a attribué le ou les numéros, une description (numéros, dates et heures des appels, votre note), votre commune et vos coordonnées si vous les avez enregistrées, ainsi que la réponse « Non » aux questions sur les transports, sur le contact avec le service client et sur la transmission de votre alerte à des tiers. Vous pouvez modifier chacune de ces réponses. Rien n'est envoyé tant que vous ne cliquez pas sur « Envoyer mon alerte », et le consentement au traitement de vos données par l'Arcep reste à cocher par vous.
+5. L'alerte est transmise à l'Arcep ; son traitement relève des conditions d'utilisation et de la politique de données personnelles de J'alerte l'Arcep.
 
 ## 6. Rapports d'anomalies (désactivés par défaut)
 

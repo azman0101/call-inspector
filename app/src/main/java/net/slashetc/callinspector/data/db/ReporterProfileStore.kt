@@ -9,8 +9,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * The user's own details, as SignalConso asks for them in step 4 ("Vos coordonnées").
- * [shareContact] answers "Souhaitez-vous partager vos coordonnées avec l'entreprise ?"; null leaves it unanswered.
+ * The user's own details, as SignalConso asks for them in step 4 ("Vos coordonnées") and J'alerte l'Arcep in
+ * its last step. [shareContact] answers SignalConso's "Souhaitez-vous partager vos coordonnées avec
+ * l'entreprise ?"; null leaves it unanswered. [postalCode] and [city] locate the user for J'alerte l'Arcep,
+ * which requires a commune: the city picks it when several share the postal code.
  */
 data class ReporterProfile(
     val firstName: String = "",
@@ -19,12 +21,17 @@ data class ReporterProfile(
     val phone: String = "",
     val referenceNumber: String = "",
     val shareContact: Boolean? = null,
+    val postalCode: String = "",
+    val city: String = "",
 ) {
-    fun isEmpty() = firstName.isBlank() && lastName.isBlank() && email.isBlank() && phone.isBlank() &&
-        referenceNumber.isBlank() && shareContact == null
+    fun isEmpty() = !hasSignalConsoContact() && postalCode.isBlank() && city.isBlank()
+
+    /** Something to prefill in SignalConso's step 4: the postal code and city alone are only J'alerte l'Arcep's. */
+    fun hasSignalConsoContact() = firstName.isNotBlank() || lastName.isNotBlank() || email.isNotBlank() ||
+        phone.isNotBlank() || referenceNumber.isNotBlank() || shareContact != null
 }
 
-/** SignalConso reports the user sent for one number. */
+/** SignalConso reports (or J'alerte l'Arcep alerts) the user sent for one number. */
 data class ReportStats(val count: Int, val lastReportedAt: Long)
 
 /**
@@ -45,7 +52,7 @@ class ReporterProfileStore internal constructor(
         openDatabase(appContext, Schema)
     }
 
-    internal object Schema : SupportSQLiteOpenHelper.Callback(4) {
+    internal object Schema : SupportSQLiteOpenHelper.Callback(6) {
         override fun onCreate(db: SupportSQLiteDatabase) {
             db.execSQL(
                 """
@@ -90,12 +97,30 @@ class ReporterProfileStore internal constructor(
                     """.trimIndent()
                 )
             }
+            if (oldVersion < 5) {
+                // Where the user lives, for J'alerte l'Arcep's commune.
+                db.execSQL("ALTER TABLE reporter_profile ADD COLUMN postal_code TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE reporter_profile ADD COLUMN city TEXT NOT NULL DEFAULT ''")
+            }
+            if (oldVersion < 6) {
+                // Alerts sent on J'alerte l'Arcep, one row per number an alert covered.
+                db.execSQL(
+                    """
+                    CREATE TABLE arcep_alerts (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        phone_number TEXT NOT NULL,
+                        sent_at INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX arcep_alerts_phone ON arcep_alerts (phone_number)")
+            }
         }
     }
 
     suspend fun load(): ReporterProfile? = withContext(Dispatchers.IO) {
         database.query(
-            "SELECT first_name, last_name, email, phone, reference_number, share_contact " +
+            "SELECT first_name, last_name, email, phone, reference_number, share_contact, postal_code, city " +
                 "FROM reporter_profile WHERE id = 1",
             emptyArray()
         ).use {
@@ -107,6 +132,8 @@ class ReporterProfileStore internal constructor(
                 phone = it.getString(3),
                 referenceNumber = it.getString(4),
                 shareContact = if (it.isNull(5)) null else it.getInt(5) != 0,
+                postalCode = it.getString(6),
+                city = it.getString(7),
             )
         }
     }
@@ -120,6 +147,8 @@ class ReporterProfileStore internal constructor(
             put("phone", profile.phone.trim())
             put("reference_number", profile.referenceNumber.trim())
             if (profile.shareContact == null) putNull("share_contact") else put("share_contact", if (profile.shareContact) 1 else 0)
+            put("postal_code", profile.postalCode.trim())
+            put("city", profile.city.trim())
         }
         database.insert("reporter_profile", SQLiteDatabase.CONFLICT_REPLACE, values)
         Unit
@@ -156,6 +185,44 @@ class ReporterProfileStore internal constructor(
         }
     }
 
+    /**
+     * Records an alert the user sent on J'alerte l'Arcep, for each (normalized) number it covered, and returns
+     * how many numbers that is: none for a hidden number, which has nothing to count it against.
+     */
+    suspend fun recordArcepAlert(phoneNumbers: Collection<String>, sentAt: Long): Int = withContext(Dispatchers.IO) {
+        val numbers = phoneNumbers.filter { it.isNotBlank() }.distinct()
+        if (numbers.isEmpty()) return@withContext 0
+        database.beginTransaction()
+        try {
+            numbers.forEach { number ->
+                database.insert(
+                    "arcep_alerts",
+                    SQLiteDatabase.CONFLICT_ABORT,
+                    ContentValues().apply {
+                        put("phone_number", number)
+                        put("sent_at", sentAt)
+                    }
+                )
+            }
+            database.setTransactionSuccessful()
+        } finally {
+            database.endTransaction()
+        }
+        numbers.size
+    }
+
+    /** Alerts sent on J'alerte l'Arcep, per normalized phone number. */
+    suspend fun arcepAlertStats(): Map<String, ReportStats> = withContext(Dispatchers.IO) {
+        database.query(
+            "SELECT phone_number, COUNT(*), MAX(sent_at) FROM arcep_alerts GROUP BY phone_number",
+            emptyArray()
+        ).use {
+            buildMap {
+                while (it.moveToNext()) put(it.getString(0), ReportStats(it.getInt(1), it.getLong(2)))
+            }
+        }
+    }
+
     /** The numbers the user gave for their lines, by line id (see CallLogEntry.lineId). */
     suspend fun lineNumbers(): Map<String, String> = withContext(Dispatchers.IO) {
         database.query("SELECT line_id, phone_number FROM phone_lines", emptyArray()).use {
@@ -183,6 +250,7 @@ class ReporterProfileStore internal constructor(
 
     internal suspend fun clearReports() = withContext(Dispatchers.IO) {
         database.delete("signalconso_reports", null, null)
+        database.delete("arcep_alerts", null, null)
         Unit
     }
 

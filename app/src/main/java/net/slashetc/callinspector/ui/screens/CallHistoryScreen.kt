@@ -58,6 +58,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,6 +69,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.slashetc.callinspector.data.model.CallLogEntry
+import net.slashetc.callinspector.ui.ArcepAlertActivity
 import net.slashetc.callinspector.ui.SignalConsoActivity
 import net.slashetc.callinspector.ui.components.CallDetailBottomSheet
 import net.slashetc.callinspector.ui.components.CallExportSheet
@@ -81,6 +83,7 @@ import net.slashetc.callinspector.ui.theme.WarningAmber
 import net.slashetc.callinspector.ui.theme.WarningAmberSoft
 import net.slashetc.callinspector.viewmodel.ArcepUiState
 import net.slashetc.callinspector.viewmodel.ArcepViewModel
+import net.slashetc.callinspector.util.ArcepAlert
 import net.slashetc.callinspector.viewmodel.CallFilter
 
 private val callFilters = listOf(
@@ -104,7 +107,7 @@ fun CallHistoryScreen(
     ) { isGranted ->
         viewModel.onPermissionResult(isGranted)
     }
-    // A report sent from the form updates the number's report count in the list and the open sheet.
+    // A report (SignalConso) or an alert (J'alerte l'Arcep) sent from its form updates the number's counts.
     val reportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -437,7 +440,9 @@ fun CallHistoryScreen(
             onToggleSpam = { viewModel.toggleSpamFlag(it) },
             onToggleFavorite = { viewModel.toggleFavorite(it) },
             onSaveNote = { phone, note -> viewModel.saveCallNote(phone, note) },
-            onReport = { reported -> reportLauncher.launch(SignalConsoActivity.intent(context, reported, uiState.calls)) }
+            onReport = { reported -> reportLauncher.launch(SignalConsoActivity.intent(context, reported, uiState.calls)) },
+            operatorCalls = remember(call, uiState.calls) { ArcepAlert.callsFromSameOperator(call, uiState.calls) },
+            onAlertArcep = { calls -> reportLauncher.launch(ArcepAlertActivity.intent(context, calls)) }
         )
     }
 

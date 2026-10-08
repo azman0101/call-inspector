@@ -80,6 +80,34 @@ class ReporterProfileStoreTest {
     }
 
     @Test
+    fun `postal code and city are stored for J'alerte l'Arcep`() = runBlocking {
+        store.save(ReporterProfile(firstName = "Camille", postalCode = " 69003 ", city = " Lyon "))
+        assertEquals(ReporterProfile(firstName = "Camille", postalCode = "69003", city = "Lyon"), store.load())
+        assertFalse(ReporterProfile(postalCode = "69003").isEmpty())
+        assertFalse(ReporterProfile(city = "Lyon").isEmpty())
+        // Not SignalConso contact details, though: its step 4 still asks for them.
+        assertFalse(ReporterProfile(postalCode = "69003", city = "Lyon").hasSignalConsoContact())
+        assertTrue(ReporterProfile(email = "camille@example.invalid").hasSignalConsoContact())
+        assertTrue(ReporterProfile(shareContact = false).hasSignalConsoContact())
+    }
+
+    @Test
+    fun `alerts sent to the Arcep are counted per number they covered`() = runBlocking {
+        assertEquals(2, store.recordArcepAlert(listOf("0162000000", "0270000000", "0162000000", ""), 1_000L))
+        assertEquals(1, store.recordArcepAlert(listOf("0162000000"), 2_000L))
+        // A hidden number has nothing to count the alert against.
+        assertEquals(0, store.recordArcepAlert(listOf(""), 3_000L))
+        val stats = store.arcepAlertStats()
+        assertEquals(ReportStats(2, 2_000L), stats["0162000000"])
+        assertEquals(ReportStats(1, 1_000L), stats["0270000000"])
+        assertEquals(2, stats.size)
+        // SignalConso reports are counted apart.
+        assertTrue(store.reportStats().isEmpty())
+        store.clearReports()
+        assertTrue(store.arcepAlertStats().isEmpty())
+    }
+
+    @Test
     fun `a version 1 profile is migrated with defaults`() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.deleteDatabase(ReporterProfileStore.DB_NAME)
@@ -100,6 +128,11 @@ class ReporterProfileStoreTest {
             ReporterProfileStore.open(ctx, FrameworkSQLiteOpenHelperFactory(), callback)
         }
         assertEquals(ReporterProfile("Camille", "Test", "camille@example.invalid", ""), migrated.load())
+        // The report and alert tables added since are there too.
+        migrated.recordReport("0612345678", 1_000L)
+        migrated.recordArcepAlert(listOf("0612345678"), 2_000L)
+        assertEquals(ReportStats(1, 1_000L), migrated.reportStats()["0612345678"])
+        assertEquals(ReportStats(1, 2_000L), migrated.arcepAlertStats()["0612345678"])
     }
 
     @Test
