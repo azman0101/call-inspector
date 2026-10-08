@@ -22,8 +22,8 @@ Dependency-Check task was not available in the review environment.
 
 | ID | Severity | Area | Status |
 | --- | --- | --- | --- |
-| SR-01 | Medium | WebView / personal data | Open |
-| SR-02 | Medium | Data supply chain / CI | Open |
+| SR-01 | Medium | WebView / personal data | Fixed (#58) |
+| SR-02 | Medium | Data supply chain / CI | Fixed (#57) |
 | SR-03 | Low | External URL dispatch | Open |
 | SR-04 | Low | WebView hardening | Open |
 
@@ -71,6 +71,20 @@ at the current step, keep values in a closure rather than globals, clear them im
 and document the remote scripts covered by the trust decision. Add an instrumentation test proving
 that no injection occurs for HTTP, look-alike hosts, unexpected paths, redirects, or error pages.
 
+**Status: fixed in #58.**
+- **Form path only.** The script is injected only on the report form: HTTPS, exact host and the form's
+  path. `SignalConsoReport.isFormUrl` checks the raw path after normalization and refuses encoded
+  characters. The script checks `location` again on every DOM change.
+- **No data in globals.** The plan is the argument of the script, so it stays in a closure.
+- **Contact details at step 4 only.** They are handed over when step 4 asks for them, and kept only
+  while it is shown.
+- **Dropped after use.** Everything is dropped once the report is sent or the page leaves the form, and
+  the WebView is destroyed with the screen.
+- **Tests.** JVM tests cover the URL checks: HTTP, look-alike hosts, other paths, `../` and encoded
+  escapes.
+- **Still open: a contract owned by SignalConso.** The site has a `/{lang}/webview/{path}` mode that
+  could serve as a base.
+
 ### SR-02: ARCEP data can flow from the network to a release without independent approval — Medium
 
 The scheduled `update_arcep.yml` workflow downloads two CSV files from `extranet.arcep.fr`, generates
@@ -90,6 +104,17 @@ require review and normal branch protection; validate content type, download siz
 phone-range syntax, uniqueness, non-empty operator identities, and expected row-count ranges; publish
 the complete source hashes in the pull request; and verify an upstream signature or independently
 published digest if ARCEP makes one available.
+
+**Status: fixed in #57.**
+- **No more scheduled job.** `update_arcep.yml` is removed. The bundled database now changes only
+  through a reviewed pull request, after running `tools/update_arcep_db.py` by hand.
+- **The app updates its own database.** It checks at first launch, once the terms are accepted, then at
+  most weekly. It first asks only for the files' `Last-Modified` dates, and downloads only when they
+  changed.
+- **Downloaded data is checked before use.** TLS pinning applies, and the download size is bounded. Row
+  counts must be plausible (at least 10 000 ranges and 500 operators). The swap is atomic and waits for
+  readers. The source SHA-256 are recorded.
+- **Still open: an upstream signature or published digest.** ARCEP publishes neither.
 
 ### SR-03: Web links can dispatch arbitrary URI schemes — Low
 
@@ -157,9 +182,9 @@ security-relevant settings.
 ## Remediation order
 
 1. Address SR-01 and SR-03 together by introducing and testing a single strict WebView navigation and
-   injection policy.
+   injection policy. (SR-01 fixed in #58.)
 2. Change the ARCEP update job to a pull-request workflow and add structural/data-volume validation
-   (SR-02).
+   (SR-02). (Fixed in #57: the job is removed and the app validates the data it downloads.)
 3. Apply explicit WebView settings and lifecycle cleanup (SR-04).
 4. Re-run unit tests, Android lint, and OWASP Dependency-Check in the documented Android build
    environment; triage every finding without suppressing CVSS scores greater than 7.0.
