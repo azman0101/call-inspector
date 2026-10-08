@@ -34,6 +34,8 @@
   // The commune the script selected (its value), and one the profile change made stale, to be dropped at step 3.
   var picked = null;
   var stalePick = null;
+  // The commune search under way; an answer to an earlier one (made before a profile change) is dropped.
+  var search = 0;
 
   function onForm() {
     var path = location.pathname;
@@ -192,6 +194,7 @@
     done.commune = true;
     var url = searchUrl(select);
     if (!url || !where.postalCode) { openSearch(select); return; }
+    var id = ++search;
     var params = new URLSearchParams({
       q: where.postalCode, page: '1', 'wicket-ajax': 'true',
       'wicket-ajax-baseurl': location.protocol + '//' + location.host + location.pathname
@@ -199,6 +202,7 @@
     fetch(url + (url.indexOf('?') < 0 ? '?' : '&') + params.toString(), { credentials: 'same-origin' })
       .then(function (response) { return response.json(); })
       .then(function (result) {
+        if (id !== search) return;
         var item = pickCommune((result && result.items) || [], where && where.city);
         var current = communeSelect();
         if (!current || current.value) return;
@@ -211,7 +215,7 @@
         picked = current.value;
         changed(current);
       })
-      .catch(function () { openSearch(communeSelect()); });
+      .catch(function () { if (id === search) openSearch(communeSelect()); });
   }
 
   function searchUrl(select) {
@@ -346,6 +350,7 @@
     // replaces the commune found from the old one.
     if (!details) {
       done.commune = false;
+      search++;
       if (picked !== null) { stalePick = picked; picked = null; }
     }
     where = details && currentStep() === 3 && onForm() ? details : null;
