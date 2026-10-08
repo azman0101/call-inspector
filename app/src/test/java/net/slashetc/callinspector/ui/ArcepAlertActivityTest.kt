@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import net.slashetc.callinspector.data.db.ReporterProfile
 import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.Note
+import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.PROFILE_CHANGED_SCRIPT
 import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.PageState
 import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.communeDelivery
 import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.contactDelivery
@@ -52,6 +53,15 @@ class ArcepAlertActivityTest {
         val commune = JSONObject().put("postalCode", "75011").toString()
         assertEquals("if (window.__iaFillCommune) window.__iaFillCommune(${commune.toJsExpression()});", communeDelivery(commune))
         assertEquals("if (window.__iaFillCommune) window.__iaFillCommune(JSON.parse(\"null\"));", communeDelivery("null"))
+    }
+
+    @Test
+    fun `a profile change only drops what the page holds, it hands nothing over`() {
+        assertEquals(
+            "if (window.__iaFillContact) window.__iaFillContact(JSON.parse(\"null\"));" +
+                "if (window.__iaFillCommune) window.__iaFillCommune(JSON.parse(\"null\"));",
+            PROFILE_CHANGED_SCRIPT
+        )
     }
 
     @Test

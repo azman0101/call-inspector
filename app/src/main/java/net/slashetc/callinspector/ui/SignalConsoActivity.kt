@@ -189,8 +189,9 @@ class SignalConsoActivity : ComponentActivity() {
                 fun useProfile(saved: ReporterProfile?) {
                     profile = saved
                     contactJson = saved.toContactJson()
-                    // Saved or erased while the form is open: the script takes them at step 4 only.
-                    if (SignalConsoReport.isFormUrl(webView.url)) webView.evaluateJavascript(contactDelivery(contactJson), null)
+                    // Saved or erased while the form is open: the script drops the details it holds, and the new
+                    // ones only reach the page when step 4 asks for them (poll below), never at another step.
+                    if (SignalConsoReport.isFormUrl(webView.url)) webView.evaluateJavascript(contactDelivery("null"), null)
                 }
                 LaunchedEffect(Unit) { useProfile(profileStore.load()) }
                 // No JS bridge: the prefill script raises flags (step 4 shown, report sent) and the app polls them.

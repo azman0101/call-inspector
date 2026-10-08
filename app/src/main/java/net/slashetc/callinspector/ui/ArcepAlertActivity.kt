@@ -103,6 +103,13 @@ class ArcepAlertActivity : ComponentActivity() {
         internal fun communeDelivery(communeJson: String): String =
             "if (window.__iaFillCommune) window.__iaFillCommune(${communeJson.toJsExpression()});"
 
+        /**
+         * Run when the profile changes while the form is open: the script drops the details it holds and asks
+         * again at the step that needs them. The new details only go to the page when it asks (poll below),
+         * never at another step, where a page script could catch them on their way in.
+         */
+        internal val PROFILE_CHANGED_SCRIPT = contactDelivery("null") + communeDelivery("null")
+
         internal fun ReporterProfile?.toContactJson(): String = this
             ?.takeIf { it.email.isNotBlank() || it.lastName.isNotBlank() || it.firstName.isNotBlank() || it.phone.isNotBlank() }
             ?.let {
@@ -168,11 +175,8 @@ class ArcepAlertActivity : ComponentActivity() {
                     profile = saved
                     contactJson = saved.toContactJson()
                     communeJson = saved.toCommuneJson()
-                    // Saved or erased while the form is open: the script only takes them at their step.
-                    if (ArcepAlert.isFormUrl(webView.url)) {
-                        webView.evaluateJavascript(contactDelivery(contactJson), null)
-                        webView.evaluateJavascript(communeDelivery(communeJson), null)
-                    }
+                    // Saved or erased while the form is open: the page gets them again only when it asks.
+                    if (ArcepAlert.isFormUrl(webView.url)) webView.evaluateJavascript(PROFILE_CHANGED_SCRIPT, null)
                 }
                 LaunchedEffect(Unit) { useProfile(profileStore.load()) }
                 // No JS bridge: the prefill script raises flags (step shown, details needed) and the app polls them.
