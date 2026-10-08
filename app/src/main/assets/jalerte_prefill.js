@@ -306,6 +306,7 @@
   }
 
   // Step 5, "Validation": the user's contact details, into empty fields only, each value once per field.
+  // One field per pass, as for every other change: whether one was filled.
   function fillContact() {
     var fields = contactFields();
     for (var key in fields) {
@@ -313,10 +314,13 @@
       if (!el || !value || el.value || filled.get(el) === value) continue;
       filled.set(el, value);
       setValue(el, value);
+      return true;
     }
+    return false;
   }
 
   // The fields still holding the details given before are emptied; a value the user typed or changed stays.
+  // One field per pass: whether one was emptied.
   function dropContact() {
     var fields = contactFields();
     for (var key in fields) {
@@ -324,7 +328,9 @@
       if (!el || !filled.has(el) || el.value !== filled.get(el)) continue;
       filled.delete(el);
       setValue(el, '');
+      return true;
     }
+    return false;
   }
 
   // Step 5, "Validation": customer service not contacted, alert not passed on to third parties. The consent
@@ -368,12 +374,12 @@
     // Nothing is changed until the server has answered the last change and redrawn the form.
     if (wicketBusy()) { runLater(); return; }
     if (staleContact) {
+      if (step === 5 && dropContact()) { runLater(); return; }
       staleContact = false;
-      if (step === 5) { dropContact(); runLater(); return; }
     }
     if (step === 3 && stalePick !== null) { dropStaleCommune(); runLater(); return; }
     if (step === 3 && found && selectFound()) { runLater(); return; }
-    if (step === 5 && contact) fillContact();
+    if (step === 5 && contact && fillContact()) { runLater(); return; }
     if (!plan) return;
     var acted = step === 1 ? step1() : step === 2 ? step2() : step === 3 ? step3() : step === 4 ? step4() : step === 5 ? step5() : false;
     if (acted) runLater();
