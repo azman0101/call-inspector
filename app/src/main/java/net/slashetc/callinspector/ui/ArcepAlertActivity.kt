@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -56,6 +57,7 @@ class ArcepAlertActivity : ComponentActivity() {
 
     companion object {
         private const val EXTRA_PLAN_JSON = "plan_json"
+        private const val EXTRA_NUMBERS = "numbers"
         private const val PAGE_POLL_MS = 1500L
 
         /** What the prefill script tells the app; flags only, never the user's data. */
@@ -139,10 +141,15 @@ class ArcepAlertActivity : ComponentActivity() {
                 lines.map(String::trim).filter(String::isNotEmpty).toList()
             }
 
-        /** Opens the form for [calls]: one call, or the calls from the same operator. */
+        /**
+         * Opens the form for [calls]: one call, or the calls from the same operator. The activity result is
+         * RESULT_OK once the alert was sent and counted for each of their numbers.
+         */
         fun intent(context: Context, calls: List<CallLogEntry>): Intent {
             val plan = ArcepAlert.buildPlan(calls, jalerteOperators(context), TimeZone.getDefault())
-            return Intent(context, ArcepAlertActivity::class.java).putExtra(EXTRA_PLAN_JSON, plan.toJson().toString())
+            return Intent(context, ArcepAlertActivity::class.java)
+                .putExtra(EXTRA_PLAN_JSON, plan.toJson().toString())
+                .putStringArrayListExtra(EXTRA_NUMBERS, ArrayList(calls.map { it.normalizedNumber }.filter(String::isNotBlank).distinct()))
         }
     }
 
@@ -151,6 +158,9 @@ class ArcepAlertActivity : ComponentActivity() {
     private var communeJson = "null"
 
     private var webView: WebView? = null
+
+    // A form opened from the app counts as one alert at most.
+    private var alertRecorded = false
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -161,6 +171,7 @@ class ArcepAlertActivity : ComponentActivity() {
         val profileStore = ReporterProfileStore.getInstance(this)
         val plan = JSONObject(planJson)
         val operatorTyped = plan.isNull("jalerteOperator") && !plan.isNull("operatorName")
+        val numbers = intent.getStringArrayListExtra(EXTRA_NUMBERS).orEmpty()
 
         setContent {
             MyApplicationTheme {
@@ -179,12 +190,28 @@ class ArcepAlertActivity : ComponentActivity() {
                     if (ArcepAlert.isFormUrl(webView.url)) webView.evaluateJavascript(PROFILE_CHANGED_SCRIPT, null)
                 }
                 LaunchedEffect(Unit) { useProfile(profileStore.load()) }
-                // No JS bridge: the prefill script raises flags (step shown, details needed) and the app polls them.
+                // No JS bridge: the prefill script raises flags (step shown, details needed) and the app polls them,
+                // and reads J'alerte l'Arcep's confirmation itself, wherever it shows.
                 LaunchedEffect(Unit) {
-                    while (true) {
+                    while (!alertRecorded) {
                         delay(PAGE_POLL_MS)
+                        if (!ArcepAlert.isJalerteUrl(webView.url)) continue
+                        webView.evaluateJavascript(ArcepAlert.SENT_QUERY) { sent ->
+                            if (sent != "true" || alertRecorded) return@evaluateJavascript
+                            alertRecorded = true
+                            step = 0
+                            webView.evaluateJavascript(PROFILE_CHANGED_SCRIPT, null)
+                            scope.launch {
+                                runCatching { profileStore.recordArcepAlert(numbers, System.currentTimeMillis()) }
+                                    .onSuccess {
+                                        setResult(RESULT_OK)
+                                        Toast.makeText(this@ArcepAlertActivity, "Alerte Arcep comptabilisée", Toast.LENGTH_SHORT).show()
+                                    }
+                            }
+                        }
                         if (!ArcepAlert.isFormUrl(webView.url)) continue
                         webView.evaluateJavascript(PAGE_STATE_QUERY) { json ->
+                            if (alertRecorded) return@evaluateJavascript
                             val state = parsePageState(json)
                             step = state.step
                             if (!ArcepAlert.isFormUrl(webView.url)) return@evaluateJavascript
@@ -289,9 +316,10 @@ class ArcepAlertActivity : ComponentActivity() {
                 return true
             }
 
-            // Only the alert form gets the script and the plan: no other page, no look-alike host.
+            // Only the alert form gets the script and the plan: no other page, no look-alike host, and not
+            // once the alert is sent (a new alert started from there is the user's own).
             override fun onPageFinished(view: WebView, url: String) {
-                if (ArcepAlert.isFormUrl(url)) view.evaluateJavascript(injection, null)
+                if (!alertRecorded && ArcepAlert.isFormUrl(url)) view.evaluateJavascript(injection, null)
             }
         }
         loadUrl(ArcepAlert.URL)

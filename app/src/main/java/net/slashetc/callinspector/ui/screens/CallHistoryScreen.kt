@@ -107,7 +107,7 @@ fun CallHistoryScreen(
     ) { isGranted ->
         viewModel.onPermissionResult(isGranted)
     }
-    // A report sent from the form updates the number's report count in the list and the open sheet.
+    // A report (SignalConso) or an alert (J'alerte l'Arcep) sent from its form updates the number's counts.
     val reportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -442,7 +442,7 @@ fun CallHistoryScreen(
             onSaveNote = { phone, note -> viewModel.saveCallNote(phone, note) },
             onReport = { reported -> reportLauncher.launch(SignalConsoActivity.intent(context, reported, uiState.calls)) },
             operatorCalls = remember(call, uiState.calls) { ArcepAlert.callsFromSameOperator(call, uiState.calls) },
-            onAlertArcep = { calls -> context.startActivity(ArcepAlertActivity.intent(context, calls)) }
+            onAlertArcep = { calls -> reportLauncher.launch(ArcepAlertActivity.intent(context, calls)) }
         )
     }
 

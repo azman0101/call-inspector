@@ -46,6 +46,11 @@ class CallLogRepository(private val context: Context) {
             .onFailure { Log.e(TAG, "Failed to read the SignalConso report log", it) }
             .getOrDefault(emptyMap())
 
+    private suspend fun loadArcepAlertStats(): Map<String, ReportStats> =
+        runCatching { reportStore.arcepAlertStats() }
+            .onFailure { Log.e(TAG, "Failed to read the J'alerte l'Arcep alert log", it) }
+            .getOrDefault(emptyMap())
+
     fun hasPermission(): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
@@ -60,6 +65,7 @@ class CallLogRepository(private val context: Context) {
 
         val entries = mutableListOf<CallLogEntry>()
         val reports = loadReportStats()
+        val alerts = loadArcepAlertStats()
         val notes = loadNotes()
         val projection = arrayOf(
             CallLog.Calls._ID,
@@ -144,6 +150,8 @@ class CallLogRepository(private val context: Context) {
                         userNote = note?.userNote,
                         reportCount = reports[lookup.normalizedNumber]?.count ?: 0,
                         lastReportedAt = reports[lookup.normalizedNumber]?.lastReportedAt,
+                        arcepAlertCount = alerts[lookup.normalizedNumber]?.count ?: 0,
+                        lastArcepAlertAt = alerts[lookup.normalizedNumber]?.lastReportedAt,
                         lineId = record.lineId,
                         viaNumber = record.viaNumber
                     )
@@ -244,6 +252,7 @@ class CallLogRepository(private val context: Context) {
 
         val results = mutableListOf<CallLogEntry>()
         val reports = loadReportStats()
+        val alerts = loadArcepAlertStats()
         val notes = loadNotes()
         val lookups = dbManager.lookupNumbers(sampleNumbers.map { it.first })
 
@@ -281,6 +290,8 @@ class CallLogRepository(private val context: Context) {
                     userNote = note?.userNote,
                     reportCount = reports[lookup.normalizedNumber]?.count ?: 0,
                     lastReportedAt = reports[lookup.normalizedNumber]?.lastReportedAt,
+                    arcepAlertCount = alerts[lookup.normalizedNumber]?.count ?: 0,
+                    lastArcepAlertAt = alerts[lookup.normalizedNumber]?.lastReportedAt,
                     lineId = if (rawNum in secondLineNumbers) SAMPLE_LINE_2 else SAMPLE_LINE_1,
                     viaNumber = if (rawNum in secondLineNumbers) "0639980002" else "0639980001"
                 )

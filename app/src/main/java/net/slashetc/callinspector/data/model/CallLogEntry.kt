@@ -55,6 +55,9 @@ data class CallLogEntry(
     /** SignalConso reports the user sent from the app for this number. */
     val reportCount: Int = 0,
     val lastReportedAt: Long? = null,
+    /** J'alerte l'Arcep alerts the user sent from the app that covered this number. */
+    val arcepAlertCount: Int = 0,
+    val lastArcepAlertAt: Long? = null,
     /**
      * The user's line that received the call (SIM or other phone account), as the call log identifies it:
      * "<phone account component>|<phone account id>". Stable, but not the line's number.

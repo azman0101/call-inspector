@@ -13,6 +13,8 @@
 //   window.__iaFillCommune / window.__iaFillContact, kept in the closure while that step is shown only;
 // - it only works on the alert form, over HTTPS.
 // Other globals are flags: __iaPrefillInstalled, and __iaStep (the step shown, 1 to 5, 0 elsewhere).
+// Once J'alerte l'Arcep confirms the alert ("Votre alerte a été soumise"), everything is dropped and the
+// script stops; the app counts the alert from that message itself.
 (function (plan) {
   var FORM_HOST = 'jalerte.arcep.fr';
   if (window.__iaPrefillInstalled) return;
@@ -263,8 +265,21 @@
     window.__iaStep = 0;
   }
 
+  function sent() {
+    var b = document.body;
+    var text = b ? norm(b.innerText || b.textContent) : '';
+    return text.indexOf('votre alerte a été soumise') !== -1;
+  }
+
   function run() {
     if (!onForm()) { forget(); return; }
+    if (sent()) {
+      forget();
+      delete window.__iaFillContact;
+      delete window.__iaFillCommune;
+      if (observer) observer.disconnect();
+      return;
+    }
     var step = currentStep();
     window.__iaStep = step;
     // The user's details only live here while the step that needs them is shown.
@@ -291,6 +306,7 @@
     run();
   };
 
-  new MutationObserver(run).observe(document.documentElement, { childList: true, subtree: true });
+  var observer = new MutationObserver(run);
+  observer.observe(document.documentElement, { childList: true, subtree: true });
   run();
 })

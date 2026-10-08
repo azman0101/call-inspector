@@ -94,6 +94,24 @@ class ArcepAlertTest {
         ).forEach { assertFalse(it.toString(), ArcepAlert.isFormUrl(it)) }
     }
 
+    @Test
+    fun `the sent message is looked for on any HTTPS page of J'alerte l'Arcep`() {
+        assertTrue(ArcepAlert.isJalerteUrl("https://jalerte.arcep.fr/jalerte/?7"))
+        assertTrue(ArcepAlert.isJalerteUrl("https://jalerte.arcep.fr/confirmation"))
+        assertFalse(ArcepAlert.isJalerteUrl("http://jalerte.arcep.fr/jalerte/?7"))
+        assertFalse(ArcepAlert.isJalerteUrl("https://jalerte.arcep.fr.example.com/"))
+        assertTrue(ArcepAlert.SENT_QUERY.contains("'votre alerte a été soumise'"))
+        // The rendered text only: innerText leaves out the page's scripts.
+        assertTrue(ArcepAlert.SENT_QUERY.contains("b.innerText"))
+    }
+
+    @Test
+    fun `the alert summary counts the alerts and dates the last one`() {
+        assertNull(ArcepAlert.alertSummary(0, null))
+        assertNull(ArcepAlert.alertSummary(2, null))
+        assertEquals("Alerté à l'Arcep 2 fois · dernière le 08/10/2026", ArcepAlert.alertSummary(2, at(8, 18), paris))
+    }
+
     // --- Step 2: the kind of number ---
 
     @Test

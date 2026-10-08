@@ -31,7 +31,7 @@ data class ReporterProfile(
         phone.isNotBlank() || referenceNumber.isNotBlank() || shareContact != null
 }
 
-/** SignalConso reports the user sent for one number. */
+/** SignalConso reports (or J'alerte l'Arcep alerts) the user sent for one number. */
 data class ReportStats(val count: Int, val lastReportedAt: Long)
 
 /**
@@ -52,7 +52,7 @@ class ReporterProfileStore internal constructor(
         openDatabase(appContext, Schema)
     }
 
-    internal object Schema : SupportSQLiteOpenHelper.Callback(5) {
+    internal object Schema : SupportSQLiteOpenHelper.Callback(6) {
         override fun onCreate(db: SupportSQLiteDatabase) {
             db.execSQL(
                 """
@@ -101,6 +101,19 @@ class ReporterProfileStore internal constructor(
                 // Where the user lives, for J'alerte l'Arcep's commune.
                 db.execSQL("ALTER TABLE reporter_profile ADD COLUMN postal_code TEXT NOT NULL DEFAULT ''")
                 db.execSQL("ALTER TABLE reporter_profile ADD COLUMN city TEXT NOT NULL DEFAULT ''")
+            }
+            if (oldVersion < 6) {
+                // Alerts sent on J'alerte l'Arcep, one row per number an alert covered.
+                db.execSQL(
+                    """
+                    CREATE TABLE arcep_alerts (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        phone_number TEXT NOT NULL,
+                        sent_at INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX arcep_alerts_phone ON arcep_alerts (phone_number)")
             }
         }
     }
@@ -172,6 +185,38 @@ class ReporterProfileStore internal constructor(
         }
     }
 
+    /** Records an alert the user sent on J'alerte l'Arcep, for each (normalized) number it covered. */
+    suspend fun recordArcepAlert(phoneNumbers: Collection<String>, sentAt: Long) = withContext(Dispatchers.IO) {
+        database.beginTransaction()
+        try {
+            phoneNumbers.filter { it.isNotBlank() }.distinct().forEach { number ->
+                database.insert(
+                    "arcep_alerts",
+                    SQLiteDatabase.CONFLICT_ABORT,
+                    ContentValues().apply {
+                        put("phone_number", number)
+                        put("sent_at", sentAt)
+                    }
+                )
+            }
+            database.setTransactionSuccessful()
+        } finally {
+            database.endTransaction()
+        }
+    }
+
+    /** Alerts sent on J'alerte l'Arcep, per normalized phone number. */
+    suspend fun arcepAlertStats(): Map<String, ReportStats> = withContext(Dispatchers.IO) {
+        database.query(
+            "SELECT phone_number, COUNT(*), MAX(sent_at) FROM arcep_alerts GROUP BY phone_number",
+            emptyArray()
+        ).use {
+            buildMap {
+                while (it.moveToNext()) put(it.getString(0), ReportStats(it.getInt(1), it.getLong(2)))
+            }
+        }
+    }
+
     /** The numbers the user gave for their lines, by line id (see CallLogEntry.lineId). */
     suspend fun lineNumbers(): Map<String, String> = withContext(Dispatchers.IO) {
         database.query("SELECT line_id, phone_number FROM phone_lines", emptyArray()).use {
@@ -199,6 +244,7 @@ class ReporterProfileStore internal constructor(
 
     internal suspend fun clearReports() = withContext(Dispatchers.IO) {
         database.delete("signalconso_reports", null, null)
+        database.delete("arcep_alerts", null, null)
         Unit
     }
 

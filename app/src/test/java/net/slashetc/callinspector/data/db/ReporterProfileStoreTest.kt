@@ -92,6 +92,20 @@ class ReporterProfileStoreTest {
     }
 
     @Test
+    fun `alerts sent to the Arcep are counted per number they covered`() = runBlocking {
+        store.recordArcepAlert(listOf("0162000000", "0270000000", "0162000000", ""), 1_000L)
+        store.recordArcepAlert(listOf("0162000000"), 2_000L)
+        val stats = store.arcepAlertStats()
+        assertEquals(ReportStats(2, 2_000L), stats["0162000000"])
+        assertEquals(ReportStats(1, 1_000L), stats["0270000000"])
+        assertEquals(2, stats.size)
+        // SignalConso reports are counted apart.
+        assertTrue(store.reportStats().isEmpty())
+        store.clearReports()
+        assertTrue(store.arcepAlertStats().isEmpty())
+    }
+
+    @Test
     fun `a version 1 profile is migrated with defaults`() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.deleteDatabase(ReporterProfileStore.DB_NAME)

@@ -29,6 +29,30 @@ object ArcepAlert {
     const val HOST = "jalerte.arcep.fr"
     const val FORM_PATH = "/jalerte/"
 
+    /** Any HTTPS page of J'alerte l'Arcep: where the "alert sent" message may be looked for (no user data). */
+    fun isJalerteUrl(url: String?): Boolean {
+        val uri = url?.let { runCatching { URI(it).normalize() }.getOrNull() } ?: return false
+        return uri.scheme == "https" && uri.host == HOST && (uri.port == -1 || uri.port == 443)
+    }
+
+    /** What J'alerte l'Arcep shows once an alert is sent. */
+    const val SENT_TEXT = "Votre alerte a été soumise"
+
+    /**
+     * Whether the page shows [SENT_TEXT]: its rendered text only (innerText, not scripts), spaces, case and
+     * apostrophes ignored. Read by the app itself, so it works on whatever page the confirmation is on.
+     */
+    val SENT_QUERY = "(function () { var b = document.body; if (!b) return false; " +
+        "var t = (b.innerText || b.textContent || '').replace(/[’]/g, \"'\").replace(/\\s+/g, ' ').toLowerCase(); " +
+        "return t.indexOf('" + SENT_TEXT.lowercase(Locale.FRANCE) + "') !== -1; })()"
+
+    /** "Alerté à l'Arcep 2 fois · dernière le 08/10/2026", or null when no alert covered the number. */
+    fun alertSummary(alertCount: Int, lastAlertAt: Long?, timeZone: TimeZone = TimeZone.getDefault()): String? {
+        if (alertCount <= 0 || lastAlertAt == null) return null
+        val date = SimpleDateFormat("dd/MM/yyyy", Locale.FRANCE).apply { this.timeZone = timeZone }.format(lastAlertAt)
+        return "Alerté à l'Arcep $alertCount fois · dernière le $date"
+    }
+
     /** The alert form only: HTTPS, exact host and path (its steps are "?0", "?1"… of the same page). */
     fun isFormUrl(url: String?): Boolean {
         val uri = url?.let { runCatching { URI(it).normalize() }.getOrNull() } ?: return false

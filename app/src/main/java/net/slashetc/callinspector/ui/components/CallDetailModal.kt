@@ -76,6 +76,7 @@ import net.slashetc.callinspector.ui.theme.DangerRedSoft
 import net.slashetc.callinspector.ui.theme.SuccessGreen
 import net.slashetc.callinspector.ui.theme.WarningAmber
 import net.slashetc.callinspector.ui.theme.WarningAmberSoft
+import net.slashetc.callinspector.util.ArcepAlert
 import net.slashetc.callinspector.util.SignalConsoReport
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -117,6 +118,7 @@ fun CallDetailBottomSheet(
                 ?.takeIf { SignalConsoReport.isReportable(call) && operatorCalls.size > 1 }
                 ?.let { alert -> { alert(operatorCalls) } },
             operatorCallCount = operatorCalls.size,
+            alertSummary = ArcepAlert.alertSummary(call.arcepAlertCount, call.lastArcepAlertAt),
             onDismiss = onDismiss
         )
     }
@@ -137,6 +139,7 @@ fun ArcepDossierContent(
     onAlertArcep: (() -> Unit)? = null,
     onAlertArcepOperator: (() -> Unit)? = null,
     operatorCallCount: Int = 0,
+    alertSummary: String? = null,
     onDismiss: (() -> Unit)? = null,
     isScrollable: Boolean = true,
     modifier: Modifier = Modifier
@@ -498,6 +501,19 @@ fun ArcepDossierContent(
                 Icon(imageVector = Icons.Default.Campaign, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(text = "Alerter l'Arcep (J'alerte l'Arcep)", fontWeight = FontWeight.SemiBold)
+            }
+            if (alertSummary != null) {
+                Text(
+                    text = alertSummary,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp)
+                        .testTag("alert_summary")
+                )
             }
         }
 
