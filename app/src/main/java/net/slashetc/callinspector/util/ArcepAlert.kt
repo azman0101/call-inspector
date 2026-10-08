@@ -179,7 +179,8 @@ object ArcepAlert {
 
     /**
      * The entry of J'alerte l'Arcep's operator list for the ARCEP's [arcepName], or null (the name then goes
-     * into "Autre"). Same name first; else the one entry whose name starts the ARCEP name ("Legos" for
+     * into "Autre"). An entry named exactly so comes first ("Unixo" rather than "EINOVA / UNIXO"); else the
+     * one entry known under that name; else the one entry whose name starts the ARCEP name ("Legos" for
      * "Legos-Local exchange global operation services"), or that the ARCEP name starts, with at least 5
      * letters so that "Free dial" is not taken for "Free".
      */
@@ -189,7 +190,8 @@ object ArcepAlert {
         val wanted = listOfNotNull(name, aliases[name])
         val names = entries.associateWith(::entryNames)
         for (candidate in wanted) {
-            entries.firstOrNull { candidate in names.getValue(it) }?.let { return it }
+            entries.firstOrNull { normalizeName(it.substringBefore(" · ")) == candidate }?.let { return it }
+            entries.filter { candidate in names.getValue(it) }.singleOrNull()?.let { return it }
         }
         val prefixes = entries.mapNotNull { entry ->
             names.getValue(entry).filter { it.length >= 5 && name.startsWith("$it ") }.maxOfOrNull { it.length }?.let { entry to it }

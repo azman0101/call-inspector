@@ -202,6 +202,15 @@ class ArcepAlertTest {
     }
 
     @Test
+    fun `an entry named exactly so wins over one that also goes by that name`() {
+        // The list has both "EINOVA / UNIXO" (earlier) and "Unixo".
+        assertEquals("Unixo", ArcepAlert.matchOperator("Unixo", list))
+        assertEquals("EINOVA / UNIXO", ArcepAlert.matchOperator("Einova", list))
+        // Known under one name by two entries, named by neither: no guess.
+        assertNull(ArcepAlert.matchOperator("Unixo", listOf("EINOVA / UNIXO", "Autre nom / Unixo")))
+    }
+
+    @Test
     fun `a longer ARCEP name is matched by the one entry that starts it`() {
         assertEquals("Legos", ArcepAlert.matchOperator("Legos-Local exchange global operation services", list))
         assertEquals("Koesio", ArcepAlert.matchOperator("Koesio networks", list))
