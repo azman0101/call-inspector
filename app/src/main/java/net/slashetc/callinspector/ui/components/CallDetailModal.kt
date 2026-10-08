@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.LocationOn
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -48,6 +50,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -84,6 +87,9 @@ fun CallDetailBottomSheet(
     onToggleFavorite: (CallLogEntry) -> Unit,
     onSaveNote: (String, String?) -> Unit,
     onReport: ((CallLogEntry) -> Unit)? = null,
+    /** The telemarketing calls from the same operator (see ArcepAlert.callsFromSameOperator). */
+    operatorCalls: List<CallLogEntry> = emptyList(),
+    onAlertArcep: ((List<CallLogEntry>) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -106,6 +112,11 @@ fun CallDetailBottomSheet(
             onSaveNote = { note -> onSaveNote(call.rawNumber, note) },
             onReport = onReport?.takeIf { SignalConsoReport.isReportable(call) }?.let { report -> { report(call) } },
             reportSummary = SignalConsoReport.reportSummary(call.reportCount, call.lastReportedAt),
+            onAlertArcep = onAlertArcep?.takeIf { SignalConsoReport.isReportable(call) }?.let { alert -> { alert(listOf(call)) } },
+            onAlertArcepOperator = onAlertArcep
+                ?.takeIf { SignalConsoReport.isReportable(call) && operatorCalls.size > 1 }
+                ?.let { alert -> { alert(operatorCalls) } },
+            operatorCallCount = operatorCalls.size,
             onDismiss = onDismiss
         )
     }
@@ -123,6 +134,9 @@ fun ArcepDossierContent(
     onSaveNote: ((String?) -> Unit)? = null,
     onReport: (() -> Unit)? = null,
     reportSummary: String? = null,
+    onAlertArcep: (() -> Unit)? = null,
+    onAlertArcepOperator: (() -> Unit)? = null,
+    operatorCallCount: Int = 0,
     onDismiss: (() -> Unit)? = null,
     isScrollable: Boolean = true,
     modifier: Modifier = Modifier
@@ -130,6 +144,30 @@ fun ArcepDossierContent(
     val context = LocalContext.current
     var editingNote by remember { mutableStateOf(userNote ?: "") }
     var isNoteExpanded by remember { mutableStateOf(!userNote.isNullOrBlank()) }
+    var choosingAlert by remember { mutableStateOf(false) }
+
+    if (choosingAlert && onAlertArcep != null && onAlertArcepOperator != null) {
+        AlertDialog(
+            onDismissRequest = { choosingAlert = false },
+            title = { Text("Alerter l'Arcep") },
+            text = {
+                Text(
+                    "Une alerte sur cet appel seulement, ou sur les $operatorCallCount appels de démarchage reçus " +
+                        "de numéros de ${lookup.operatorDisplayName} ? Regrouper les appels montre à l'Arcep un " +
+                        "opérateur dont les numéros servent souvent à démarcher.",
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { choosingAlert = false; onAlertArcepOperator() }) {
+                    Text("Les $operatorCallCount appels")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { choosingAlert = false; onAlertArcep() }) { Text("Cet appel") }
+            }
+        )
+    }
 
     val scrollModifier = if (isScrollable) {
         Modifier.verticalScroll(rememberScrollState())
@@ -445,6 +483,21 @@ fun ArcepDossierContent(
                         .padding(top = 4.dp)
                         .testTag("report_summary")
                 )
+            }
+        }
+
+        if (onAlertArcep != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { if (onAlertArcepOperator != null) choosingAlert = true else onAlertArcep() },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("alert_arcep_button")
+            ) {
+                Icon(imageVector = Icons.Default.Campaign, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = "Alerter l'Arcep (J'alerte l'Arcep)", fontWeight = FontWeight.SemiBold)
             }
         }
 

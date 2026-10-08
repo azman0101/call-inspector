@@ -9,8 +9,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * The user's own details, as SignalConso asks for them in step 4 ("Vos coordonnées").
- * [shareContact] answers "Souhaitez-vous partager vos coordonnées avec l'entreprise ?"; null leaves it unanswered.
+ * The user's own details, as SignalConso asks for them in step 4 ("Vos coordonnées") and J'alerte l'Arcep in
+ * its last step. [shareContact] answers SignalConso's "Souhaitez-vous partager vos coordonnées avec
+ * l'entreprise ?"; null leaves it unanswered. [postalCode] and [city] locate the user for J'alerte l'Arcep,
+ * which requires a commune: the city picks it when several share the postal code.
  */
 data class ReporterProfile(
     val firstName: String = "",
@@ -19,9 +21,11 @@ data class ReporterProfile(
     val phone: String = "",
     val referenceNumber: String = "",
     val shareContact: Boolean? = null,
+    val postalCode: String = "",
+    val city: String = "",
 ) {
     fun isEmpty() = firstName.isBlank() && lastName.isBlank() && email.isBlank() && phone.isBlank() &&
-        referenceNumber.isBlank() && shareContact == null
+        referenceNumber.isBlank() && shareContact == null && postalCode.isBlank() && city.isBlank()
 }
 
 /** SignalConso reports the user sent for one number. */
@@ -45,7 +49,7 @@ class ReporterProfileStore internal constructor(
         openDatabase(appContext, Schema)
     }
 
-    internal object Schema : SupportSQLiteOpenHelper.Callback(4) {
+    internal object Schema : SupportSQLiteOpenHelper.Callback(5) {
         override fun onCreate(db: SupportSQLiteDatabase) {
             db.execSQL(
                 """
@@ -90,12 +94,17 @@ class ReporterProfileStore internal constructor(
                     """.trimIndent()
                 )
             }
+            if (oldVersion < 5) {
+                // Where the user lives, for J'alerte l'Arcep's commune.
+                db.execSQL("ALTER TABLE reporter_profile ADD COLUMN postal_code TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE reporter_profile ADD COLUMN city TEXT NOT NULL DEFAULT ''")
+            }
         }
     }
 
     suspend fun load(): ReporterProfile? = withContext(Dispatchers.IO) {
         database.query(
-            "SELECT first_name, last_name, email, phone, reference_number, share_contact " +
+            "SELECT first_name, last_name, email, phone, reference_number, share_contact, postal_code, city " +
                 "FROM reporter_profile WHERE id = 1",
             emptyArray()
         ).use {
@@ -107,6 +116,8 @@ class ReporterProfileStore internal constructor(
                 phone = it.getString(3),
                 referenceNumber = it.getString(4),
                 shareContact = if (it.isNull(5)) null else it.getInt(5) != 0,
+                postalCode = it.getString(6),
+                city = it.getString(7),
             )
         }
     }
@@ -120,6 +131,8 @@ class ReporterProfileStore internal constructor(
             put("phone", profile.phone.trim())
             put("reference_number", profile.referenceNumber.trim())
             if (profile.shareContact == null) putNull("share_contact") else put("share_contact", if (profile.shareContact) 1 else 0)
+            put("postal_code", profile.postalCode.trim())
+            put("city", profile.city.trim())
         }
         database.insert("reporter_profile", SQLiteDatabase.CONFLICT_REPLACE, values)
         Unit

@@ -80,6 +80,14 @@ class ReporterProfileStoreTest {
     }
 
     @Test
+    fun `postal code and city are stored for J'alerte l'Arcep`() = runBlocking {
+        store.save(ReporterProfile(firstName = "Camille", postalCode = " 69003 ", city = " Lyon "))
+        assertEquals(ReporterProfile(firstName = "Camille", postalCode = "69003", city = "Lyon"), store.load())
+        assertFalse(ReporterProfile(postalCode = "69003").isEmpty())
+        assertFalse(ReporterProfile(city = "Lyon").isEmpty())
+    }
+
+    @Test
     fun `a version 1 profile is migrated with defaults`() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.deleteDatabase(ReporterProfileStore.DB_NAME)

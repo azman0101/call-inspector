@@ -8,7 +8,7 @@ import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.PageState
 import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.contactDelivery
 import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.parsePageState
 import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.prefillInjection
-import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.toJsExpression
+import net.slashetc.callinspector.util.toJsExpression
 import net.slashetc.callinspector.ui.SignalConsoActivity.Companion.visibleNotes
 import org.json.JSONObject
 import org.json.JSONTokener

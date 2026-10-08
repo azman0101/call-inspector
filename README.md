@@ -74,6 +74,15 @@ Application Android Kotlin / Jetpack Compose qui analyse l'historique d'appels d
   - Coordonnées (étape 4 : identité, email, téléphone, numéro de référence, choix de partage avec l'entreprise) mémorisables via « Mes coordonnées » : stockées dans une base locale dédiée (`reporter_profile_secure.db`) chiffrée par SQLCipher, avec une clé protégée par l'Android Keystore (StrongBox si disponible), exclue des sauvegardes et des transferts d'appareil ; elles ne quittent le téléphone que dans un signalement validé par l'utilisateur.
   - L'utilisateur vérifie chaque étape, choisit l'entreprise si besoin et valide lui-même l'envoi.
   - Signalements envoyés comptabilisés par numéro, quand SignalConso affiche son accusé de réception : l'historique indique le nombre de signalements et la date du dernier, rappelés sous le bouton de signalement. Ils sont stockés dans la même base chiffrée.
+- **Alerte à l'Arcep (J'alerte l'Arcep)** :
+  - Depuis la fiche d'un appel reçu, le bouton « Alerter l'Arcep » ouvre [J'alerte l'Arcep](https://jalerte.arcep.fr/jalerte/) dans l'application, pour cet appel ou pour tous les appels de démarchage reçus de numéros attribués au même opérateur (plages de démarchage, numéros marqués comme spam, et le numéro de l'appel). Regroupés, ces appels montrent à l'Arcep un opérateur dont les numéros servent souvent à démarcher, y compris quand l'appelant est à l'étranger et que SignalConso ne peut rien faire.
+  - Préremplissage, étape par étape :
+    - Contexte : particulier, « Fraudes et démarchage », mobile.
+    - Diagnostic : « Démarchage commercial non sollicité » et le type de chaque numéro : centre d'appel, mobile, fixe, étranger, masqué.
+    - Détails : l'opérateur auquel l'Arcep a attribué les numéros, choisi dans la liste de J'alerte l'Arcep (`jalerte_operators.txt`, rapprochement sans accents ni forme juridique, par marque ou par autre nom) ou, à défaut, saisi dans « Autre » ; la commune, cherchée d'après le code postal (et la commune, si plusieurs partagent le code) enregistrés dans « Mes coordonnées ».
+    - Compléments : les numéros, dates et heures des appels, la tranche et l'opérateur (code ARCEP, SIRET), les notes.
+    - Validation : email, nom, prénom et téléphone des coordonnées enregistrées. Les consentements et l'envoi restent à l'utilisateur.
+  - Comme pour SignalConso, le script (`jalerte_prefill.js`) n'est injecté que sur le formulaire, en HTTPS ; les données restent dans sa fermeture, la commune n'est transmise qu'à l'étape 3 et les coordonnées qu'à l'étape 5.
 - **Gestion des annotations locales** :
   - Marquage de numéros en favoris ou comme indésirables / démarchage.
   - Ajout de notes personnelles locales associées aux numéros, chiffrées sur le téléphone (SQLCipher, clé Android Keystore).
@@ -120,8 +129,8 @@ Depuis le 1er janvier 2023, la législation française encadre strictement le t�
 
 ### 5. Confidentialité et conditions d'utilisation
 Le texte de référence est [`legal/CGU.md`](legal/CGU.md) : l'application affiche ce même fichier et demande de l'accepter à la première ouverture et à chaque modification. En bref :
-- Journal d'appels, notes, favoris et recherches sont traités sur le téléphone. Seul un signalement SignalConso validé par l'utilisateur transmet des données (au service public SignalConso).
-- Pas de serveur propre : l'application se connecte à l'extranet de l'ARCEP pour mettre à jour sa base (au premier démarrage, puis chaque semaine), à SignalConso pour les signalements, et à Sentry seulement si l'utilisateur l'active.
+- Journal d'appels, notes, favoris et recherches sont traités sur le téléphone. Seuls un signalement SignalConso ou une alerte J'alerte l'Arcep validés par l'utilisateur transmettent des données (au service public SignalConso, à l'Arcep).
+- Pas de serveur propre : l'application se connecte à l'extranet de l'ARCEP pour mettre à jour sa base (au premier démarrage, puis chaque semaine), à SignalConso et à J'alerte l'Arcep pour les signalements, et à Sentry seulement si l'utilisateur l'active.
 - Rapports d'anomalies désactivés par défaut. S'ils sont activés : données techniques pseudonymes (identifiant d'installation aléatoire), sans numéro, contact, note, nom ni email.
 
 ---
