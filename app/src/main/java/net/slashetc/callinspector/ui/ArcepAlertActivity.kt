@@ -73,13 +73,13 @@ class ArcepAlertActivity : ComponentActivity() {
                 ?: PageState(step = 0, needsContact = false, needsCommune = false)
 
         /** The notes above the form. Each is short, shown at the step it is about, and can be closed. */
-        internal enum class Note { PREFILLED, OPERATOR_TYPED, NO_POSTAL_CODE, PROFILE }
+        internal enum class Note { PREFILLED, OPERATOR, NO_POSTAL_CODE, PROFILE }
 
         /** The notes to show; none while the keyboard is open, the form needs the whole height to type in. */
         internal fun visibleNotes(
             step: Int,
             keyboardOpen: Boolean,
-            operatorTyped: Boolean,
+            hasOperator: Boolean,
             hasPostalCode: Boolean,
             hasContact: Boolean,
             closed: Set<Note>,
@@ -87,10 +87,21 @@ class ArcepAlertActivity : ComponentActivity() {
             if (keyboardOpen) return emptyList()
             return buildList {
                 if (step <= 2) add(Note.PREFILLED)
-                if (step == 3 && operatorTyped) add(Note.OPERATOR_TYPED)
+                if (step == 3 && hasOperator) add(Note.OPERATOR)
                 if (step == 3 && !hasPostalCode) add(Note.NO_POSTAL_CODE)
                 if (step == 5 && !hasContact) add(Note.PROFILE)
             }.filterNot { it in closed }
+        }
+
+        /**
+         * Step 3's reminder of the operator the ARCEP assigned the number(s) to, which the user may not have in
+         * mind when checking the operator, and how the form names it.
+         */
+        internal fun operatorNote(operatorName: String, jalerteOperator: String?): String = when {
+            jalerteOperator == null -> "Opérateur attribué par l'Arcep : $operatorName. Absent de la liste : saisi dans « Autre »."
+            ArcepAlert.normalizeName(jalerteOperator) == ArcepAlert.normalizeName(operatorName) ->
+                "Opérateur attribué par l'Arcep : $operatorName."
+            else -> "Opérateur attribué par l'Arcep : $operatorName, « $jalerteOperator » dans la liste."
         }
 
         /** The prefill script, called with the plan: the plan stays in its closure, never in a global. */
@@ -170,7 +181,8 @@ class ArcepAlertActivity : ComponentActivity() {
         val injection = prefillInjection(prefillScript, planJson)
         val profileStore = ReporterProfileStore.getInstance(this)
         val plan = JSONObject(planJson)
-        val operatorTyped = plan.isNull("jalerteOperator") && !plan.isNull("operatorName")
+        val operatorName = plan.optString("operatorName").takeUnless { plan.isNull("operatorName") || it.isBlank() }
+        val jalerteOperator = plan.optString("jalerteOperator").takeUnless { plan.isNull("jalerteOperator") || it.isBlank() }
         val numbers = intent.getStringArrayListExtra(EXTRA_NUMBERS).orEmpty()
 
         setContent {
@@ -268,7 +280,7 @@ class ArcepAlertActivity : ComponentActivity() {
                         val notes = visibleNotes(
                             step = step,
                             keyboardOpen = keyboardOpen,
-                            operatorTyped = operatorTyped,
+                            hasOperator = operatorName != null,
                             hasPostalCode = !profile?.postalCode.isNullOrBlank(),
                             hasContact = profile.toContactJson() != "null",
                             closed = closedNotes,
@@ -278,12 +290,17 @@ class ArcepAlertActivity : ComponentActivity() {
                                 text = when (note) {
                                     Note.PREFILLED -> "Champs préremplis depuis votre journal d'appels. Vérifiez chaque étape : " +
                                         "rien n'est envoyé sans votre validation."
-                                    Note.OPERATOR_TYPED -> "Opérateur absent de la liste de l'Arcep : son nom est saisi dans « Autre »."
+                                    Note.OPERATOR -> operatorNote(operatorName.orEmpty(), jalerteOperator)
                                     Note.NO_POSTAL_CODE -> "Commune obligatoire : enregistrez votre code postal avec l'icône en haut " +
                                         "à droite pour la préremplir."
                                     Note.PROFILE -> "Mémorisez vos coordonnées sur ce téléphone avec l'icône en haut à droite."
                                 },
-                                highlighted = note != Note.PREFILLED,
+                                // A reminder only, unless the operator had to be typed in « Autre ».
+                                highlighted = when (note) {
+                                    Note.PREFILLED -> false
+                                    Note.OPERATOR -> jalerteOperator == null
+                                    else -> true
+                                },
                                 onClose = { closedNotes = closedNotes + note }
                             )
                         }

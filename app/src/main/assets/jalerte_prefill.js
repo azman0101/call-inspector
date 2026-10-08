@@ -1,6 +1,9 @@
 // Prefills J'alerte l'Arcep (jalerte.arcep.fr/jalerte/) for telemarketing calls. It only picks options and
 // fills empty fields, each at most once, and never clicks "Poursuivre" or "Envoyer mon alerte": the user
-// reviews every step and sends the alert. An option or field the user already set is left alone.
+// reviews every step and sends the alert. An option or field the user already set is left alone. Where it
+// answers for the user (5G, not in transport, customer service not contacted, no transmission to third
+// parties), it gives the answer they asked for, and they can change it; the consent to the Arcep's
+// processing stays theirs to tick.
 //
 // The site is a Wicket application: every choice is sent to the server, which redraws the form. The script
 // makes one such change per pass, then runs again on the redraw (MutationObserver) or, for a change the
@@ -151,10 +154,10 @@
     return false;
   }
 
-  // Step 3, "Détails": the operator the ARCEP assigned the number to, from J'alerte l'Arcep's list or in
-  // "Autre"; the technology is not applicable to a call.
+  // Step 3, "Détails": 5G, the operator the ARCEP assigned the number to (from J'alerte l'Arcep's list or in
+  // "Autre"), not in transport, and the commune.
   function step3() {
-    if (chooseOnce('technologieContainer:technologie', 'NON_APPLICABLE')) return true;
+    if (chooseOnce('technologieContainer:technologie', 'CINQ_G')) return true;
     var select = field('select[name="operateurPrincipalContainer:operateurPrincipal"]');
     var other = field('input[name="operateurPrincipalAutreContainer:operateurPrincipalAutre"]');
     if (!done.operator && select) {
@@ -172,6 +175,7 @@
         if (other && plan.operatorName) { setValue(other, plan.operatorName); return true; }
       }
     }
+    if (pickOnce('localisationContainer:transports', 'Non')) return true;
     if (where) fillCommune();
     return false;
   }
@@ -291,6 +295,12 @@
     }
   }
 
+  // Step 5, "Validation": customer service not contacted, alert not passed on to third parties. The consent
+  // to the Arcep's processing, the rating and the sending are the user's.
+  function step5() {
+    return pickOnce('serviceClientContainer:contacte', 'Non') || pickOnce('consentementTiers', 'Non');
+  }
+
   function forget() {
     plan = null;
     contact = null;
@@ -326,7 +336,7 @@
     window.__iaNeedsContact = step === 5 && !contact;
     if (step === 5 && contact) fillContact();
     if (!plan) return;
-    var acted = step === 1 ? step1() : step === 2 ? step2() : step === 3 ? step3() : step === 4 ? step4() : false;
+    var acted = step === 1 ? step1() : step === 2 ? step2() : step === 3 ? step3() : step === 4 ? step4() : step === 5 ? step5() : false;
     if (acted && !pending) pending = setTimeout(function () { pending = null; run(); }, NEXT_PASS_MS);
   }
 

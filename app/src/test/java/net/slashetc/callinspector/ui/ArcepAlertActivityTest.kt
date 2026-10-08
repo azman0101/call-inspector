@@ -8,6 +8,7 @@ import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.PROFILE_CHANGE
 import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.PageState
 import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.communeDelivery
 import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.contactDelivery
+import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.operatorNote
 import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.parsePageState
 import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.prefillInjection
 import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.toCommuneJson
@@ -101,18 +102,19 @@ class ArcepAlertActivityTest {
     private fun notes(
         step: Int,
         keyboardOpen: Boolean = false,
-        operatorTyped: Boolean = false,
+        hasOperator: Boolean = false,
         hasPostalCode: Boolean = true,
         hasContact: Boolean = true,
         closed: Set<Note> = emptySet(),
-    ) = visibleNotes(step, keyboardOpen, operatorTyped, hasPostalCode, hasContact, closed)
+    ) = visibleNotes(step, keyboardOpen, hasOperator, hasPostalCode, hasContact, closed)
 
     @Test
     fun `each note shows at its step`() {
         assertEquals(listOf(Note.PREFILLED), notes(1))
         assertEquals(listOf(Note.PREFILLED), notes(2))
         assertEquals(emptyList<Note>(), notes(3))
-        assertEquals(listOf(Note.OPERATOR_TYPED, Note.NO_POSTAL_CODE), notes(3, operatorTyped = true, hasPostalCode = false))
+        assertEquals(listOf(Note.OPERATOR, Note.NO_POSTAL_CODE), notes(3, hasOperator = true, hasPostalCode = false))
+        assertEquals(listOf(Note.OPERATOR), notes(3, hasOperator = true))
         assertEquals(emptyList<Note>(), notes(4))
         assertEquals(listOf(Note.PROFILE), notes(5, hasContact = false))
         assertEquals(emptyList<Note>(), notes(5))
@@ -122,6 +124,20 @@ class ArcepAlertActivityTest {
     fun `no note while typing, and a closed note stays closed`() {
         assertEquals(emptyList<Note>(), notes(1, keyboardOpen = true))
         assertEquals(emptyList<Note>(), notes(3, keyboardOpen = true, hasPostalCode = false))
-        assertEquals(listOf(Note.NO_POSTAL_CODE), notes(3, operatorTyped = true, hasPostalCode = false, closed = setOf(Note.OPERATOR_TYPED)))
+        assertEquals(listOf(Note.NO_POSTAL_CODE), notes(3, hasOperator = true, hasPostalCode = false, closed = setOf(Note.OPERATOR)))
+    }
+
+    @Test
+    fun `step 3 recalls the operator the ARCEP assigned the number to, and how the list names it`() {
+        assertEquals("Opérateur attribué par l'Arcep : Unixo.", operatorNote("Unixo", "Unixo"))
+        assertEquals("Opérateur attribué par l'Arcep : ORANGE SA.", operatorNote("ORANGE SA", "Orange"))
+        assertEquals(
+            "Opérateur attribué par l'Arcep : Kav El International, « Kavokom / Kav El International » dans la liste.",
+            operatorNote("Kav El International", "Kavokom / Kav El International")
+        )
+        assertEquals(
+            "Opérateur attribué par l'Arcep : Opérateur Inconnu. Absent de la liste : saisi dans « Autre ».",
+            operatorNote("Opérateur Inconnu", null)
+        )
     }
 }
