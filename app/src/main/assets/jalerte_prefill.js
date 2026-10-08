@@ -11,6 +11,8 @@
 // - the user's commune (postal code, city) and contact details are not injected with it: the script raises
 //   window.__iaNeedsCommune at step 3 and window.__iaNeedsContact at step 5, and the app then hands them to
 //   window.__iaFillCommune / window.__iaFillContact, kept in the closure while that step is shown only;
+// - when the user changes their saved details, the app sends null: the script drops what it holds, and the
+//   commune or contact fields still holding what it put there are emptied, so the new details go in;
 // - it only works on the alert form, over HTTPS.
 // Other globals are flags: __iaPrefillInstalled, and __iaStep (the step shown, 1 to 5, 0 elsewhere).
 // Once J'alerte l'Arcep confirms the alert ("Votre alerte a été soumise"), everything is dropped and the
@@ -26,6 +28,9 @@
   var filled = new WeakMap();
   var pending = null;
   var NEXT_PASS_MS = 400;
+  // The commune the script selected (its value), and one the profile change made stale, to be dropped at step 3.
+  var picked = null;
+  var stalePick = null;
 
   function onForm() {
     var path = location.pathname;
@@ -199,6 +204,7 @@
         option.textContent = item.text;
         current.appendChild(option);
         current.value = item.id;
+        picked = current.value;
         changed(current);
       })
       .catch(function () { openSearch(communeSelect()); });
@@ -222,6 +228,20 @@
     return starts.length === 1 ? starts[0] : null;
   }
 
+  // The commune selected from the old postal code goes, unless the user chose another one since.
+  function dropStaleCommune() {
+    var select = communeSelect();
+    if (!select) return;
+    if (select.value === stalePick) {
+      for (var i = select.options.length - 1; i >= 0; i--) {
+        if (select.options[i].value === stalePick) select.remove(i);
+      }
+      select.value = '';
+      changed(select);
+    }
+    stalePick = null;
+  }
+
   function openSearch(select) {
     var $ = window.jQuery;
     if (!select || !$ || !$(select).data('select2') || !where || !where.postalCode) return;
@@ -240,19 +260,34 @@
     return true;
   }
 
-  // Step 5, "Validation": the user's contact details, into empty fields only, each value once per field.
-  function fillContact() {
-    var fields = {
+  function contactFields() {
+    return {
       email: field('input[name="utilisateurContainer:email"]'),
       lastName: field('input[name="utilisateurContainer:nom"]'),
       firstName: field('input[name="utilisateurContainer:prenom"]'),
       phone: field('input[name="utilisateurContainer:telephone"]')
     };
+  }
+
+  // Step 5, "Validation": the user's contact details, into empty fields only, each value once per field.
+  function fillContact() {
+    var fields = contactFields();
     for (var key in fields) {
       var el = fields[key], value = contact[key];
       if (!el || !value || el.value || filled.get(el) === value) continue;
       filled.set(el, value);
       setValue(el, value);
+    }
+  }
+
+  // The fields still holding the details given before are emptied; a value the user typed or changed stays.
+  function dropContact() {
+    var fields = contactFields();
+    for (var key in fields) {
+      var el = fields[key];
+      if (!el || !filled.has(el) || el.value !== filled.get(el)) continue;
+      filled.delete(el);
+      setValue(el, '');
     }
   }
 
@@ -285,6 +320,7 @@
     // The user's details only live here while the step that needs them is shown.
     if (step !== 5) contact = null;
     if (step !== 3) where = null;
+    if (step === 3 && stalePick !== null) dropStaleCommune();
     var commune = communeSelect();
     window.__iaNeedsCommune = step === 3 && !!commune && !commune.value && !where && !done.commune;
     window.__iaNeedsContact = step === 5 && !contact;
@@ -296,12 +332,18 @@
 
   // The app's ways in for the user's details (null drops them).
   window.__iaFillCommune = function (details) {
-    // Dropped (the profile changed): a new postal code gets a new search, even after a failed one.
-    if (!details) done.commune = false;
+    // Dropped (the profile changed): a new postal code gets a new search, even after a failed one, and
+    // replaces the commune found from the old one.
+    if (!details) {
+      done.commune = false;
+      if (picked !== null) { stalePick = picked; picked = null; }
+    }
     where = details && currentStep() === 3 && onForm() ? details : null;
     run();
   };
   window.__iaFillContact = function (details) {
+    // Dropped (the profile changed): what the script put in the fields shown goes too.
+    if (!details && currentStep() === 5 && onForm() && !sent()) dropContact();
     contact = details && currentStep() === 5 && onForm() ? details : null;
     run();
   };

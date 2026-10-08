@@ -10,6 +10,8 @@
 // - the contact details are not injected with it: the script raises window.__icNeedsContact once step 4
 //   shows, and the app then hands them to window.__icFillContact, kept in the closure while step 4 is
 //   displayed only (what is typed into the form is the page's anyway);
+// - when the user changes their saved details, the app sends null: the script drops what it holds, and the
+//   fields still holding what it put there are emptied, so the new details go in;
 // - everything is dropped once the report is sent or the page leaves the form.
 // The only globals are flags and that entry point: __icPrefillInstalled, __icNeedsContact, __icReportSent,
 // __icStep (which step shows, so the app only displays the notes that step needs) and __icPastFirstStep
@@ -117,16 +119,20 @@
     return null;
   }
 
-  // Saved contact details go into empty fields only, and never twice into the same field: a value the
-  // user erased stays erased. SignalConso rebuilds step 4 empty after "Précédent", which gets refilled.
-  function fillContact() {
-    var fields = {
+  function contactFields() {
+    return {
       firstName: document.querySelector('input[name="firstName"]'),
       lastName: document.querySelector('input[name="lastName"]'),
       email: document.querySelector('input[name="email"]'),
       phone: contactPhoneInput(),
       referenceNumber: document.querySelector('input[name="referenceNumber"]')
     };
+  }
+
+  // Saved contact details go into empty fields only, and never twice into the same field: a value the
+  // user erased stays erased. SignalConso rebuilds step 4 empty after "Précédent", which gets refilled.
+  function fillContact() {
+    var fields = contactFields();
     for (var key in fields) {
       var el = fields[key], value = contact[key];
       if (!el || !value || el.value || contactFilled.get(el) === value) continue;
@@ -135,6 +141,18 @@
     }
     if (contact.shareContact === true || contact.shareContact === false) {
       pickShareChoice(contact.shareContact ? 'Je partage mes coordonnées' : 'Je ne partage pas mes coordonnées');
+    }
+  }
+
+  // The fields still holding the details given before are emptied; a value the user typed or changed stays.
+  // The share choice stays as it is: a radio can't be unset, and the user sees it.
+  function dropContact() {
+    var fields = contactFields();
+    for (var key in fields) {
+      var el = fields[key];
+      if (!el || !contactFilled.has(el) || el.value !== contactFilled.get(el)) continue;
+      contactFilled.delete(el);
+      setValue(el, '');
     }
   }
 
@@ -244,8 +262,10 @@
     fillOnce('description', document.querySelector('textarea'), plan.description);
   }
 
-  // The app's way in for the contact details, at step 4 only (null drops them, after "Effacer").
+  // The app's way in for the contact details, at step 4 only (null drops them, after a profile change, with
+  // what the script put in the fields shown).
   window.__icFillContact = function (details) {
+    if (!details && contactStep() && onForm()) dropContact();
     contact = details && contactStep() && onForm() ? details : null;
     run();
   };
