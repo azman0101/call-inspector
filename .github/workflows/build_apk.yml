@@ -210,9 +210,11 @@ jobs:
     if: ${{ needs.release-window.outputs.publish == 'true' }}
     runs-on: ubuntu-24.04
     environment: release
+    # queue: max keeps every waiting publication (first come, first served): the default queue holds one
+    # pending job and cancels it when another arrives.
     concurrency:
       group: release-publish
-      cancel-in-progress: false
+      queue: max
     # contents: write to commit the badge link on main and to create the tag and the GitHub release.
     permissions:
       contents: write
