@@ -69,15 +69,30 @@ class AppUpdateUiTest {
     }
 
     @Test
-    fun `the notes sheet lists the pull requests only and offers the newer apk`() {
+    fun `the notes sheet lists the pull requests only, by kind, and offers the newer apk`() {
         composeRule.setContent { ReleaseNotesSheet(release, offerDownload = true, onDismiss = {}) }
 
         composeRule.onNodeWithText("Nouveautés de la version 1.0.180").assertExists()
         composeRule.onAllNodesWithTag("release_change").assertCountEquals(2)
-        composeRule.onNodeWithText("feat: update check (#53)").assertExists()
+        composeRule.onNodeWithTag("release_group_feature").assertExists()
+        composeRule.onNodeWithTag("release_group_fix").assertExists()
+        composeRule.onNodeWithTag("release_group_other").assertDoesNotExist()
+        composeRule.onNodeWithText("Update check (#53)").assertExists()
+        composeRule.onNodeWithText("Something else (#54)").assertExists()
+        composeRule.onNodeWithTag("release_notes_since").assertDoesNotExist()
         composeRule.onNodeWithText("SHA-256", substring = true).assertDoesNotExist()
         composeRule.onNodeWithTag("release_notes_download").performClick()
         assertEquals(release.apkUrl, lastStartedUrl())
+    }
+
+    @Test
+    fun `the notes of several releases say which version they follow`() {
+        val cumulated = release.copy(changes = listOf("feat: first (#52)") + release.changes, changesSince = "1.0.174")
+        composeRule.setContent { ReleaseNotesSheet(cumulated, offerDownload = true, onDismiss = {}) }
+
+        composeRule.onNodeWithText("Changements de toutes les versions publiées depuis la 1.0.174").assertExists()
+        composeRule.onAllNodesWithTag("release_change").assertCountEquals(3)
+        composeRule.onNodeWithText("First (#52)").assertExists()
     }
 
     @Test
