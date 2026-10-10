@@ -75,6 +75,7 @@ import net.slashetc.callinspector.ui.components.CallDetailBottomSheet
 import net.slashetc.callinspector.ui.components.CallExportSheet
 import net.slashetc.callinspector.ui.components.CallItemCard
 import net.slashetc.callinspector.ui.components.PermissionRationaleDialog
+import net.slashetc.callinspector.ui.components.copyOnLongPress
 import net.slashetc.callinspector.ui.theme.ArcepBlue
 import net.slashetc.callinspector.ui.theme.ArcepNavy
 import net.slashetc.callinspector.ui.theme.DangerRed
@@ -385,11 +386,13 @@ fun CallHistoryScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                val countText = "${uiState.filteredCalls.size} appel${if (uiState.filteredCalls.size > 1) "s" else ""} · " +
+                    "$numberCount numéro${if (numberCount > 1) "s" else ""}"
                 Text(
-                    text = "${uiState.filteredCalls.size} appel${if (uiState.filteredCalls.size > 1) "s" else ""} · " +
-                        "$numberCount numéro${if (numberCount > 1) "s" else ""}",
+                    text = countText,
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.copyOnLongPress(countText)
                 )
                 TextButton(
                     onClick = { viewModel.openExport(uiState.filteredCalls) },

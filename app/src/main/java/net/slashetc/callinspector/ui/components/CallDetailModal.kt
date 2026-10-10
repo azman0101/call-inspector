@@ -197,14 +197,18 @@ fun ArcepDossierContent(
                         text = cachedName,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.copyOnLongPress(cachedName, sensitive = true)
                     )
                 }
                 Text(
                     text = lookup.formattedNumber,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .copyOnLongPress(lookup.formattedNumber, sensitive = true)
+                        .testTag("dossier_number")
                 )
             }
 
@@ -335,7 +339,10 @@ fun ArcepDossierContent(
                             text = lookup.operatorDisplayName,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier
+                                .copyOnLongPress(lookup.operatorDisplayName)
+                                .testTag("dossier_operator")
                         )
                     }
                 }
@@ -484,6 +491,7 @@ fun ArcepDossierContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 4.dp)
+                        .copyOnLongPress(reportSummary)
                         .testTag("report_summary")
                 )
             }
@@ -512,6 +520,7 @@ fun ArcepDossierContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 4.dp)
+                        .copyOnLongPress(alertSummary)
                         .testTag("alert_summary")
                 )
             }
@@ -608,7 +617,10 @@ private fun DossierRow(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .copyOnLongPress(value)
+                    .testTag("dossier_value_$label"),
                 textAlign = androidx.compose.ui.text.style.TextAlign.End
             )
         }

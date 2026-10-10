@@ -67,6 +67,10 @@ import net.slashetc.callinspector.data.model.ArcepLookupResult
 import net.slashetc.callinspector.ui.components.ArcepDossierContent
 import net.slashetc.callinspector.ui.components.OperatorBadge
 import net.slashetc.callinspector.ui.components.PhoneCategoryBadge
+import net.slashetc.callinspector.ui.components.ProvideCopyActions
+import net.slashetc.callinspector.ui.components.copyActions
+import net.slashetc.callinspector.ui.components.copyOnLongPress
+import net.slashetc.callinspector.ui.components.rememberCopyActions
 import net.slashetc.callinspector.ui.theme.ArcepBlue
 import net.slashetc.callinspector.ui.theme.ArcepNavy
 import net.slashetc.callinspector.viewmodel.ArcepUiState
@@ -298,60 +302,68 @@ private fun PrefixResultCard(
     item: ArcepLookupResult,
     onClick: () -> Unit
 ) {
+    val copyActions = rememberCopyActions()
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
+            .copyActions(copyActions)
             .testTag("prefix_card_${item.range?.ezabpqm ?: item.queryNumber}"),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp)
-        ) {
-            // Header Row: Bloc number on left, Category badge on right
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+        // TalkBack reads the card as one node: it offers one copy action per value.
+        ProvideCopyActions(copyActions) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp)
             ) {
-                Text(
-                    text = "Bloc ${item.range?.ezabpqm ?: item.queryNumber}",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    color = MaterialTheme.colorScheme.primary
+                // Header Row: Bloc number on left, Category badge on right
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    val block = item.range?.ezabpqm ?: item.queryNumber
+                    Text(
+                        text = "Bloc $block",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.copyOnLongPress(block)
+                    )
+
+                    PhoneCategoryBadge(type = item.numberType)
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Operator Badge on its own full-width row
+                OperatorBadge(
+                    operatorName = item.operatorDisplayName,
+                    operatorCode = item.operatorCode
                 )
 
-                PhoneCategoryBadge(type = item.numberType)
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Number range details
+                val trancheDebut = item.range?.trancheDebut
+                val trancheFin = item.range?.trancheFin
+                val trancheText = if (!trancheDebut.isNullOrBlank() && !trancheFin.isNullOrBlank()) {
+                    "$trancheDebut à $trancheFin"
+                } else {
+                    item.blockDisplay
+                }
+                Text(
+                    text = "Tranche : $trancheText",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.copyOnLongPress(trancheText)
+                )
             }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Operator Badge on its own full-width row
-            OperatorBadge(
-                operatorName = item.operatorDisplayName,
-                operatorCode = item.operatorCode
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Number range details
-            val trancheDebut = item.range?.trancheDebut
-            val trancheFin = item.range?.trancheFin
-            val trancheText = if (!trancheDebut.isNullOrBlank() && !trancheFin.isNullOrBlank()) {
-                "$trancheDebut à $trancheFin"
-            } else {
-                item.blockDisplay
-            }
-            Text(
-                text = "Tranche : $trancheText",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }

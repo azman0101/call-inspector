@@ -55,6 +55,22 @@ class WhoCalledTest {
     }
 
     @Test
+    fun `a long press copies each value without its label, the warning has nothing to copy`() {
+        val call = call("0162001122", ArcepOperator("QWLK", "Qwalikom"), name = "Camille")
+        val answer = WhoCalled.answer(call, hasPermission = true)
+
+        assertEquals("01 62 00 11 22", answer.titleCopy)
+        val copies = answer.lines.map { it.copy }
+        assertEquals(PhoneNumberFormatter.formatFullTimestamp(call.timestamp), copies[0])
+        assertEquals("Camille", copies[1])
+        assertTrue(answer.lines[1].sensitive)
+        assertEquals("Qwalikom (QWLK)", copies[2])
+        assertEquals(PhoneNumberType.DEMARCHAGE_COMMERCIAL.label, copies[3])
+        assertNull(copies[4])
+        assertNull(WhoCalled.answer(null, hasPermission = true).titleCopy)
+    }
+
+    @Test
     fun `without the permission or a missed call the tile says so`() {
         assertTrue(WhoCalled.answer(null, hasPermission = false).message.contains("Autorisez l'accès au journal d'appels"))
         assertEquals("Aucun appel manqué dans le journal.", WhoCalled.answer(null, hasPermission = true).message)
