@@ -18,7 +18,7 @@ Téléchargez `info-operateur-<version>.apk` depuis la [dernière release](https
 
 - Chaque build de `main` publie une [release](https://github.com/azman0101/call-inspector/releases) `v1.0.<numéro du run>` : l'APK signé, son fichier `.sha256`, et des notes avec les empreintes, le rapport VirusTotal et les pull requests fusionnées.
 - L'application vérifie au plus une fois par jour si une version plus récente est publiée et l'annonce avec ses nouveautés (réglage *Vérifier les mises à jour*).
-- Le badge VirusTotal mène au rapport de la dernière release. L'analyse est informative : une détection est souvent un faux positif pour une app qui lit le journal d'appels.
+- Le badge VirusTotal mène au rapport de la dernière release analysée : si l'analyse échoue ou n'est pas configurée, il garde son lien précédent. Les notes de chaque release disent si son propre APK a été analysé. L'analyse est informative : une détection est souvent un faux positif pour une app qui lit le journal d'appels.
 - L'APK debug des pull requests est une autre application (« Info Opérateur (debug) », tuile « Qui m'a appelé ? (debug) ») : il s'installe à côté de la release au lieu de la mettre à jour.
 
 ### Vérifier la signature d'un APK de release
