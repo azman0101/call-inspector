@@ -214,4 +214,10 @@ class PhoneNumberFormatterTest {
         assertEquals("Aujourd'hui à 00:30", PhoneNumberFormatter.formatTimestamp(call, now, paris))
         assertEquals("Hier à 18:30", PhoneNumberFormatter.formatTimestamp(call, now, TimeZone.getTimeZone("America/New_York")))
     }
+
+    @Test
+    fun formatFullTimestamp_isTheDateAndTimeInFull_forCopying() {
+        // "Hier à 12:16" on screen; copied, the date it was.
+        assertEquals("02/10/2026 12:16", PhoneNumberFormatter.formatFullTimestamp(at(2026, 10, 2, 12, 16), paris))
+    }
 }

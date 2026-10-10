@@ -73,7 +73,9 @@ fun AppUpdateBanner(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = ArcepNavy,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .copyOnLongPress(release.versionName)
             )
             TextButton(onClick = onShowNotes, modifier = Modifier.testTag("app_update_notes")) {
                 Text("Nouveautés", fontSize = 11.sp, color = ArcepBlue)
@@ -133,7 +135,7 @@ fun ReleaseNotesSheet(
                         Row {
                             Text("•", fontSize = 13.sp, color = ArcepBlue)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(change, fontSize = 13.sp, lineHeight = 17.sp, modifier = Modifier.testTag("release_change"))
+                            Text(change, fontSize = 13.sp, lineHeight = 17.sp, modifier = Modifier.copyOnLongPress(change).testTag("release_change"))
                         }
                     }
                 }

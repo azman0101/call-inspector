@@ -67,6 +67,7 @@ import net.slashetc.callinspector.data.model.ArcepLookupResult
 import net.slashetc.callinspector.ui.components.ArcepDossierContent
 import net.slashetc.callinspector.ui.components.OperatorBadge
 import net.slashetc.callinspector.ui.components.PhoneCategoryBadge
+import net.slashetc.callinspector.ui.components.copyOnLongPress
 import net.slashetc.callinspector.ui.theme.ArcepBlue
 import net.slashetc.callinspector.ui.theme.ArcepNavy
 import net.slashetc.callinspector.viewmodel.ArcepUiState
@@ -319,11 +320,13 @@ private fun PrefixResultCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                val block = item.range?.ezabpqm ?: item.queryNumber
                 Text(
-                    text = "Bloc ${item.range?.ezabpqm ?: item.queryNumber}",
+                    text = "Bloc $block",
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.copyOnLongPress(block)
                 )
 
                 PhoneCategoryBadge(type = item.numberType)
@@ -350,7 +353,8 @@ private fun PrefixResultCard(
             Text(
                 text = "Tranche : $trancheText",
                 fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.copyOnLongPress(trancheText)
             )
         }
     }

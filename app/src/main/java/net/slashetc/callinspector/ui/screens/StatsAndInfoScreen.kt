@@ -61,6 +61,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import net.slashetc.callinspector.ui.components.LegalTermsDialog
+import net.slashetc.callinspector.ui.components.copyOnLongPress
 import net.slashetc.callinspector.util.LegalTerms
 import net.slashetc.callinspector.util.SentryHelper
 import androidx.compose.ui.Alignment
@@ -249,11 +250,13 @@ fun StatsAndInfoScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text("Version officielle :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            val versionDate = stats?.databaseVersionDate ?: "Tue, 15 Sep 2026"
                             Text(
-                                text = stats?.databaseVersionDate ?: "Tue, 15 Sep 2026",
+                                text = versionDate,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.copyOnLongPress(versionDate)
                             )
                         }
 
@@ -263,7 +266,7 @@ fun StatsAndInfoScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("Génération locale :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(genDate, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
+                                Text(genDate, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.copyOnLongPress(genDate))
                             }
                         }
 
@@ -273,7 +276,7 @@ fun StatsAndInfoScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("Dernière décision ARCEP :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(attrDate, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
+                                Text(attrDate, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.copyOnLongPress(attrDate))
                             }
                         }
 
@@ -283,7 +286,13 @@ fun StatsAndInfoScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("Empreinte SHA-256 :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("${sha.take(16)}...", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                // The whole fingerprint, though only its start is shown.
+                                Text(
+                                    "${sha.take(16)}...",
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.copyOnLongPress(sha).testTag("stats_sha256")
+                                )
                             }
                         }
 
@@ -328,11 +337,14 @@ fun StatsAndInfoScreen(
                                     }
                                 }
                             }
+                            val appVersion = "${net.slashetc.callinspector.BuildConfig.VERSION_NAME} (build ${net.slashetc.callinspector.BuildConfig.VERSION_CODE})"
+                            // A tap still counts towards the developer mode.
                             Text(
-                                text = "${net.slashetc.callinspector.BuildConfig.VERSION_NAME} (build ${net.slashetc.callinspector.BuildConfig.VERSION_CODE})",
+                                text = appVersion,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.copyOnLongPress(appVersion)
                             )
                         }
 
@@ -488,10 +500,12 @@ fun StatsAndInfoScreen(
                                         Text(updateStatus.message, fontWeight = FontWeight.Bold, color = SuccessGreen, fontSize = 13.sp)
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
+                                    val summary = "${updateStatus.rangesCount} tranches et ${updateStatus.operatorsCount} opérateurs compilés avec succès (${updateStatus.date})."
                                     Text(
-                                        text = "${updateStatus.rangesCount} tranches et ${updateStatus.operatorsCount} opérateurs compilés avec succès (${updateStatus.date}).",
+                                        text = summary,
                                         fontSize = 11.sp,
-                                        color = Color(0xFF1B5E20)
+                                        color = Color(0xFF1B5E20),
+                                        modifier = Modifier.copyOnLongPress(summary)
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
                                     TextButton(
@@ -517,7 +531,12 @@ fun StatsAndInfoScreen(
                                         Text("Échec de la mise à jour", fontWeight = FontWeight.Bold, color = DangerRed, fontSize = 13.sp)
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text(updateStatus.errorMessage, fontSize = 11.sp, color = Color(0xFFB71C1C))
+                                    Text(
+                                        updateStatus.errorMessage,
+                                        fontSize = 11.sp,
+                                        color = Color(0xFFB71C1C),
+                                        modifier = Modifier.copyOnLongPress(updateStatus.errorMessage)
+                                    )
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                                         TextButton(onClick = { onResetUpdateStatus?.invoke() }) {
@@ -607,8 +626,14 @@ fun StatsAndInfoScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(text = opName, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                                        Text(text = "$count appels ($percent%)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(text = opName, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.copyOnLongPress(opName))
+                                        // The count is the operator's: copied with its name.
+                                        Text(
+                                            text = "$count appels ($percent%)",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.copyOnLongPress("$opName : $count appels ($percent %)")
+                                        )
                                     }
                                 }
                             }
@@ -735,11 +760,13 @@ fun StatsAndInfoScreen(
                                 ) {
                                     Text("Statut du collecteur :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     val isTelemetryActive = isTelemetryEnabled
+                                    val collectorStatus = if (isTelemetryActive) "Actif (Logs + Erreurs)" else "Désactivé (Opt-out)"
                                     Text(
-                                        if (isTelemetryActive) "Actif (Logs + Erreurs)" else "Désactivé (Opt-out)",
+                                        collectorStatus,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (isTelemetryActive) SuccessGreen else DangerRed
+                                        color = if (isTelemetryActive) SuccessGreen else DangerRed,
+                                        modifier = Modifier.copyOnLongPress(collectorStatus)
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(2.dp))
@@ -750,7 +777,7 @@ fun StatsAndInfoScreen(
                                     Text("Point d'ingestion configuré :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     val dsn = SentryHelper.getResolvedDsn(context)
                                     val masked = if (dsn.length > 25) "${dsn.take(16)}...${dsn.takeLast(10)}" else dsn
-                                    Text(masked, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                    Text(masked, fontSize = 11.sp, fontWeight = FontWeight.Medium, modifier = Modifier.copyOnLongPress(masked))
                                 }
                             }
                         }
@@ -1146,7 +1173,10 @@ private fun StatMetricCard(
     Surface(
         color = color.copy(alpha = 0.08f),
         shape = RoundedCornerShape(12.dp),
+        // A count means nothing without what it counts: its label is copied with it.
         modifier = modifier
+            .copyOnLongPress("$label : $value")
+            .testTag("stat_$label")
     ) {
         Column(
             modifier = Modifier.padding(12.dp),

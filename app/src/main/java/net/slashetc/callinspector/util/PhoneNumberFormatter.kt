@@ -76,6 +76,10 @@ object PhoneNumberFormatter {
         }
     }
 
+    /** The call's date and time in full ("02/10/2026 12:16"), as copied: "Hier" means nothing once pasted. */
+    fun formatFullTimestamp(epochMillis: Long, timeZone: TimeZone = TimeZone.getDefault()): String =
+        SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRENCH).apply { this.timeZone = timeZone }.format(Date(epochMillis))
+
     // Days between the two dates' midnights, so daylight saving changes (23- or 25-hour days) do not count.
     private fun calendarDaysBetween(from: Long, to: Long, timeZone: TimeZone): Long {
         fun dayNumber(millis: Long): Long {

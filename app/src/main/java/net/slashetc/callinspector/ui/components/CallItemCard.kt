@@ -95,14 +95,18 @@ fun CallItemCard(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1
+                            maxLines = 1,
+                            modifier = Modifier.copyOnLongPress(call.cachedName, sensitive = true)
                         )
                     }
                     Text(
                         text = call.formattedNumber,
                         style = if (call.cachedName.isNullOrBlank()) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium,
                         fontWeight = if (call.cachedName.isNullOrBlank()) FontWeight.Bold else FontWeight.Medium,
-                        color = if (call.cachedName.isNullOrBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (call.cachedName.isNullOrBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .copyOnLongPress(call.formattedNumber, sensitive = true)
+                            .testTag("call_number_${call.rawNumber}")
                     )
                 }
 
@@ -111,13 +115,18 @@ fun CallItemCard(
                     Text(
                         text = PhoneNumberFormatter.formatTimestamp(call.timestamp),
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .copyOnLongPress(PhoneNumberFormatter.formatFullTimestamp(call.timestamp))
+                            .testTag("call_time_${call.rawNumber}")
                     )
                     if (call.durationSeconds > 0) {
+                        val duration = PhoneNumberFormatter.formatDuration(call.durationSeconds)
                         Text(
-                            text = PhoneNumberFormatter.formatDuration(call.durationSeconds),
+                            text = duration,
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            modifier = Modifier.copyOnLongPress(duration)
                         )
                     }
                 }
@@ -172,7 +181,9 @@ fun CallItemCard(
                     fontWeight = FontWeight.SemiBold,
                     color = DangerRed,
                     maxLines = 1,
-                    modifier = Modifier.testTag("call_report_summary")
+                    modifier = Modifier
+                        .copyOnLongPress(summary)
+                        .testTag("call_report_summary")
                 )
             }
 
@@ -183,7 +194,11 @@ fun CallItemCard(
                     text = "Note : ${call.userNote}",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
+                    maxLines = 1,
+                    // The note itself, not "Note :"; the whole note, though the card shows one line of it.
+                    modifier = Modifier
+                        .copyOnLongPress(call.userNote, sensitive = true)
+                        .testTag("call_note_${call.rawNumber}")
                 )
             }
         }

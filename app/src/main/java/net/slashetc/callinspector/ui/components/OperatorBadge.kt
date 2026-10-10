@@ -42,9 +42,12 @@ fun OperatorBadge(
     modifier: Modifier = Modifier
 ) {
     val (bgColor, textColor) = getOperatorColors(operatorName)
+    val hasCode = operatorCode.isNotBlank() && operatorCode != "—"
 
     Row(
         modifier = modifier
+            // The name, and the code that goes with it.
+            .copyOnLongPress(if (hasCode) "$operatorName ($operatorCode)" else operatorName)
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
             .padding(horizontal = 8.dp, vertical = 4.dp),
@@ -67,7 +70,7 @@ fun OperatorBadge(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false)
         )
-        if (operatorCode.isNotBlank() && operatorCode != "—") {
+        if (hasCode) {
             Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = "($operatorCode)",
@@ -111,6 +114,7 @@ fun PhoneCategoryBadge(
 
     Row(
         modifier = modifier
+            .copyOnLongPress(type.label)
             .clip(RoundedCornerShape(6.dp))
             .background(bgColor)
             .padding(horizontal = 7.dp, vertical = 3.dp),

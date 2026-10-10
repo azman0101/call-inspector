@@ -1,12 +1,5 @@
 package net.slashetc.callinspector.ui.components
 
-import android.content.ClipData
-import android.content.ClipDescription
-import android.content.ClipboardManager
-import android.content.Context
-import android.os.Build
-import android.os.PersistableBundle
-import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -219,6 +212,7 @@ fun CallExportSheet(
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier
                                     .weight(1f)
+                                    .copyOnLongPress(line.number, sensitive = true)
                                     .testTag("export_line_number")
                             )
                             TextButton(
@@ -269,7 +263,12 @@ fun CallExportSheet(
                         Checkbox(checked = checked, onCheckedChange = null)
                         Spacer(modifier = Modifier.width(8.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(text = number.formattedNumber, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text(
+                                text = number.formattedNumber,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp,
+                                modifier = Modifier.copyOnLongPress(number.formattedNumber, sensitive = true)
+                            )
                             Text(
                                 text = "${number.calls.size} appel${if (number.calls.size > 1) "s" else ""} · " +
                                     "dernier ${PhoneNumberFormatter.formatTimestamp(number.calls.maxOf { it.timestamp })} · ${number.operatorName}",
@@ -334,7 +333,9 @@ fun CallExportSheet(
                             fontSize = 10.sp,
                             lineHeight = 13.sp,
                             maxLines = 8,
+                            // The preview shows the start; a long press copies the whole export, as the button does.
                             modifier = Modifier
+                                .copyOnLongPress(exportText, sensitive = true)
                                 .padding(8.dp)
                                 .testTag("export_preview")
                         )
@@ -346,15 +347,10 @@ fun CallExportSheet(
 
             Button(
                 onClick = {
-                    copyToClipboard(context, "Appels $searchLabel", exportText)
-                    // Android 13+ confirms the copy itself.
-                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                        Toast.makeText(
-                            context,
-                            "${selectedCalls.size} appel${if (selectedCalls.size > 1) "s" else ""} copié${if (selectedCalls.size > 1) "s" else ""}",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
+                    copyToClipboard(
+                        context, "Appels $searchLabel", exportText, sensitive = true,
+                        confirmation = "${selectedCalls.size} appel${if (selectedCalls.size > 1) "s" else ""} copié${if (selectedCalls.size > 1) "s" else ""}"
+                    )
                     onDismiss()
                 },
                 enabled = selectedCalls.isNotEmpty(),
@@ -373,18 +369,4 @@ fun CallExportSheet(
             }
         }
     }
-}
-
-// Phone numbers and notes: marked sensitive so Android 13+ keeps them out of the clipboard preview.
-private fun copyToClipboard(context: Context, label: String, text: String) {
-    val clip = ClipData.newPlainText(label, text).apply {
-        description.extras = PersistableBundle().apply {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
-            } else {
-                putBoolean("android.content.extra.IS_SENSITIVE", true)
-            }
-        }
-    }
-    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
 }
