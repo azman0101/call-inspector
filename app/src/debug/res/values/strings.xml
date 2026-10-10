@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Info Opérateur (debug)</string>
+    <!-- The debug app is another app, with its own tile: told apart from the release one in the quick settings. -->
+    <string name="tile_who_called_label">Qui m\'a appelé ? (debug)</string>
 </resources>
