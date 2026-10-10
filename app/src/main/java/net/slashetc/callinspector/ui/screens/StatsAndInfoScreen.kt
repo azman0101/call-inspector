@@ -61,7 +61,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import net.slashetc.callinspector.ui.components.LegalTermsDialog
+import net.slashetc.callinspector.ui.components.ProvideCopyActions
+import net.slashetc.callinspector.ui.components.copyActions
 import net.slashetc.callinspector.ui.components.copyOnLongPress
+import net.slashetc.callinspector.ui.components.rememberCopyActions
 import net.slashetc.callinspector.util.LegalTerms
 import net.slashetc.callinspector.util.SentryHelper
 import androidx.compose.ui.Alignment
@@ -297,6 +300,7 @@ fun StatsAndInfoScreen(
                         }
 
                         // Ligne Version de l'application cliquable (activation du mode développeur par 7 taps)
+                        val copyActions = rememberCopyActions()
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -315,37 +319,41 @@ fun StatsAndInfoScreen(
                                         }
                                     }
                                 }
+                                .copyActions(copyActions)
                                 .padding(vertical = 4.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Version de l'application :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                if (devModeEnabled) {
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Surface(
-                                        color = MaterialTheme.colorScheme.primaryContainer,
-                                        shape = RoundedCornerShape(4.dp)
-                                    ) {
-                                        Text(
-                                            text = "DEV",
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                        )
+                            // TalkBack reads the row as one node: it offers the copy action of the version.
+                            ProvideCopyActions(copyActions) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Version de l'application :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if (devModeEnabled) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text(
+                                                text = "DEV",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                            )
+                                        }
                                     }
                                 }
+                                val appVersion = "${net.slashetc.callinspector.BuildConfig.VERSION_NAME} (build ${net.slashetc.callinspector.BuildConfig.VERSION_CODE})"
+                                // A tap still counts towards the developer mode.
+                                Text(
+                                    text = appVersion,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.copyOnLongPress(appVersion)
+                                )
                             }
-                            val appVersion = "${net.slashetc.callinspector.BuildConfig.VERSION_NAME} (build ${net.slashetc.callinspector.BuildConfig.VERSION_CODE})"
-                            // A tap still counts towards the developer mode.
-                            Text(
-                                text = appVersion,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.copyOnLongPress(appVersion)
-                            )
                         }
 
                         // Versions published on GitHub (tools/publish_release.sh)

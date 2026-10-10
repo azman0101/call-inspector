@@ -9,6 +9,12 @@ import android.os.PersistableBundle
 import android.widget.Toast
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -17,6 +23,8 @@ import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 
@@ -41,11 +49,36 @@ fun copyToClipboard(context: Context, label: String, text: String, sensitive: Bo
 }
 
 /**
+ * The copy actions of the values inside a clickable card or row. Such a container merges its texts into one
+ * accessibility node, where each text's own long-click action would collapse into a single one: it offers
+ * them all instead, one "Copier : …" action per value (see [copyActions] and [ProvideCopyActions]).
+ */
+class CopyActions internal constructor() {
+    internal val entries = mutableStateListOf<Pair<Any, CustomAccessibilityAction>>()
+}
+
+private val LocalCopyActions = staticCompositionLocalOf<CopyActions?> { null }
+
+@Composable
+fun rememberCopyActions(): CopyActions = remember { CopyActions() }
+
+/** On the container: the copy actions of the values it holds (given to them with [ProvideCopyActions]). */
+fun Modifier.copyActions(copyActions: CopyActions): Modifier = composed {
+    val actions = copyActions.entries.map { it.second }
+    if (actions.isEmpty()) this else semantics { customActions = actions }
+}
+
+@Composable
+fun ProvideCopyActions(copyActions: CopyActions, content: @Composable () -> Unit) =
+    CompositionLocalProvider(LocalCopyActions provides copyActions, content = content)
+
+/**
  * A long press on this text copies [value]: the information itself, not the label shown next to it, unless
  * the value means nothing without it (a count, a percentage), which the caller then includes. Null or blank:
  * nothing to copy.
  *
- * A tap is left alone, so a text inside a clickable card or row still opens or toggles it.
+ * A tap is left alone, so a text inside a clickable card or row still opens or toggles it. For TalkBack, the
+ * text has its own long-click action, or, inside a container that collects them, a "Copier : …" action there.
  */
 fun Modifier.copyOnLongPress(value: String?, sensitive: Boolean = false): Modifier = composed {
     if (value.isNullOrBlank()) return@composed this
@@ -55,9 +88,19 @@ fun Modifier.copyOnLongPress(value: String?, sensitive: Boolean = false): Modifi
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
         copyToClipboard(context, "Info Opérateur", value, sensitive)
     }
-    this
-        .semantics { onLongClick(label = "Copier") { copy(); true } }
-        .pointerInput(value, sensitive) { detectLongPress(copy) }
+    val container = LocalCopyActions.current
+    val accessible = if (container != null) {
+        val label = "Copier : " + if (value.length <= 40) value else value.take(39).trimEnd() + "…"
+        DisposableEffect(container, label, value, sensitive) {
+            val entry = Any() to CustomAccessibilityAction(label) { copy(); true }
+            container.entries.add(entry)
+            onDispose { container.entries.remove(entry) }
+        }
+        this
+    } else {
+        semantics { onLongClick(label = "Copier") { copy(); true } }
+    }
+    accessible.pointerInput(value, sensitive) { detectLongPress(copy) }
 }
 
 /**

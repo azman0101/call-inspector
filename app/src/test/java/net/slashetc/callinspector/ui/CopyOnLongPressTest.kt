@@ -3,6 +3,7 @@ package net.slashetc.callinspector.ui
 import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
@@ -90,6 +91,21 @@ class CopyOnLongPressTest {
 
         composeRule.onNodeWithTag("call_time_0162001122", useUnmergedTree = true).performTouchInput { longClick() }
         assertEquals(PhoneNumberFormatter.formatFullTimestamp(call.timestamp), copied)
+    }
+
+    @Test
+    fun `TalkBack gets one copy action per value of the card it reads as one node`() {
+        composeRule.setContent { CallItemCard(call = call, onClick = {}, onToggleFavorite = {}) }
+
+        val actions = composeRule.onNodeWithTag("call_item_0162001122").fetchSemanticsNode()
+            .config[SemanticsActions.CustomActions]
+        val labels = actions.map { it.label }
+        assertTrue(labels.toString(), "Copier : 01 62 00 11 22" in labels)
+        assertTrue(labels.toString(), "Copier : Qwalikom (QWLK)" in labels)
+        assertTrue(labels.toString(), labels.any { it.startsWith("Copier : Isolation") })
+
+        composeRule.runOnIdle { actions.first { it.label.startsWith("Copier : Isolation") }.action() }
+        assertEquals("Isolation à 1 €, rappel refusé", copied)
     }
 
     @Test

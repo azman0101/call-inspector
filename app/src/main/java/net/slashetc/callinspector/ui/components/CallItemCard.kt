@@ -56,12 +56,14 @@ fun CallItemCard(
 ) {
     val lookup = call.lookupResult
     val isSpamOrDemarchage = call.isSpamFlagged || lookup.numberType.isDemarchage
+    val copyActions = rememberCopyActions()
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
+            .copyActions(copyActions)
             .testTag("call_item_${call.rawNumber}"),
         colors = CardDefaults.cardColors(
             containerColor = if (isSpamOrDemarchage) {
@@ -73,133 +75,136 @@ fun CallItemCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Call Type Indicator
-                CallTypeIcon(callType = call.callType)
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                // Caller identity & number
-                Column(modifier = Modifier.weight(1f)) {
-                    if (!call.cachedName.isNullOrBlank()) {
-                        Text(
-                            text = call.cachedName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            modifier = Modifier.copyOnLongPress(call.cachedName, sensitive = true)
-                        )
-                    }
-                    Text(
-                        text = call.formattedNumber,
-                        style = if (call.cachedName.isNullOrBlank()) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium,
-                        fontWeight = if (call.cachedName.isNullOrBlank()) FontWeight.Bold else FontWeight.Medium,
-                        color = if (call.cachedName.isNullOrBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .copyOnLongPress(call.formattedNumber, sensitive = true)
-                            .testTag("call_number_${call.rawNumber}")
-                    )
-                }
-
-                // Date & Time + Favorite button
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = PhoneNumberFormatter.formatTimestamp(call.timestamp),
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .copyOnLongPress(PhoneNumberFormatter.formatFullTimestamp(call.timestamp))
-                            .testTag("call_time_${call.rawNumber}")
-                    )
-                    if (call.durationSeconds > 0) {
-                        val duration = PhoneNumberFormatter.formatDuration(call.durationSeconds)
-                        Text(
-                            text = duration,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                            modifier = Modifier.copyOnLongPress(duration)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // ARCEP Operator Information & Badges
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+        // TalkBack reads the card as one node: it offers one copy action per value.
+        ProvideCopyActions(copyActions) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp)
             ) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.weight(1f, fill = false)
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    OperatorBadge(
-                        operatorName = lookup.operatorDisplayName,
-                        operatorCode = lookup.operatorCode
-                    )
-                    PhoneCategoryBadge(type = lookup.numberType)
-                }
+                    // Call Type Indicator
+                    CallTypeIcon(callType = call.callType)
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (call.isFavorite) {
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = "Favori",
-                            tint = WarningAmber,
-                            modifier = Modifier.size(16.dp)
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    // Caller identity & number
+                    Column(modifier = Modifier.weight(1f)) {
+                        if (!call.cachedName.isNullOrBlank()) {
+                            Text(
+                                text = call.cachedName,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                modifier = Modifier.copyOnLongPress(call.cachedName, sensitive = true)
+                            )
+                        }
+                        Text(
+                            text = call.formattedNumber,
+                            style = if (call.cachedName.isNullOrBlank()) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (call.cachedName.isNullOrBlank()) FontWeight.Bold else FontWeight.Medium,
+                            color = if (call.cachedName.isNullOrBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .copyOnLongPress(call.formattedNumber, sensitive = true)
+                                .testTag("call_number_${call.rawNumber}")
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
                     }
 
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = "Détails ARCEP",
-                        tint = ArcepBlue,
-                        modifier = Modifier.size(18.dp)
+                    // Date & Time + Favorite button
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = PhoneNumberFormatter.formatTimestamp(call.timestamp),
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .copyOnLongPress(PhoneNumberFormatter.formatFullTimestamp(call.timestamp))
+                                .testTag("call_time_${call.rawNumber}")
+                        )
+                        if (call.durationSeconds > 0) {
+                            val duration = PhoneNumberFormatter.formatDuration(call.durationSeconds)
+                            Text(
+                                text = duration,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                modifier = Modifier.copyOnLongPress(duration)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // ARCEP Operator Information & Badges
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.weight(1f, fill = false)
+                    ) {
+                        OperatorBadge(
+                            operatorName = lookup.operatorDisplayName,
+                            operatorCode = lookup.operatorCode
+                        )
+                        PhoneCategoryBadge(type = lookup.numberType)
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (call.isFavorite) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = "Favori",
+                                tint = WarningAmber,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                        }
+
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Détails ARCEP",
+                            tint = ArcepBlue,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                // SignalConso reports sent from the app for this number
+                SignalConsoReport.reportSummary(call.reportCount, call.lastReportedAt)?.let { summary ->
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = summary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = DangerRed,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .copyOnLongPress(summary)
+                            .testTag("call_report_summary")
                     )
                 }
-            }
 
-            // SignalConso reports sent from the app for this number
-            SignalConsoReport.reportSummary(call.reportCount, call.lastReportedAt)?.let { summary ->
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = summary,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = DangerRed,
-                    maxLines = 1,
-                    modifier = Modifier
-                        .copyOnLongPress(summary)
-                        .testTag("call_report_summary")
-                )
-            }
-
-            // User Note snippet if present
-            if (!call.userNote.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Note : ${call.userNote}",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    // The note itself, not "Note :"; the whole note, though the card shows one line of it.
-                    modifier = Modifier
-                        .copyOnLongPress(call.userNote, sensitive = true)
-                        .testTag("call_note_${call.rawNumber}")
-                )
+                // User Note snippet if present
+                if (!call.userNote.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Note : ${call.userNote}",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        // The note itself, not "Note :"; the whole note, though the card shows one line of it.
+                        modifier = Modifier
+                            .copyOnLongPress(call.userNote, sensitive = true)
+                            .testTag("call_note_${call.rawNumber}")
+                    )
+                }
             }
         }
     }

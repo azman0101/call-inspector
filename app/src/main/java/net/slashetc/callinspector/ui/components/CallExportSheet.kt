@@ -250,6 +250,7 @@ fun CallExportSheet(
 
                 items(numbers, key = { it.normalizedNumber }) { number ->
                     val checked = number.normalizedNumber in selected
+                    val copyActions = rememberCopyActions()
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
@@ -258,24 +259,28 @@ fun CallExportSheet(
                                 selected = if (checked) selected - number.normalizedNumber else selected + number.normalizedNumber
                             }
                             .padding(vertical = 2.dp)
+                            .copyActions(copyActions)
                             .testTag("export_number_${number.normalizedNumber}")
                     ) {
-                        Checkbox(checked = checked, onCheckedChange = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = number.formattedNumber,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 14.sp,
-                                modifier = Modifier.copyOnLongPress(number.formattedNumber, sensitive = true)
-                            )
-                            Text(
-                                text = "${number.calls.size} appel${if (number.calls.size > 1) "s" else ""} · " +
-                                    "dernier ${PhoneNumberFormatter.formatTimestamp(number.calls.maxOf { it.timestamp })} · ${number.operatorName}",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1
-                            )
+                        // TalkBack reads the row as one node: it offers one copy action per value.
+                        ProvideCopyActions(copyActions) {
+                            Checkbox(checked = checked, onCheckedChange = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = number.formattedNumber,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.copyOnLongPress(number.formattedNumber, sensitive = true)
+                                )
+                                Text(
+                                    text = "${number.calls.size} appel${if (number.calls.size > 1) "s" else ""} · " +
+                                        "dernier ${PhoneNumberFormatter.formatTimestamp(number.calls.maxOf { it.timestamp })} · ${number.operatorName}",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1
+                                )
+                            }
                         }
                     }
                 }
