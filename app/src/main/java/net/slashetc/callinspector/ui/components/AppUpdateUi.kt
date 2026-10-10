@@ -94,8 +94,10 @@ fun AppUpdateBanner(
 }
 
 /**
- * A release's notes, as the list of changes it brings. [offerDownload] for a newer version than the one
- * installed; otherwise the notes of the installed version (after an update, or from the Observatoire).
+ * A release's notes, as the changes it brings, under Nouveautés, Correctifs and Autres changements; for a
+ * version several releases ahead, those of all of them ([AppRelease.changesSince]). [offerDownload] for a
+ * newer version than the one installed; otherwise the notes of the installed version (after an update, or
+ * from the Observatoire).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,7 +107,7 @@ fun ReleaseNotesSheet(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    val changes = AppUpdates.changes(release.notes)
+    val groups = AppUpdates.grouped(release.changes)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(
             modifier = Modifier
@@ -119,8 +121,16 @@ fun ReleaseNotesSheet(
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
+            release.changesSince?.let { since ->
+                Text(
+                    text = "Changements de toutes les versions publiées depuis la $since",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("release_notes_since")
+                )
+            }
             Spacer(modifier = Modifier.height(8.dp))
-            if (changes.isEmpty()) {
+            if (groups.isEmpty()) {
                 Text(
                     "Pas de liste de changements pour cette version : voir la page de la release.",
                     fontSize = 13.sp,
@@ -131,11 +141,24 @@ fun ReleaseNotesSheet(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.weight(1f, fill = false)
                 ) {
-                    items(changes) { change ->
-                        Row {
-                            Text("•", fontSize = 13.sp, color = ArcepBlue)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(change, fontSize = 13.sp, lineHeight = 17.sp, modifier = Modifier.copyOnLongPress(change).testTag("release_change"))
+                    groups.forEach { (kind, changes) ->
+                        item(key = kind.name) {
+                            Text(
+                                text = kind.title,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .padding(top = 6.dp)
+                                    .testTag("release_group_${kind.name.lowercase()}")
+                            )
+                        }
+                        items(changes) { change ->
+                            Row {
+                                Text("•", fontSize = 13.sp, color = ArcepBlue)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(change, fontSize = 13.sp, lineHeight = 17.sp, modifier = Modifier.copyOnLongPress(change).testTag("release_change"))
+                            }
                         }
                     }
                 }

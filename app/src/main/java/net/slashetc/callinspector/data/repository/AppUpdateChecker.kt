@@ -42,21 +42,30 @@ class AppUpdateChecker internal constructor(
         set(value) = prefs.edit().putBoolean(KEY_ENABLED_IN_DEBUG, value).apply()
 
     /**
-     * The newer release to offer, or null. GitHub is asked at most once every [CHECK_INTERVAL_MS] unless
-     * [force]; in between, the last answer is reused. A release the user dismissed is not offered again.
+     * The newest release to offer, or null, with the changes of every release since the installed version.
+     * GitHub is asked at most once every [CHECK_INTERVAL_MS] unless [force]; in between, the last answer is
+     * reused. A release the user dismissed is not offered again.
      */
     suspend fun availableUpdate(force: Boolean = false): AppRelease? {
         if (!isEnabled) return null
         val lastCheck = prefs.getLong(KEY_LAST_CHECK, 0L)
-        if (force || now() - lastCheck >= CHECK_INTERVAL_MS) {
-            fetch(LATEST_URL)?.let { json ->
-                prefs.edit().putString(KEY_LATEST_JSON, json).putLong(KEY_LAST_CHECK, now()).apply()
+        if (force || now() - lastCheck >= CHECK_INTERVAL_MS || !prefs.contains(KEY_NEWER_JSON)) {
+            fetchReleasesAfter(installedVersionCode)?.let { releases ->
+                // Only the releases after the installed version are kept: the banner needs no other.
+                val newer = releases.filter { AppUpdates.isNewer(it, installedVersionCode) }
+                prefs.edit()
+                    .putString(KEY_NEWER_JSON, AppUpdates.toJson(newer))
+                    .putLong(KEY_LAST_CHECK, now())
+                    .remove(KEY_LATEST_JSON)
+                    .apply()
             }
         }
-        val latest = prefs.getString(KEY_LATEST_JSON, null)?.let { AppUpdates.parseRelease(it) } ?: return null
-        return latest.takeIf {
-            AppUpdates.isNewer(it, installedVersionCode) && it.versionCode != prefs.getInt(KEY_DISMISSED_CODE, 0)
+        val newer = prefs.getString(KEY_NEWER_JSON, null)?.let { AppUpdates.parseReleases(it) }.orEmpty()
+        val latest = newer.maxByOrNull { it.versionCode } ?: return null
+        if (!AppUpdates.isNewer(latest, installedVersionCode) || latest.versionCode == prefs.getInt(KEY_DISMISSED_CODE, 0)) {
+            return null
         }
+        return AppUpdates.since(newer, latest, installedVersionCode, installedVersionName)
     }
 
     fun dismiss(release: AppRelease) {
@@ -64,24 +73,49 @@ class AppUpdateChecker internal constructor(
     }
 
     /**
-     * The installed version's release, the first time it runs after an update; null on a fresh install,
-     * once shown, or when GitHub cannot be reached (it is then tried again at the next launch).
+     * The installed version's release, the first time it runs after an update, with the changes of every
+     * release since the version last opened; null on a fresh install, once shown, for a version that is not
+     * published, or when GitHub cannot be reached (it is then tried again at the next launch).
      */
     suspend fun whatsNewAfterUpdate(): AppRelease? {
         val lastSeen = prefs.getInt(KEY_LAST_SEEN_CODE, 0)
         if (lastSeen == 0 || lastSeen > installedVersionCode) {
-            prefs.edit().putInt(KEY_LAST_SEEN_CODE, installedVersionCode).apply()
+            rememberSeen()
             return null
         }
         if (lastSeen == installedVersionCode || !isEnabled) return null
-        val release = installedRelease() ?: return null
-        prefs.edit().putInt(KEY_LAST_SEEN_CODE, installedVersionCode).apply()
-        return release
+        val releases = fetchReleasesAfter(lastSeen) ?: return null
+        val lastSeenName = prefs.getString(KEY_LAST_SEEN_NAME, null)
+            ?: releases.firstOrNull { it.versionCode == lastSeen }?.versionName
+        rememberSeen()
+        val installed = releases.firstOrNull { it.versionCode == installedVersionCode } ?: return null
+        return AppUpdates.since(releases, installed, lastSeen, lastSeenName)
+    }
+
+    private fun rememberSeen() {
+        prefs.edit().putInt(KEY_LAST_SEEN_CODE, installedVersionCode).putString(KEY_LAST_SEEN_NAME, installedVersionName).apply()
     }
 
     /** The installed version's release notes, on demand. */
     suspend fun installedRelease(): AppRelease? =
         fetch(TAG_URL + "v" + installedVersionName)?.let { AppUpdates.parseRelease(it) }
+
+    /**
+     * The releases after version [afterCode] and at least one more, newest first, page after page until a page
+     * reaches [afterCode] or is the last one ([MAX_PAGES] at most); null when GitHub cannot be reached or
+     * answers something else.
+     */
+    private suspend fun fetchReleasesAfter(afterCode: Int): List<AppRelease>? {
+        val releases = mutableListOf<AppRelease>()
+        for (page in 1..MAX_PAGES) {
+            val json = fetch(releasesUrl(page)) ?: return null
+            val batch = AppUpdates.parseReleases(json) ?: return null
+            releases += batch
+            // A shorter page is the last one: its own length counts, pre-releases and drafts included.
+            if (AppUpdates.entryCount(json) < PER_PAGE || batch.any { it.versionCode <= afterCode }) break
+        }
+        return releases
+    }
 
     private suspend fun fetch(url: String): String? = withContext(Dispatchers.IO) {
         val request = Request.Builder()
@@ -108,13 +142,20 @@ class AppUpdateChecker internal constructor(
         private const val KEY_ENABLED = "check_enabled"
         private const val KEY_ENABLED_IN_DEBUG = "check_enabled_in_debug"
         private const val KEY_LAST_CHECK = "last_check_at"
+        /** Before the releases list: the latest release only. Removed at the first check. */
         private const val KEY_LATEST_JSON = "latest_release_json"
+        private const val KEY_NEWER_JSON = "newer_releases_json"
         private const val KEY_DISMISSED_CODE = "dismissed_version_code"
         private const val KEY_LAST_SEEN_CODE = "last_seen_version_code"
+        private const val KEY_LAST_SEEN_NAME = "last_seen_version_name"
 
         internal const val CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L
         private const val MAX_RESPONSE_BYTES = 1_000_000L
-        internal const val LATEST_URL = "https://api.github.com/repos/azman0101/call-inspector/releases/latest"
+        /** Releases per page, about 7 KB each: one page covers most updates, since merges close together share one. */
+        private const val PER_PAGE = 30
+        private const val MAX_PAGES = 10
+        internal fun releasesUrl(page: Int) =
+            "https://api.github.com/repos/azman0101/call-inspector/releases?per_page=$PER_PAGE&page=$page"
         internal const val TAG_URL = "https://api.github.com/repos/azman0101/call-inspector/releases/tags/"
 
         private val defaultClient: OkHttpClient by lazy {

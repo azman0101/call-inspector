@@ -107,4 +107,89 @@ class AppUpdatesTest {
         )
         assertTrue(AppUpdates.changes("## Installer\n\nRien d'autre.").isEmpty())
     }
+
+    @Test
+    fun `the headings that sort the changes of a release are skipped`() {
+        // Notes sorted by tools/group_release_notes.py.
+        val sorted = """
+            ## What's Changed
+
+            ### Nouveautés
+            * feat: a tile by @azman0101 in https://github.com/azman0101/call-inspector/pull/54
+
+            ### Correctifs
+            * fix: date labels by @azman0101 in https://github.com/azman0101/call-inspector/pull/55
+
+            **Full Changelog**: https://github.com/azman0101/call-inspector/compare/v1.0.174...v1.0.180
+        """.trimIndent()
+
+        assertEquals(listOf("feat: a tile (#54)", "fix: date labels (#55)"), AppUpdates.changes(sorted))
+    }
+
+    @Test
+    fun `a releases list is read back from its stored copy`() {
+        val json = "[" + releaseJson("v1.0.180") + "," + releaseJson("v1.0.179", draft = true) + "," + releaseJson("v1.0.174") + "]"
+        val releases = AppUpdates.parseReleases(json)!!
+
+        assertEquals(listOf(180, 174), releases.map { it.versionCode })
+        val stored = AppUpdates.parseReleases(AppUpdates.toJson(releases))!!
+        assertEquals(releases.map { it.copy(notes = "") }, stored.map { it.copy(notes = "") })
+        // Only what the app reads is stored: the changes, not the install and checksum header.
+        assertEquals(releases.map { it.changes }, stored.map { it.changes })
+        assertFalse(stored[0].notes.contains("SHA-256"))
+        assertEquals(emptyList<AppRelease>(), AppUpdates.parseReleases("[]"))
+        assertNull(AppUpdates.parseReleases(releaseJson()))
+    }
+
+    private fun release(build: Int, vararg changes: String) = AppRelease(
+        versionCode = build,
+        versionName = "1.0.$build",
+        pageUrl = "https://github.com/azman0101/call-inspector/releases/tag/v1.0.$build",
+        apkUrl = null,
+        notes = "## What's Changed\n" + changes.joinToString("\n") { "* $it" },
+    )
+
+    @Test
+    fun `a version several releases ahead brings all their changes, oldest first, each once`() {
+        val releases = listOf(
+            release(182, "fix: third", "feat: second"),
+            release(181, "feat: second"),
+            release(180, "feat: first"),
+            release(174, "feat: installed"),
+        )
+
+        val update = AppUpdates.since(releases, releases[0], afterCode = 174, afterName = "1.0.174")
+        assertEquals(listOf("feat: first", "feat: second", "fix: third"), update.changes)
+        assertEquals("1.0.174", update.changesSince)
+        assertEquals(182, update.versionCode)
+
+        val next = AppUpdates.since(releases, releases[0], afterCode = 181, afterName = "1.0.181")
+        assertEquals(releases[0], next)
+        assertNull(next.changesSince)
+    }
+
+    @Test
+    fun `changes are sorted into features, fixes and the rest, without their prefix`() {
+        val grouped = AppUpdates.grouped(
+            listOf(
+                "ci: one release per wave of merges (#66)",
+                "feat(tile): \"Qui m'a appelé ?\" quick settings tile (#54)",
+                "fix: date labels count calendar days (#55)",
+                "security(SR-01): keep the reporter's data out of page globals (#58)",
+                "Bump okhttp from 4 to 5 (#70)",
+                "perf!: faster lookups (#49)",
+                "feat: a long press copies a value (#63)",
+            )
+        )
+
+        assertEquals(listOf(ChangeKind.FEATURE, ChangeKind.FIX, ChangeKind.OTHER), grouped.keys.toList())
+        assertEquals(listOf("\"Qui m'a appelé ?\" quick settings tile (#54)", "A long press copies a value (#63)"), grouped[ChangeKind.FEATURE])
+        assertEquals(
+            listOf("Date labels count calendar days (#55)", "Keep the reporter's data out of page globals (#58)", "Faster lookups (#49)"),
+            grouped[ChangeKind.FIX]
+        )
+        assertEquals(listOf("One release per wave of merges (#66)", "Bump okhttp from 4 to 5 (#70)"), grouped[ChangeKind.OTHER])
+        assertEquals(listOf(ChangeKind.FIX), AppUpdates.grouped(listOf("fix: only a fix")).keys.toList())
+        assertTrue(AppUpdates.grouped(emptyList()).isEmpty())
+    }
 }
