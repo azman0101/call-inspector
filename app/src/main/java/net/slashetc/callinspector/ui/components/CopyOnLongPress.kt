@@ -49,6 +49,17 @@ fun copyToClipboard(context: Context, label: String, text: String, sensitive: Bo
 }
 
 /**
+ * What a long press copies of [value]: a number only (phone number, SIRET, SIREN), shown in groups, without
+ * its spaces ("01 87 21 77 77" gives "0187217777"); anything else as it is.
+ */
+internal fun copiedValue(value: String): String {
+    val trimmed = value.trim()
+    val digits = trimmed.removePrefix("+")
+    val numberOnly = digits.any(Char::isDigit) && digits.all { it.isDigit() || it.isWhitespace() }
+    return if (numberOnly) trimmed.filterNot(Char::isWhitespace) else value
+}
+
+/**
  * The copy actions of the values inside a clickable card or row. Such a container merges its texts into one
  * accessibility node, where each text's own long-click action would collapse into a single one: it offers
  * them all instead, one "Copier : …" action per value (see [copyActions] and [ProvideCopyActions]).
@@ -86,7 +97,7 @@ fun Modifier.copyOnLongPress(value: String?, sensitive: Boolean = false): Modifi
     val haptics = LocalHapticFeedback.current
     val copy = {
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-        copyToClipboard(context, "Info Opérateur", value, sensitive)
+        copyToClipboard(context, "Info Opérateur", copiedValue(value), sensitive)
     }
     val container = LocalCopyActions.current
     val accessible = if (container != null) {

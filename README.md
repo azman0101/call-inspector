@@ -94,7 +94,7 @@ Application Android Kotlin / Jetpack Compose qui analyse l'historique d'appels d
 - **Copie par appui long** :
   - Un appui long sur une information la copie dans le presse-papiers : numéro, contact, opérateur et son code, SIRET, adresse, tranche, dates, note, résumés de signalement, version de la base et de l'app, empreinte SHA-256 complète, erreurs de mise à jour, nouveautés d'une version, lignes de la tuile « Qui m'a appelé ? ».
   - Seule la valeur est copiée, sans son libellé (« SIRET de l'acteur », « Note : »), sauf quand elle ne veut rien dire seule : un compteur de l'Observatoire est copié avec ce qu'il compte (« Manqués : 12 »).
-  - Une date relative (« Hier à 12:16 ») est copiée en entier (« 02/10/2026 12:16 »), et une valeur tronquée à l'écran (note, empreinte, aperçu de l'export) est copiée en entier.
+  - Une date relative (« Hier à 12:16 ») est copiée en entier (« 02/10/2026 12:16 »), et une valeur tronquée à l'écran (note, empreinte, aperçu de l'export) est copiée en entier. Un numéro seul (téléphone, SIRET, SIREN) est copié sans ses espaces (« 01 87 21 77 77 » donne « 0187217777 »).
   - Un appui court garde son effet (ouvrir l'appel, cocher un numéro de l'export). Les numéros, contacts et notes sont marqués sensibles : Android 13+ ne les affiche pas dans l'aperçu du presse-papiers.
 
 ---

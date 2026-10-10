@@ -18,6 +18,7 @@ import net.slashetc.callinspector.data.model.CallType
 import net.slashetc.callinspector.data.model.PhoneNumberType
 import net.slashetc.callinspector.ui.components.ArcepDossierContent
 import net.slashetc.callinspector.ui.components.CallItemCard
+import net.slashetc.callinspector.ui.components.copiedValue
 import net.slashetc.callinspector.util.PhoneNumberFormatter
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -74,7 +75,7 @@ class CopyOnLongPressTest {
         // The card merges its texts for accessibility: their own nodes are in the unmerged tree.
 
         composeRule.onNodeWithTag("call_number_0162001122", useUnmergedTree = true).performTouchInput { longClick() }
-        assertEquals("01 62 00 11 22", copied)
+        assertEquals("0162001122", copied)
         assertTrue(copiedIsSensitive)
         assertEquals("the long press is not a tap on the card", 0, opened)
 
@@ -106,6 +107,8 @@ class CopyOnLongPressTest {
 
         composeRule.runOnIdle { actions.first { it.label.startsWith("Copier : Isolation") }.action() }
         assertEquals("Isolation à 1 €, rappel refusé", copied)
+        composeRule.runOnIdle { actions.first { it.label == "Copier : 01 62 00 11 22" }.action() }
+        assertEquals("0162001122", copied)
     }
 
     @Test
@@ -120,8 +123,20 @@ class CopyOnLongPressTest {
         assertEquals("Qwalikom", copied)
 
         composeRule.onNodeWithTag("dossier_number").performTouchInput { longClick() }
-        assertEquals("01 62 00 11 22", copied)
+        assertEquals("0162001122", copied)
         assertTrue(copiedIsSensitive)
+    }
+
+    @Test
+    fun `a number only is copied without its spaces, anything else as it is`() {
+        assertEquals("0187217777", copiedValue("01 87 21 77 77"))
+        assertEquals("+33187217777", copiedValue("+33 1 87 21 77 77"))
+        assertEquals("81234567800019", copiedValue("812 345 678 00019"))
+        assertEquals("123456789", copiedValue("123\u00A0456\u202F789"))
+        assertEquals("Qwalikom (QWLK)", copiedValue("Qwalikom (QWLK)"))
+        assertEquals("02/10/2026 12:16", copiedValue("02/10/2026 12:16"))
+        assertEquals("0162000000 à 0162009999", copiedValue("0162000000 à 0162009999"))
+        assertEquals("Manqués : 12", copiedValue("Manqués : 12"))
     }
 
     @Test

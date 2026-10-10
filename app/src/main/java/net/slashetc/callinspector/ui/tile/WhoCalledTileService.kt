@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import net.slashetc.callinspector.MainActivity
 import net.slashetc.callinspector.data.model.CallLogEntry
 import net.slashetc.callinspector.data.repository.CallLogRepository
+import net.slashetc.callinspector.ui.components.copiedValue
 import net.slashetc.callinspector.ui.components.copyToClipboard
 import net.slashetc.callinspector.util.WhoCalled
 
@@ -98,7 +99,7 @@ class WhoCalledTileService : TileService() {
 
     private fun TextView.copyOnLongClick(value: String, sensitive: Boolean) = setOnLongClickListener { view ->
         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-        copyToClipboard(view.context, "Info Opérateur", value, sensitive)
+        copyToClipboard(view.context, "Info Opérateur", copiedValue(value), sensitive)
         true
     }
 
