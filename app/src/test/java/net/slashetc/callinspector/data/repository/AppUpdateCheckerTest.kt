@@ -43,8 +43,8 @@ class AppUpdateCheckerTest {
             .build()
     }.build()
 
-    private fun release(build: Int, change: String = "feat: something") = """
-        {"tag_name": "v1.0.$build", "draft": false, "prerelease": false,
+    private fun release(build: Int, change: String = "feat: something", prerelease: Boolean = false) = """
+        {"tag_name": "v1.0.$build", "draft": false, "prerelease": $prerelease,
          "html_url": "https://github.com/azman0101/call-inspector/releases/tag/v1.0.$build",
          "body": "## What's Changed\n* $change by @azman0101 in https://github.com/azman0101/call-inspector/pull/$build\n",
          "assets": [{"name": "info-operateur-1.0.$build.apk",
@@ -165,6 +165,16 @@ class AppUpdateCheckerTest {
         requested.clear()
         checker(240).availableUpdate(force = true)
         assertEquals("the first page reaches 240", 1, requested.size)
+    }
+
+    @Test
+    fun `a full page with a pre-release in it is not taken for the last one`() = runBlocking {
+        responses[AppUpdateChecker.releasesUrl(1)] = (260 downTo 231).joinToString(",", "[", "]") { release(it, prerelease = it == 245) }
+        responses[AppUpdateChecker.releasesUrl(2)] = releases(*(230 downTo 201).toList().toIntArray())
+
+        val update = checker(225).availableUpdate()!!
+        assertEquals((226..260).filter { it != 245 }.map { "feat: something (#$it)" }, update.changes)
+        assertEquals(2, requested.size)
     }
 
     @Test

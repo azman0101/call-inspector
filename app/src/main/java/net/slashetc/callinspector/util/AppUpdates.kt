@@ -55,6 +55,9 @@ object AppUpdates {
         }
     }.getOrNull()
 
+    /** How many entries a releases list holds, usable or not; 0 if the JSON is not a list. */
+    fun entryCount(json: String): Int = runCatching { JSONArray(json).length() }.getOrDefault(0)
+
     /**
      * [releases] as the releases API gives them, for [parseReleases] to read back. The notes keep only what
      * [changes] reads, from "## What's Changed" on: the install and checksum header is left out.

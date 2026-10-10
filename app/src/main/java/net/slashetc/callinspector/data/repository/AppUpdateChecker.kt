@@ -108,9 +108,11 @@ class AppUpdateChecker internal constructor(
     private suspend fun fetchReleasesAfter(afterCode: Int): List<AppRelease>? {
         val releases = mutableListOf<AppRelease>()
         for (page in 1..MAX_PAGES) {
-            val batch = fetch(releasesUrl(page))?.let { AppUpdates.parseReleases(it) } ?: return null
+            val json = fetch(releasesUrl(page)) ?: return null
+            val batch = AppUpdates.parseReleases(json) ?: return null
             releases += batch
-            if (batch.size < PER_PAGE || batch.any { it.versionCode <= afterCode }) break
+            // A shorter page is the last one: its own length counts, pre-releases and drafts included.
+            if (AppUpdates.entryCount(json) < PER_PAGE || batch.any { it.versionCode <= afterCode }) break
         }
         return releases
     }
