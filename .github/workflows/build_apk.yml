@@ -52,10 +52,13 @@ jobs:
 
       - name: Compute version information
         id: versioning
+        env:
+          # The branch name comes from whoever opens the pull request: through env it stays data, while
+          # ${{ }} in the script would paste it into the shell code ($(...) in a branch name would run).
+          REF_NAME: ${{ github.head_ref || github.ref_name }}
         run: |
           RUN_NUM="${{ github.run_number }}"
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          REF_NAME="${{ github.head_ref || github.ref_name }}"
           CLEAN_REF=$(echo "$REF_NAME" | sed 's#[^a-zA-Z0-9.-]#-#g' | cut -c1-20)
 
           if [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ github.event_name }}" != "pull_request" ]; then
@@ -168,17 +171,17 @@ jobs:
           retention-days: 14
 
   # Merges that land on main close together go into one release, instead of one release each. Every build
-  # of main that passes waits here 30 minutes, then for the newer runs of main to end, and publishes only if
-  # none of them published a release: the last good build of the wave publishes, and its release notes list
-  # every pull request merged since the previous release. "Publier maintenant" (workflow_dispatch on main)
-  # skips the 30 minutes. See tools/release_window.sh.
+  # of main that passes waits here 30 minutes, and stops as soon as a newer build of main passes: the last
+  # good build of the wave publishes, and its release notes list every pull request merged since the
+  # previous release. A newer build still running at the end of the wait is waited for, since it may fail.
+  # "Publier maintenant" (workflow_dispatch on main) skips the 30 minutes. See tools/release_window.sh.
   release-window:
     name: Release window (30 min)
     needs: build
     if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04
-    # 30 minutes of quiet, plus at most 300 for the newer runs of the wave (each waits for the next one).
-    timeout-minutes: 340
+    # 30 minutes of quiet, plus at most 45 for a newer build still running.
+    timeout-minutes: 90
     permissions:
       actions: read
       contents: read
@@ -196,7 +199,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           QUIET_MINUTES: ${{ github.event_name == 'workflow_dispatch' && '0' || '30' }}
-          PENDING_MINUTES: '300'
+          PENDING_MINUTES: '45'
+          BUILD_JOB: Build & Test Android APK
         run: tools/release_window.sh
 
   # Builds the signed release APK of the commit the window chose to publish, scans it with VirusTotal,
@@ -231,7 +235,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # This job holds the release-publish slot now: a newer run may have published while it waited (its
-      # window gave up after 300 minutes, or the slot was busy). Publishing after it would put an older
+      # window gave up on a newer build after 45 minutes, or the slot was busy). Publishing after it would put an older
       # version back as the latest release, so every step below runs only if none did.
       - name: Check again for a newer release
         id: recheck
