@@ -228,13 +228,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # This job holds the release-publish slot now: a newer run may have published while it waited (its
+      # window gave up after 300 minutes, or the slot was busy). Publishing after it would put an older
+      # version back as the latest release, so every step below runs only if none did.
+      - name: Check again for a newer release
+        id: recheck
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: tools/release_window.sh --recheck
+
       - name: Set up JDK 21
+        if: ${{ steps.recheck.outputs.publish == 'true' }}
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           java-version: '21'
           distribution: 'temurin'
 
       - name: Setup Gradle
+        if: ${{ steps.recheck.outputs.publish == 'true' }}
         uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2 (MIT-licensed cache; v6's default cache-provider is proprietary, see PR review)
         with:
           # The same entries as the build job, whose cache this restores; the build job alone saves it.
@@ -245,6 +256,7 @@ jobs:
           cache-read-only: true
 
       - name: Prepare build environment
+        if: ${{ steps.recheck.outputs.publish == 'true' }}
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
@@ -263,6 +275,7 @@ jobs:
           fi
 
       - name: Build Release APK
+        if: ${{ steps.recheck.outputs.publish == 'true' }}
         env:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'android' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android' }}
@@ -270,6 +283,7 @@ jobs:
         run: ./gradlew assembleRelease --stacktrace
 
       - name: Upload Release APK Artifact
+        if: ${{ steps.recheck.outputs.publish == 'true' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: info-operateur-release-v${{ env.VERSION_NAME }}
@@ -282,6 +296,7 @@ jobs:
       # VIRUSTOTAL_API_KEY secret, else it is skipped.
       - name: Scan APK with VirusTotal (non-blocking)
         id: virustotal
+        if: ${{ steps.recheck.outputs.publish == 'true' }}
         continue-on-error: true
         timeout-minutes: 15
         env:
@@ -295,6 +310,7 @@ jobs:
       # a throwaway key): such an APK could not update any install. Tags made with GITHUB_TOKEN start no
       # workflow run.
       - name: Publish the GitHub release
+        if: ${{ steps.recheck.outputs.publish == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           # Release signing certificate, as published in the README ("Vérifier la signature").
@@ -311,7 +327,7 @@ jobs:
       # moved since the built commit (the window lasts 30 minutes), so the edit is made on its current head.
       # [skip ci], and pushes made with GITHUB_TOKEN start no workflow run anyway, so this can't loop.
       - name: Point the VirusTotal badge at the latest report
-        if: ${{ steps.virustotal.outputs.report_url != '' }}
+        if: ${{ steps.recheck.outputs.publish == 'true' && steps.virustotal.outputs.report_url != '' }}
         continue-on-error: true
         env:
           REPORT_URL: ${{ steps.virustotal.outputs.report_url }}

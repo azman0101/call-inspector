@@ -7,10 +7,13 @@
 #   - none did (no newer run, or their build failed, or they were cancelled, or their publication failed):
 #     this build is the last good one of the wave, and publishes. A wave whose last run fails still gets a
 #     release, from its last good build.
-# Past PENDING_MINUTES with a newer run still going, this one publishes: at worst the newer run publishes a
-# second release, none is lost. Writes publish=true or publish=false to GITHUB_OUTPUT.
+# Past PENDING_MINUTES with a newer run still going, this one goes on to publish: none is lost, and the
+# publish job checks again (--recheck) once its turn comes, so it never publishes after a newer release.
+# Writes publish=true or publish=false to GITHUB_OUTPUT.
 #
-# Usage: tools/release_window.sh
+# Usage: tools/release_window.sh [--recheck]
+#   --recheck  only the last check, without waiting: is a higher version already published? For the publish
+#              job, once it holds the release-publish slot (publications run one at a time), before building.
 # Environment:
 #   GH_TOKEN          token with actions: read and contents: read (the workflow's github.token)
 #   GITHUB_REPOSITORY, GITHUB_RUN_ID, GITHUB_RUN_NUMBER  (set by Actions)
@@ -46,24 +49,28 @@ decide() { # publish (true|false), reason
   exit 0
 }
 
-if [ "$QUIET_MINUTES" -gt 0 ]; then
-  echo "Waiting $QUIET_MINUTES minutes for the merges that follow build #$GITHUB_RUN_NUMBER..."
-  sleep $((QUIET_MINUTES * 60))
-fi
-
-workflow_id="$(api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .workflow_id)"
-deadline=$(($(date +%s) + PENDING_MINUTES * 60))
-while :; do
-  pending="$(api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?branch=main&per_page=50" \
-    --jq "[.workflow_runs[] | select((.event == \"push\" or .event == \"workflow_dispatch\") and .run_number > $GITHUB_RUN_NUMBER and .status != \"completed\") | \"#\(.run_number)\"] | join(\" \")")"
-  [ -n "$pending" ] || break
-  if [ "$(date +%s)" -ge "$deadline" ]; then
-    echo "::warning::Run(s) $pending of main still going after $PENDING_MINUTES minutes: build #$GITHUB_RUN_NUMBER publishes now."
-    break
+wait_for_newer_runs() {
+  local workflow_id deadline pending
+  if [ "$QUIET_MINUTES" -gt 0 ]; then
+    echo "Waiting $QUIET_MINUTES minutes for the merges that follow build #$GITHUB_RUN_NUMBER..."
+    sleep $((QUIET_MINUTES * 60))
   fi
-  echo "Waiting for run(s) $pending of main, which may publish these changes instead..."
-  sleep "$POLL_SECONDS"
-done
+  workflow_id="$(api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .workflow_id)"
+  deadline=$(($(date +%s) + PENDING_MINUTES * 60))
+  while :; do
+    pending="$(api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?branch=main&per_page=50" \
+      --jq "[.workflow_runs[] | select((.event == \"push\" or .event == \"workflow_dispatch\") and .run_number > $GITHUB_RUN_NUMBER and .status != \"completed\") | \"#\(.run_number)\"] | join(\" \")")"
+    [ -n "$pending" ] || return 0
+    if [ "$(date +%s)" -ge "$deadline" ]; then
+      echo "::warning::Run(s) $pending of main still going after $PENDING_MINUTES minutes: build #$GITHUB_RUN_NUMBER goes on to publish (checked again before building)."
+      return 0
+    fi
+    echo "Waiting for run(s) $pending of main, which may publish these changes instead..."
+    sleep "$POLL_SECONDS"
+  done
+}
+
+[ "${1:-}" = "--recheck" ] || wait_for_newer_runs
 
 # The highest version published, from the tags v1.0.<run number>.
 published="$(api "repos/$GITHUB_REPOSITORY/releases?per_page=20" \
