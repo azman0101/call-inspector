@@ -344,8 +344,14 @@
   // "Autorisez-vous l'Arcep à communiquer votre signalement et vos données personnelles à des tiers ?": the
   // answer the user saved in their details (the one SignalConso asks for sharing them with the company), none
   // when they chose not to prefill it. An answer the user gave is kept; the script's own follows the profile.
-  function answerShare() {
-    var want = contact.shareContact === true ? 'Oui' : contact.shareContact === false ? 'Non' : null;
+  // Without a saved choice any more ("Ne pas préremplir", details erased), the script's own "Oui" is withdrawn:
+  // the site has no way to leave the question unanswered again, so it becomes "Non", which shares nothing.
+  function shareChoice() {
+    return contact && contact.shareContact === true ? 'Oui' : contact && contact.shareContact === false ? 'Non' : null;
+  }
+
+  function answerShare(choice) {
+    var want = choice || (shareAnswer === 'Oui' ? 'Non' : null);
     var inputs = group('consentementTiers');
     if (!want || !inputs.length) return false;
     var checked = null;
@@ -395,11 +401,13 @@
     if (staleContact) {
       if (step === 5 && dropContact()) { runLater(); return; }
       staleContact = false;
+      // The old choice goes with the old details: the new ones answer again when they come.
+      if (step === 5 && answerShare(null)) { runLater(); return; }
     }
     if (step === 3 && stalePick !== null) { dropStaleCommune(); runLater(); return; }
     if (step === 3 && found && selectFound()) { runLater(); return; }
     if (step === 5 && contact && fillContact()) { runLater(); return; }
-    if (step === 5 && contact && answerShare()) { runLater(); return; }
+    if (step === 5 && contact && answerShare(shareChoice())) { runLater(); return; }
     if (!plan) return;
     var acted = step === 1 ? step1() : step === 2 ? step2() : step === 3 ? step3() : step === 4 ? step4() : step === 5 ? step5() : false;
     if (acted) runLater();
