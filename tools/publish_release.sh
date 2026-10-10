@@ -2,7 +2,9 @@
 # Publishes the release APK of a build on main as a GitHub release: tag v<VERSION_NAME> on the built commit,
 # the signed APK under a versioned name with its SHA-256 file, and release notes made of an install and
 # verification header (checksums, signing certificate, VirusTotal report, build run) followed by the pull
-# requests merged since the previous release (GitHub's generated notes).
+# requests merged since the previous release (GitHub's generated notes), sorted into Nouveautés, Correctifs
+# and Autres changements by tools/group_release_notes.py. Builds of main that pass close together publish
+# once, from the last of them (tools/release_window.sh), so these notes cover all their merges.
 #
 # It refuses to publish an APK that is not signed with the project's release key: a CI fallback key (missing
 # KEYSTORE_BASE64 secret) produces an APK that cannot update any install, which must not become a release.
@@ -69,6 +71,12 @@ previous_tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq 
 notes_args=(-f "tag_name=$TAG" -f "target_commitish=$GITHUB_SHA")
 [ -n "$previous_tag" ] && notes_args+=(-f "previous_tag_name=$previous_tag")
 generated="$(gh api --method POST "repos/$GITHUB_REPOSITORY/releases/generate-notes" "${notes_args[@]}" --jq .body)"
+# The sorting is for readers only: the release goes out with GitHub's order if it fails.
+if grouped="$(printf '%s\n' "$generated" | python3 "$(dirname "$0")/group_release_notes.py")"; then
+  generated="$grouped"
+else
+  echo "::warning::Release notes not sorted by kind: published in merge order."
+fi
 
 if [ -n "${VIRUSTOTAL_REPORT_URL:-}" ]; then
   if [ -n "${VIRUSTOTAL_MALICIOUS:-}" ]; then

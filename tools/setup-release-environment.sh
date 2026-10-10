@@ -13,7 +13,7 @@
 #   --env       environment name (default: release)
 #   --branch    only branch allowed to deploy to it (default: main)
 #
-# It then asks for SENTRY_DSN and NVD_API_KEY if the environment lacks them: the build job of main runs
+# It then asks for SENTRY_DSN if the environment lacks it: the publish job of main builds the release APK
 # in it. Nothing is printed or written to disk except a temporary Java checker; values go to gh through
 # stdin, never on a command line.
 set -euo pipefail
@@ -163,16 +163,17 @@ printf '%s' "$KEYSTORE_B64" | gh secret set KEYSTORE_BASE64 --repo "$REPO" --env
 printf '%s' "$STORE_PASSWORD" | gh secret set STORE_PASSWORD --repo "$REPO" --env "$ENVIRONMENT"
 printf '%s' "$KEY_PASSWORD" | gh secret set KEY_PASSWORD --repo "$REPO" --env "$ENVIRONMENT"
 
-# The build job of main runs in this environment, so it also needs the build's other environment secrets
-# (repository secrets are visible everywhere). Environments cannot share secrets: ask for the values.
+# The publish job of main builds the release APK in this environment, so it also needs the build's other
+# environment secret (repository secrets are visible everywhere). Environments cannot share secrets: ask
+# for the value. NVD_API_KEY is not needed here: the dependency scan runs in the build job ('production').
 env_secrets="$(gh secret list --repo "$REPO" --env "$ENVIRONMENT" --json name --jq '.[].name')"
-for name in SENTRY_DSN NVD_API_KEY; do
+for name in SENTRY_DSN; do
   grep -qx "$name" <<<"$env_secrets" && continue
   read -rsp "$name for '$ENVIRONMENT' (Enter to skip): " value; echo
   if [ -n "$value" ]; then
     printf '%s' "$value" | gh secret set "$name" --repo "$REPO" --env "$ENVIRONMENT"
   else
-    echo "  Skipped: builds on $BRANCH will run without $name until it is set in '$ENVIRONMENT'."
+    echo "  Skipped: release APKs will be built without $name until it is set in '$ENVIRONMENT'."
   fi
 done
 unset value
