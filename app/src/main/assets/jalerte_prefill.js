@@ -1,9 +1,9 @@
 // Prefills J'alerte l'Arcep (jalerte.arcep.fr/jalerte/) for telemarketing calls. It only picks options and
 // fills empty fields, each at most once, and never clicks "Poursuivre" or "Envoyer mon alerte": the user
 // reviews every step and sends the alert. An option or field the user already set is left alone. Where it
-// answers for the user (5G, not in transport, customer service not contacted, no transmission to third
-// parties), it gives the answer they asked for, and they can change it; the consent to the Arcep's
-// processing stays theirs to tick.
+// answers for the user (5G, not in transport, customer service not contacted, and the transmission to third
+// parties from the share choice saved in their details), it gives the answer they asked for, and they can
+// change it; the consent to the Arcep's processing stays theirs to tick.
 //
 // The site is a Wicket application: every choice is sent to the server, which redraws the form. The script
 // makes one such change per pass, then runs again on the redraw (MutationObserver) or, for a change the
@@ -39,6 +39,11 @@
   var stalePick = null;
   // The profile changed while step 5 is shown: the contact details put in are to be emptied.
   var staleContact = false;
+  // The answer the script gave to the third-party question ('Oui' or 'Non'), from the user's share choice,
+  // and a profile change it has not caught up with yet: at whatever step it came, the next step 5 sees it
+  // (the server keeps the answer while the user goes back and forth between steps).
+  var shareAnswer = null;
+  var staleShare = false;
   // The commune search under way; an answer to an earlier one (made before a profile change) is dropped.
   var search = 0;
   // The commune it found, selected on the next pass the server is idle for.
@@ -333,10 +338,33 @@
     return false;
   }
 
-  // Step 5, "Validation": customer service not contacted, alert not passed on to third parties. The consent
-  // to the Arcep's processing, the rating and the sending are the user's.
+  // Step 5, "Validation": customer service not contacted. The third-party question follows the user's saved
+  // share choice (answerShare); the consent to the Arcep's processing, the rating and the sending are theirs.
   function step5() {
-    return pickOnce('serviceClientContainer:contacte', 'Non') || pickOnce('consentementTiers', 'Non');
+    return pickOnce('serviceClientContainer:contacte', 'Non');
+  }
+
+  // "Autorisez-vous l'Arcep à communiquer votre signalement et vos données personnelles à des tiers ?": the
+  // answer the user saved in their details (the one SignalConso asks for sharing them with the company), none
+  // when they chose not to prefill it. An answer the user gave is kept; the script's own follows the profile.
+  // Without a saved choice any more ("Ne pas préremplir", details erased), the script's own "Oui" is withdrawn:
+  // the site has no way to leave the question unanswered again, so it becomes "Non", which shares nothing.
+  function shareChoice() {
+    return contact && contact.shareContact === true ? 'Oui' : contact && contact.shareContact === false ? 'Non' : null;
+  }
+
+  function answerShare(choice) {
+    var want = choice || (shareAnswer === 'Oui' ? 'Non' : null);
+    var inputs = group('consentementTiers');
+    if (!want || !inputs.length) return false;
+    var checked = null;
+    for (var i = 0; i < inputs.length; i++) if (inputs[i].checked) checked = inputs[i];
+    if (checked && (shareAnswer === null || labelText(checked) !== norm(shareAnswer) || shareAnswer === want)) return false;
+    var input = labelled(inputs, want);
+    if (!input) return false;
+    shareAnswer = want;
+    input.click();
+    return true;
   }
 
   function forget() {
@@ -377,9 +405,15 @@
       if (step === 5 && dropContact()) { runLater(); return; }
       staleContact = false;
     }
+    // The old choice goes with the old details: the new ones answer again when they come.
+    if (staleShare && step === 5) {
+      staleShare = false;
+      if (answerShare(null)) { runLater(); return; }
+    }
     if (step === 3 && stalePick !== null) { dropStaleCommune(); runLater(); return; }
     if (step === 3 && found && selectFound()) { runLater(); return; }
     if (step === 5 && contact && fillContact()) { runLater(); return; }
+    if (step === 5 && contact && answerShare(shareChoice())) { runLater(); return; }
     if (!plan) return;
     var acted = step === 1 ? step1() : step === 2 ? step2() : step === 3 ? step3() : step === 4 ? step4() : step === 5 ? step5() : false;
     if (acted) runLater();
@@ -400,7 +434,10 @@
   };
   window.__iaFillContact = function (details) {
     // Dropped (the profile changed): what the script put in the fields shown goes too, on the next pass.
-    if (!details && currentStep() === 5) staleContact = true;
+    if (!details) {
+      staleShare = true;
+      if (currentStep() === 5) staleContact = true;
+    }
     contact = details && currentStep() === 5 && onForm() ? details : null;
     run();
   };

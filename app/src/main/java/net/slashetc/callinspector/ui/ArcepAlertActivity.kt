@@ -123,14 +123,23 @@ class ArcepAlertActivity : ComponentActivity() {
          */
         internal val PROFILE_CHANGED_SCRIPT = contactDelivery("null") + communeDelivery("null")
 
+        /** Contact details to save for J'alerte l'Arcep's step 5 (the PROFILE note): the share choice is not one. */
+        internal fun ReporterProfile?.hasJalerteContact(): Boolean =
+            this != null && (email.isNotBlank() || lastName.isNotBlank() || firstName.isNotBlank() || phone.isNotBlank())
+
+        /**
+         * Step 5's details. The share choice SignalConso asks about also answers "Autorisez-vous l'Arcep à
+         * communiquer votre signalement et vos données personnelles à des tiers ?" (null: left to the user).
+         */
         internal fun ReporterProfile?.toContactJson(): String = this
-            ?.takeIf { it.email.isNotBlank() || it.lastName.isNotBlank() || it.firstName.isNotBlank() || it.phone.isNotBlank() }
+            ?.takeIf { it.hasJalerteContact() || it.shareContact != null }
             ?.let {
                 JSONObject()
                     .put("email", it.email)
                     .put("lastName", it.lastName)
                     .put("firstName", it.firstName)
                     .put("phone", it.phone)
+                    .put("shareContact", it.shareContact ?: JSONObject.NULL)
                     .toString()
             } ?: "null"
 
@@ -282,7 +291,7 @@ class ArcepAlertActivity : ComponentActivity() {
                             keyboardOpen = keyboardOpen,
                             hasOperator = operatorName != null,
                             hasPostalCode = !profile?.postalCode.isNullOrBlank(),
-                            hasContact = profile.toContactJson() != "null",
+                            hasContact = profile.hasJalerteContact(),
                             closed = closedNotes,
                         )
                         notes.forEach { note ->
