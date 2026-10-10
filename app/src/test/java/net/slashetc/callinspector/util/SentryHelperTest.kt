@@ -37,7 +37,7 @@ class SentryHelperTest {
     }
 
     // Enabling telemetry starts the real SDK: point it at a local port that accepts nothing, so tests
-    // never send events to the project's Sentry (the fallback DSN, or the CI's SENTRY_DSN).
+    // never send events to external Sentry services.
     private fun useUnreachableDsn() {
         context.getSharedPreferences("sentry_dev_prefs", Context.MODE_PRIVATE)
             .edit()
@@ -75,9 +75,23 @@ class SentryHelperTest {
     }
 
     @Test
-    fun `getResolvedDsn returns default fallback when no custom or build DSN is set`() {
+    fun `getResolvedDsn prefers custom DSN over build or environment DSN`() {
+        useUnreachableDsn()
         val dsn = SentryHelper.getResolvedDsn(context)
-        assertEquals(SentryHelper.FALLBACK_DSN, dsn)
+        assertEquals("http://test@127.0.0.1:9/1", dsn)
+    }
+
+    @Test
+    fun `getResolvedDsn returns expected DSN when no custom DSN is set`() {
+        val expectedBuildDsn = try { net.slashetc.callinspector.BuildConfig.SENTRY_DSN } catch (_: Throwable) { "" }
+        val expectedEnvDsn = System.getenv("SENTRY_DSN") ?: ""
+        val expected = when {
+            expectedBuildDsn.isNotBlank() -> expectedBuildDsn
+            expectedEnvDsn.isNotBlank() -> expectedEnvDsn
+            else -> ""
+        }
+        val dsn = SentryHelper.getResolvedDsn(context)
+        assertEquals(expected, dsn)
     }
 
     @Test

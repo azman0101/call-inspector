@@ -22,9 +22,6 @@ object SentryHelper {
     private const val KEY_TOAST_ENABLED = "toast_enabled"
     private const val KEY_CUSTOM_DSN = "custom_dsn"
 
-    // DSN par défaut configuré pour le projet
-    const val FALLBACK_DSN = "https://32fcd96b74ca3fe4ac168c459b53f0c7@o4511450241302528.ingest.de.sentry.io/4512142920384592"
-
     fun isTelemetryEnabled(context: Context): Boolean {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getBoolean(KEY_TELEMETRY_ENABLED, false)
@@ -78,7 +75,7 @@ object SentryHelper {
         val envDsn = System.getenv("SENTRY_DSN") ?: ""
         if (envDsn.isNotBlank()) return envDsn
 
-        return FALLBACK_DSN
+        return ""
     }
 
     fun notifyIfToastEnabled(context: Context, message: String) {
