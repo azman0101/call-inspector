@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
 # Decides whether this build of main publishes a release, so that merges landing close together share one
-# release instead of one each. It waits QUIET_MINUTES, then looks at the newer runs of this workflow on main
-# (pushes and "Publier maintenant"):
-#   - one whose build job passed publishes later, with this build's changes: this one does not publish;
-#   - one whose build job is still running is waited for, since it may fail, at most PENDING_MINUTES (then
-#     this one publishes: at worst the newer one publishes a second release, none is lost);
-#   - none, or only failed ones: this build is the last good one of the wave, and publishes.
-# Writes publish=true or publish=false to GITHUB_OUTPUT.
+# release instead of one each. It waits QUIET_MINUTES, then waits for the newer runs of this workflow on main
+# (pushes and "Publier maintenant") to end, at most PENDING_MINUTES:
+#   - a newer run published a release (its version is higher than this one): it holds this build's changes,
+#     so this build does not publish;
+#   - none did (no newer run, or their build failed, or they were cancelled, or their publication failed):
+#     this build is the last good one of the wave, and publishes. A wave whose last run fails still gets a
+#     release, from its last good build.
+# Past PENDING_MINUTES with a newer run still going, this one publishes: at worst the newer run publishes a
+# second release, none is lost. Writes publish=true or publish=false to GITHUB_OUTPUT.
 #
 # Usage: tools/release_window.sh
 # Environment:
-#   GH_TOKEN          token with actions: read (the workflow's github.token)
+#   GH_TOKEN          token with actions: read and contents: read (the workflow's github.token)
 #   GITHUB_REPOSITORY, GITHUB_RUN_ID, GITHUB_RUN_NUMBER  (set by Actions)
-#   QUIET_MINUTES     default 30; 0 publishes right away unless a newer build passed
-#   PENDING_MINUTES   default 45
-#   BUILD_JOB         name of the build job, default "Build & Test Android APK"
-#   POLL_SECONDS      default 60, between two looks at a newer build still running
+#   QUIET_MINUTES     default 30; 0 skips the wait (newer runs still going are waited for)
+#   PENDING_MINUTES   default 300
+#   POLL_SECONDS      default 60, between two looks at the newer runs
 set -euo pipefail
 
 QUIET_MINUTES="${QUIET_MINUTES:-30}"
-PENDING_MINUTES="${PENDING_MINUTES:-45}"
-BUILD_JOB="${BUILD_JOB:-Build & Test Android APK}"
+PENDING_MINUTES="${PENDING_MINUTES:-300}"
 POLL_SECONDS="${POLL_SECONDS:-60}"
 : "${GITHUB_REPOSITORY:?}" "${GITHUB_RUN_ID:?}" "${GITHUB_RUN_NUMBER:?}"
 OUTPUT="${GITHUB_OUTPUT:-/dev/stdout}"
@@ -54,27 +54,21 @@ fi
 workflow_id="$(api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .workflow_id)"
 deadline=$(($(date +%s) + PENDING_MINUTES * 60))
 while :; do
-  newer="$(api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?branch=main&per_page=50" \
-    --jq ".workflow_runs[] | select((.event == \"push\" or .event == \"workflow_dispatch\") and .run_number > $GITHUB_RUN_NUMBER) | \"\(.id) \(.run_number)\"")"
-  pending=""
-  while read -r id number; do
-    [ -n "$id" ] || continue
-    # "null null" while the run has not started its build job yet.
-    build="$(api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs" \
-      --jq "[.jobs[] | select(.name == \"$BUILD_JOB\")][0] | \"\(.status) \(.conclusion)\"")"
-    case "$build" in
-      "completed success")
-        decide false "Build #$number of main passed after this one: it publishes the release, with the changes of build #$GITHUB_RUN_NUMBER." ;;
-      completed\ *) ;; # failed or cancelled: it publishes nothing
-      *) pending="$pending #$number" ;;
-    esac
-  done <<<"$newer"
+  pending="$(api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?branch=main&per_page=50" \
+    --jq "[.workflow_runs[] | select((.event == \"push\" or .event == \"workflow_dispatch\") and .run_number > $GITHUB_RUN_NUMBER and .status != \"completed\") | \"#\(.run_number)\"] | join(\" \")")"
   [ -n "$pending" ] || break
   if [ "$(date +%s)" -ge "$deadline" ]; then
-    echo "::warning::Build(s)$pending of main still running after $PENDING_MINUTES minutes: build #$GITHUB_RUN_NUMBER publishes now."
+    echo "::warning::Run(s) $pending of main still going after $PENDING_MINUTES minutes: build #$GITHUB_RUN_NUMBER publishes now."
     break
   fi
-  echo "Waiting for build(s)$pending of main, which may pass and publish instead..."
+  echo "Waiting for run(s) $pending of main, which may publish these changes instead..."
   sleep "$POLL_SECONDS"
 done
-decide true "No newer build of main passed: build #$GITHUB_RUN_NUMBER publishes release v1.0.$GITHUB_RUN_NUMBER."
+
+# The highest version published, from the tags v1.0.<run number>.
+published="$(api "repos/$GITHUB_REPOSITORY/releases?per_page=20" \
+  --jq '[.[] | select(.draft | not) | .tag_name | capture("^v1\\.0\\.(?<n>[0-9]+)$").n | tonumber] | max // 0')"
+if [ "$published" -gt "$GITHUB_RUN_NUMBER" ]; then
+  decide false "Release v1.0.$published, published by a newer run of main, holds the changes of build #$GITHUB_RUN_NUMBER: nothing to publish."
+fi
+decide true "No newer run of main published a release: build #$GITHUB_RUN_NUMBER publishes release v1.0.$GITHUB_RUN_NUMBER."

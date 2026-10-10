@@ -168,17 +168,17 @@ jobs:
           retention-days: 14
 
   # Merges that land on main close together go into one release, instead of one release each. Every build
-  # of main that passes waits here 30 minutes, then publishes only if no newer build of main has passed in
-  # the meantime: the last build of the wave publishes, and its release notes list every pull request merged
-  # since the previous release. A newer build still running is waited for, since it may fail. "Publier
-  # maintenant" (workflow_dispatch on main) skips the 30 minutes. See tools/release_window.sh.
+  # of main that passes waits here 30 minutes, then for the newer runs of main to end, and publishes only if
+  # none of them published a release: the last good build of the wave publishes, and its release notes list
+  # every pull request merged since the previous release. "Publier maintenant" (workflow_dispatch on main)
+  # skips the 30 minutes. See tools/release_window.sh.
   release-window:
     name: Release window (30 min)
     needs: build
     if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04
-    # 30 minutes of quiet, plus at most 45 for a newer build still running.
-    timeout-minutes: 90
+    # 30 minutes of quiet, plus at most 300 for the newer runs of the wave (each waits for the next one).
+    timeout-minutes: 340
     permissions:
       actions: read
       contents: read
@@ -196,8 +196,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           QUIET_MINUTES: ${{ github.event_name == 'workflow_dispatch' && '0' || '30' }}
-          PENDING_MINUTES: '45'
-          BUILD_JOB: Build & Test Android APK
+          PENDING_MINUTES: '300'
         run: tools/release_window.sh
 
   # Builds the signed release APK of the commit the window chose to publish, scans it with VirusTotal,
