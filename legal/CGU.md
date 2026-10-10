@@ -1,6 +1,6 @@
 # Conditions générales d'utilisation et confidentialité
 
-*Dernière mise à jour : 8 octobre 2026*
+*Dernière mise à jour : 10 octobre 2026*
 
 **Info Opérateur** identifie l'opérateur d'un numéro de téléphone à partir des données publiques de l'ARCEP et aide à signaler le démarchage abusif sur SignalConso. L'application vous demande d'accepter ces conditions à sa première ouverture, puis à chaque modification.
 
@@ -39,7 +39,7 @@ Les liens vers `arcep.fr`, ainsi que le téléchargement d'une nouvelle version 
 1. L'application pré-remplit le formulaire officiel. Rien n'est envoyé tant que vous ne validez pas la dernière étape.
 2. Le signalement est transmis au service public SignalConso (DGCCRF) : numéro appelant, date(s), description (avec votre note sur l'appel), entreprise signalée et vos coordonnées. Leur traitement relève de la politique de confidentialité de SignalConso, et le site peut utiliser ses propres outils de mesure.
 3. Vérifiez chaque pré-remplissage : faute d'identifier l'appelant, l'entreprise proposée est l'opérateur du numéro, et le motif peut être un motif par défaut. Vous êtes responsable de l'exactitude de votre signalement.
-4. *Alerter l'Arcep* pré-remplit de la même façon J'alerte l'Arcep, la plateforme d'alerte de l'Arcep, pour un appel ou pour tous les appels de démarchage reçus de numéros d'un même opérateur. Sont pré-remplis : le type de numéro, la technologie (5G), l'opérateur auquel l'Arcep a attribué le ou les numéros, une description (numéros, dates et heures des appels, votre note), votre commune et vos coordonnées si vous les avez enregistrées, ainsi que la réponse « Non » aux questions sur les transports, sur le contact avec le service client et sur la transmission de votre alerte à des tiers. Vous pouvez modifier chacune de ces réponses. Rien n'est envoyé tant que vous ne cliquez pas sur « Envoyer mon alerte », et le consentement au traitement de vos données par l'Arcep reste à cocher par vous.
+4. *Alerter l'Arcep* pré-remplit de la même façon J'alerte l'Arcep, la plateforme d'alerte de l'Arcep, pour un appel ou pour tous les appels de démarchage reçus de numéros d'un même opérateur. Sont pré-remplis : le type de numéro, la technologie (5G), l'opérateur auquel l'Arcep a attribué le ou les numéros, une description (numéros, dates et heures des appels, votre note), votre commune et vos coordonnées si vous les avez enregistrées, la réponse « Non » aux questions sur les transports et sur le contact avec le service client, ainsi que la réponse à la transmission de votre alerte à des tiers selon le choix de partage enregistré dans vos coordonnées (aucune réponse si vous n'en avez pas enregistré). Vous pouvez modifier chacune de ces réponses. Rien n'est envoyé tant que vous ne cliquez pas sur « Envoyer mon alerte », et le consentement au traitement de vos données par l'Arcep reste à cocher par vous.
 5. L'alerte est transmise à l'Arcep ; son traitement relève des conditions d'utilisation et de la politique de données personnelles de J'alerte l'Arcep.
 
 ## 6. Rapports d'anomalies (désactivés par défaut)

@@ -11,7 +11,8 @@ import kotlinx.coroutines.withContext
 /**
  * The user's own details, as SignalConso asks for them in step 4 ("Vos coordonnées") and J'alerte l'Arcep in
  * its last step. [shareContact] answers SignalConso's "Souhaitez-vous partager vos coordonnées avec
- * l'entreprise ?"; null leaves it unanswered. [postalCode] and [city] locate the user for J'alerte l'Arcep,
+ * l'entreprise ?" and J'alerte l'Arcep's "Autorisez-vous l'Arcep à communiquer votre signalement et vos
+ * données personnelles à des tiers ?"; null leaves both unanswered. [postalCode] and [city] locate the user for J'alerte l'Arcep,
  * which requires a commune: the city picks it when several share the postal code.
  */
 data class ReporterProfile(

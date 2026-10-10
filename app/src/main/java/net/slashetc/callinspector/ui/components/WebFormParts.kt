@@ -131,7 +131,13 @@ internal fun ReporterProfileDialog(
                 OutlinedTextField(
                     city, { city = it }, label = { Text("Commune (si plusieurs pour ce code)") }, singleLine = true
                 )
-                Text("Partager vos coordonnées avec l'entreprise ? (SignalConso)", fontSize = 13.sp)
+                Text("Partager vos coordonnées ?", fontSize = 13.sp)
+                Text(
+                    text = "SignalConso : avec l'entreprise signalée. J'alerte l'Arcep : transmission par l'Arcep à des " +
+                        "tiers (autres autorités, opérateur concerné).",
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
+                )
                 listOf(null to "Ne pas préremplir", true to "Je partage", false to "Je ne partage pas").forEach { (value, text) ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,

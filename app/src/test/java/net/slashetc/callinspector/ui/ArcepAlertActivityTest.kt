@@ -8,6 +8,7 @@ import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.PROFILE_CHANGE
 import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.PageState
 import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.communeDelivery
 import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.contactDelivery
+import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.hasJalerteContact
 import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.operatorNote
 import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.parsePageState
 import net.slashetc.callinspector.ui.ArcepAlertActivity.Companion.prefillInjection
@@ -73,12 +74,21 @@ class ArcepAlertActivityTest {
         assertEquals("Test", contact.getString("lastName"))
         assertEquals("Camille", contact.getString("firstName"))
         assertEquals("0611223344", contact.getString("phone"))
-        // SignalConso's reference number and share choice are not J'alerte l'Arcep's business.
+        // The share choice also answers the third-party question; SignalConso's reference number is its own.
+        assertTrue(contact.getBoolean("shareContact"))
         assertFalse(contact.has("referenceNumber"))
-        assertFalse(contact.has("shareContact"))
         val commune = JSONObject(profile.toCommuneJson())
         assertEquals("69003", commune.getString("postalCode"))
         assertEquals("Lyon", commune.getString("city"))
+    }
+
+    @Test
+    fun `the share choice alone is handed over, and is not contact details to save`() {
+        val refused = ReporterProfile(shareContact = false)
+        assertFalse(JSONObject(refused.toContactJson()).getBoolean("shareContact"))
+        assertFalse(refused.hasJalerteContact())
+        assertTrue(JSONObject(ReporterProfile(email = "camille@example.invalid").toContactJson()).isNull("shareContact"))
+        assertTrue(ReporterProfile(email = "camille@example.invalid").hasJalerteContact())
     }
 
     @Test
