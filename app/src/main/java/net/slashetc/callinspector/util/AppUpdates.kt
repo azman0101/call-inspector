@@ -55,13 +55,18 @@ object AppUpdates {
         }
     }.getOrNull()
 
-    /** [releases] as the releases API gives them, for [parseReleases] to read back. */
+    /**
+     * [releases] as the releases API gives them, for [parseReleases] to read back. The notes keep only what
+     * [changes] reads, from "## What's Changed" on: the install and checksum header is left out.
+     */
     fun toJson(releases: List<AppRelease>): String = JSONArray(
         releases.map { release ->
+            val changesStart = release.notes.lineSequence()
+                .indexOfFirst { it.trim().equals("## What's Changed", ignoreCase = true) }
             JSONObject()
                 .put("tag_name", "v" + release.versionName)
                 .put("html_url", release.pageUrl)
-                .put("body", release.notes)
+                .put("body", if (changesStart < 0) release.notes else release.notes.lines().drop(changesStart).joinToString("\n"))
                 .put("assets", JSONArray(listOfNotNull(release.apkUrl?.let {
                     JSONObject().put("name", it.substringAfterLast('/')).put("browser_download_url", it)
                 })))

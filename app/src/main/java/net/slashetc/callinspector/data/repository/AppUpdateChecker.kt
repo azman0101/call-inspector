@@ -50,7 +50,7 @@ class AppUpdateChecker internal constructor(
         if (!isEnabled) return null
         val lastCheck = prefs.getLong(KEY_LAST_CHECK, 0L)
         if (force || now() - lastCheck >= CHECK_INTERVAL_MS || !prefs.contains(KEY_NEWER_JSON)) {
-            fetchReleases()?.let { releases ->
+            fetchReleasesAfter(installedVersionCode)?.let { releases ->
                 // Only the releases after the installed version are kept: the banner needs no other.
                 val newer = releases.filter { AppUpdates.isNewer(it, installedVersionCode) }
                 prefs.edit()
@@ -84,7 +84,7 @@ class AppUpdateChecker internal constructor(
             return null
         }
         if (lastSeen == installedVersionCode || !isEnabled) return null
-        val releases = fetchReleases() ?: return null
+        val releases = fetchReleasesAfter(lastSeen) ?: return null
         val lastSeenName = prefs.getString(KEY_LAST_SEEN_NAME, null)
             ?: releases.firstOrNull { it.versionCode == lastSeen }?.versionName
         rememberSeen()
@@ -100,8 +100,20 @@ class AppUpdateChecker internal constructor(
     suspend fun installedRelease(): AppRelease? =
         fetch(TAG_URL + "v" + installedVersionName)?.let { AppUpdates.parseRelease(it) }
 
-    /** The latest releases, newest first; null when GitHub cannot be reached or answers something else. */
-    private suspend fun fetchReleases(): List<AppRelease>? = fetch(RELEASES_URL)?.let { AppUpdates.parseReleases(it) }
+    /**
+     * The releases after version [afterCode] and at least one more, newest first, page after page until a page
+     * reaches [afterCode] or is the last one ([MAX_PAGES] at most); null when GitHub cannot be reached or
+     * answers something else.
+     */
+    private suspend fun fetchReleasesAfter(afterCode: Int): List<AppRelease>? {
+        val releases = mutableListOf<AppRelease>()
+        for (page in 1..MAX_PAGES) {
+            val batch = fetch(releasesUrl(page))?.let { AppUpdates.parseReleases(it) } ?: return null
+            releases += batch
+            if (batch.size < PER_PAGE || batch.any { it.versionCode <= afterCode }) break
+        }
+        return releases
+    }
 
     private suspend fun fetch(url: String): String? = withContext(Dispatchers.IO) {
         val request = Request.Builder()
@@ -137,11 +149,11 @@ class AppUpdateChecker internal constructor(
 
         internal const val CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L
         private const val MAX_RESPONSE_BYTES = 1_000_000L
-        /**
-         * The 30 latest releases (about 7 KB each): enough to cover the versions a user skipped, since merges
-         * close together share one release.
-         */
-        internal const val RELEASES_URL = "https://api.github.com/repos/azman0101/call-inspector/releases?per_page=30"
+        /** Releases per page, about 7 KB each: one page covers most updates, since merges close together share one. */
+        private const val PER_PAGE = 30
+        private const val MAX_PAGES = 10
+        internal fun releasesUrl(page: Int) =
+            "https://api.github.com/repos/azman0101/call-inspector/releases?per_page=$PER_PAGE&page=$page"
         internal const val TAG_URL = "https://api.github.com/repos/azman0101/call-inspector/releases/tags/"
 
         private val defaultClient: OkHttpClient by lazy {

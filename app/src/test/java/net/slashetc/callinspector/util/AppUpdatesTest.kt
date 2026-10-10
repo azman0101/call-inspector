@@ -132,7 +132,11 @@ class AppUpdatesTest {
         val releases = AppUpdates.parseReleases(json)!!
 
         assertEquals(listOf(180, 174), releases.map { it.versionCode })
-        assertEquals(releases, AppUpdates.parseReleases(AppUpdates.toJson(releases)))
+        val stored = AppUpdates.parseReleases(AppUpdates.toJson(releases))!!
+        assertEquals(releases.map { it.copy(notes = "") }, stored.map { it.copy(notes = "") })
+        // Only what the app reads is stored: the changes, not the install and checksum header.
+        assertEquals(releases.map { it.changes }, stored.map { it.changes })
+        assertFalse(stored[0].notes.contains("SHA-256"))
         assertEquals(emptyList<AppRelease>(), AppUpdates.parseReleases("[]"))
         assertNull(AppUpdates.parseReleases(releaseJson()))
     }

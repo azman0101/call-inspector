@@ -64,7 +64,7 @@ class AppUpdateCheckerTest {
 
     @Test
     fun `a newer release is offered, the installed or an older one is not`() = runBlocking {
-        responses[AppUpdateChecker.RELEASES_URL] = releases(180, 174)
+        responses[AppUpdateChecker.releasesUrl(1)] = releases(180, 174)
 
         assertEquals(180, checker(174).availableUpdate()?.versionCode)
         assertNull(checker(180).availableUpdate(force = true))
@@ -73,12 +73,12 @@ class AppUpdateCheckerTest {
 
     @Test
     fun `GitHub is asked at most once a day, the last answer is reused in between`() = runBlocking {
-        responses[AppUpdateChecker.RELEASES_URL] = releases(180)
+        responses[AppUpdateChecker.releasesUrl(1)] = releases(180)
         val checker = checker(174)
 
         checker.availableUpdate()
         clock += AppUpdateChecker.CHECK_INTERVAL_MS - 1
-        responses[AppUpdateChecker.RELEASES_URL] = releases(181, 180)
+        responses[AppUpdateChecker.releasesUrl(1)] = releases(181, 180)
         assertEquals(180, checker.availableUpdate()?.versionCode)
         assertEquals(1, requested.size)
 
@@ -92,7 +92,7 @@ class AppUpdateCheckerTest {
 
     @Test
     fun `offline, the last known release is kept and the next launch asks again`() = runBlocking {
-        responses[AppUpdateChecker.RELEASES_URL] = releases(180)
+        responses[AppUpdateChecker.releasesUrl(1)] = releases(180)
         val checker = checker(174)
         checker.availableUpdate()
 
@@ -106,19 +106,19 @@ class AppUpdateCheckerTest {
 
     @Test
     fun `a dismissed version is not offered again, the next one is`() = runBlocking {
-        responses[AppUpdateChecker.RELEASES_URL] = releases(180)
+        responses[AppUpdateChecker.releasesUrl(1)] = releases(180)
         val checker = checker(174)
 
         checker.dismiss(checker.availableUpdate()!!)
         assertNull(checker.availableUpdate(force = true))
 
-        responses[AppUpdateChecker.RELEASES_URL] = releases(181, 180)
+        responses[AppUpdateChecker.releasesUrl(1)] = releases(181, 180)
         assertEquals(181, checker.availableUpdate(force = true)?.versionCode)
     }
 
     @Test
     fun `turned off, nothing is asked and nothing is offered`() = runBlocking {
-        responses[AppUpdateChecker.RELEASES_URL] = releases(180)
+        responses[AppUpdateChecker.releasesUrl(1)] = releases(180)
         val checker = checker(174)
         checker.isEnabled = false
 
@@ -131,7 +131,7 @@ class AppUpdateCheckerTest {
 
     @Test
     fun `the offer brings the changes of every release since the installed one, oldest first`() = runBlocking {
-        responses[AppUpdateChecker.RELEASES_URL] = listOf(
+        responses[AppUpdateChecker.releasesUrl(1)] = listOf(
             release(182, "fix(tile): third"),
             release(181, "feat: second"),
             release(180, "feat: first"),
@@ -149,16 +149,44 @@ class AppUpdateCheckerTest {
     }
 
     @Test
+    fun `more than a page of skipped releases is read page after page, up to the installed one`() = runBlocking {
+        responses[AppUpdateChecker.releasesUrl(1)] = releases(*(260 downTo 231).toList().toIntArray())
+        responses[AppUpdateChecker.releasesUrl(2)] = releases(*(230 downTo 201).toList().toIntArray())
+        responses[AppUpdateChecker.releasesUrl(3)] = releases(*(200 downTo 190).toList().toIntArray())
+
+        val update = checker(225).availableUpdate()!!
+        assertEquals(260, update.versionCode)
+        assertEquals((226..260).map { "feat: something (#$it)" }, update.changes)
+        assertEquals(listOf(AppUpdateChecker.releasesUrl(1), AppUpdateChecker.releasesUrl(2)), requested)
+
+        requested.clear()
+        assertEquals(35, checker(225).availableUpdate(force = true)!!.changes.size)
+        assertEquals(2, requested.size)
+        requested.clear()
+        checker(240).availableUpdate(force = true)
+        assertEquals("the first page reaches 240", 1, requested.size)
+    }
+
+    @Test
+    fun `a page GitHub cannot give fails the whole check, the last answer is kept`() = runBlocking {
+        responses[AppUpdateChecker.releasesUrl(1)] = releases(180)
+        assertEquals(180, checker(174).availableUpdate()?.versionCode)
+
+        responses[AppUpdateChecker.releasesUrl(1)] = releases(*(260 downTo 231).toList().toIntArray()) // page 2: 404
+        assertEquals(180, checker(174).availableUpdate(force = true)?.versionCode)
+    }
+
+    @Test
     fun `the first check after this version asks GitHub even when the last one is recent`() = runBlocking {
         // What an older version left: the latest release alone, checked a moment ago.
         context.getSharedPreferences("app_updates", Context.MODE_PRIVATE).edit()
             .putString("latest_release_json", release(180))
             .putLong("last_check_at", clock)
             .commit()
-        responses[AppUpdateChecker.RELEASES_URL] = releases(181, 180)
+        responses[AppUpdateChecker.releasesUrl(1)] = releases(181, 180)
 
         assertEquals(181, checker(174).availableUpdate()?.versionCode)
-        assertEquals(listOf(AppUpdateChecker.RELEASES_URL), requested)
+        assertEquals(listOf(AppUpdateChecker.releasesUrl(1)), requested)
         assertEquals(false, context.getSharedPreferences("app_updates", Context.MODE_PRIVATE).contains("latest_release_json"))
         assertEquals(181, checker(174).availableUpdate()?.versionCode)
         assertEquals(1, requested.size)
@@ -174,7 +202,7 @@ class AppUpdateCheckerTest {
 
     @Test
     fun `what's new shows once, after an update, never on a fresh install`() = runBlocking {
-        responses[AppUpdateChecker.RELEASES_URL] = releases(180, 174)
+        responses[AppUpdateChecker.releasesUrl(1)] = releases(180, 174)
 
         assertNull(checker(174).whatsNewAfterUpdate()) // fresh install: remembers 174
         assertEquals(emptyList<String>(), requested)
@@ -188,7 +216,7 @@ class AppUpdateCheckerTest {
     @Test
     fun `what's new brings the changes of every release since the version last opened`() = runBlocking {
         assertNull(checker(174).whatsNewAfterUpdate())
-        responses[AppUpdateChecker.RELEASES_URL] = listOf(
+        responses[AppUpdateChecker.releasesUrl(1)] = listOf(
             release(182, "feat: not installed yet"),
             release(181, "fix: second"),
             release(180, "feat: first"),
@@ -204,7 +232,7 @@ class AppUpdateCheckerTest {
     @Test
     fun `what's new of a version that is not published is not asked again`() = runBlocking {
         assertNull(checker(174).whatsNewAfterUpdate())
-        responses[AppUpdateChecker.RELEASES_URL] = releases(180, 174)
+        responses[AppUpdateChecker.releasesUrl(1)] = releases(180, 174)
 
         assertNull(checker(179).whatsNewAfterUpdate())
         assertNull(checker(179).whatsNewAfterUpdate())
@@ -218,7 +246,7 @@ class AppUpdateCheckerTest {
         offline = true
         assertNull(checker(180).whatsNewAfterUpdate())
         offline = false
-        responses[AppUpdateChecker.RELEASES_URL] = releases(180)
+        responses[AppUpdateChecker.releasesUrl(1)] = releases(180)
         assertEquals(180, checker(180).whatsNewAfterUpdate()?.versionCode)
     }
 
