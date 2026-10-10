@@ -9,6 +9,8 @@ on:
   push:
     branches:
       - main
+  # "Publier maintenant": on main, publishes a release once the build passes, without the release window.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -17,16 +19,9 @@ jobs:
   build:
     name: Build & Test Android APK
     runs-on: ubuntu-24.04
-    # Pushes to main build the signed release APK: they use the 'release' environment, restricted to main,
-    # which alone holds the signing secrets (KEYSTORE_BASE64, STORE_PASSWORD, KEY_PASSWORD). Every other
-    # run, pull requests included, uses 'production' and cannot read them. Both environments need
-    # SENTRY_DSN and NVD_API_KEY (tools/setup-release-environment.sh).
-    environment: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && 'release' || 'production' }}
-    # contents: write so that, on main, the VirusTotal badge step can commit the current report link and the
-    # release step can create the tag and the GitHub release (see those steps). The workflow-level
-    # permissions above stay read-only for every other job.
-    permissions:
-      contents: write
+    # Every build, main included, uses 'production' (SENTRY_DSN, NVD_API_KEY): it cannot read the signing
+    # secrets, which only the publish job below gets, from the 'release' environment.
+    environment: production
     env:
       # Goes into BuildConfig. Set for every Gradle step, not only the APK ones: a value that differs
       # between steps changes BuildConfig and recompiles all Kotlin.
@@ -63,7 +58,7 @@ jobs:
           REF_NAME="${{ github.head_ref || github.ref_name }}"
           CLEAN_REF=$(echo "$REF_NAME" | sed 's#[^a-zA-Z0-9.-]#-#g' | cut -c1-20)
 
-          if [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ github.event_name }}" = "push" ]; then
+          if [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ github.event_name }}" != "pull_request" ]; then
             VERSION_NAME="1.0.${RUN_NUM}"
             IS_RELEASE="true"
           else
@@ -79,9 +74,6 @@ jobs:
       - name: Prepare build environment
         env:
           DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
-          # The release key is only exposed to pushes on main, the only builds that use it.
-          KEYSTORE_BASE64: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && secrets.KEYSTORE_BASE64 || '' }}
-          IS_MAIN_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         run: |
           chmod +x gradlew
 
@@ -100,18 +92,6 @@ jobs:
             fi
           fi
 
-          # Configuration du keystore de signature pour la release (push sur main uniquement)
-          if [ "${IS_MAIN_PUSH}" = "true" ] && [ ! -f my-upload-key.jks ]; then
-            if [ -n "${KEYSTORE_BASE64}" ]; then
-              echo "Restoring my-upload-key.jks from secrets.KEYSTORE_BASE64..."
-              printf '%s' "${KEYSTORE_BASE64}" | base64 -d > my-upload-key.jks
-            else
-              # Alias must match keyAlias "upload" in app/build.gradle.kts.
-              echo "::warning::KEYSTORE_BASE64 secret is not set: signing with a throwaway key. This APK cannot update an install signed by any other build."
-              keytool -genkeypair -keystore my-upload-key.jks -storepass android -alias upload -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=CI Ephemeral Upload Key,O=call-inspector,C=FR"
-            fi
-          fi
-
           # Création du fichier .env pour le plugin secrets-gradle s'il n'existe pas
           if [ ! -f .env ]; then
             if [ -f .env.example ]; then
@@ -124,10 +104,10 @@ jobs:
       - name: Run Unit & Robolectric Tests
         run: ./gradlew testDebugUnitTest --stacktrace --profile
 
-      # On main the scan gates the release APK, so it runs here, before it. On pull requests it is advisory
-      # and runs in the dependency-check job below, in parallel with this one.
+      # On main the scan gates the release (the publish job needs this one), so it runs here. On pull
+      # requests it is advisory and runs in the dependency-check job below, in parallel with this one.
       - name: Scan dependencies (OWASP Dependency-Check)
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name != 'pull_request' }}
         env:
           NVD_API_KEY_RAW: ${{ secrets.NVD_API_KEY }}
         run: |
@@ -139,7 +119,7 @@ jobs:
           ./gradlew dependencyCheckAnalyze --no-daemon --no-configuration-cache --stacktrace --info
 
       - name: Upload dependency scan report
-        if: ${{ always() && github.event_name == 'push' }}
+        if: ${{ always() && github.event_name != 'pull_request' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dependency-check-report
@@ -164,19 +144,133 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      # Construction de l'APK Release sur la branche main
-      - name: Build Release APK (Main Branch)
-        if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+      # Pull requests build the debug APK, whose D8 dexing of every library took about 7 CPU-minutes per
+      # run (mergeExtDexDebug waits on it). Main is the only branch whose Gradle cache is saved, and it does
+      # not build that APK otherwise: building it here puts the debug dex in that cache, for every pull
+      # request to reuse. The APK itself is not uploaded.
+      - name: Warm the debug dexing cache (Main Branch)
+        if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+        run: ./gradlew assembleDebug --stacktrace --profile
+
+      # Per-task timings (Gradle --profile) of every build step above, to compare runs: the slowest tasks
+      # go to the job summary and this log, the full reports to the gradle-profile artifact.
+      - name: Summarize Gradle profile
+        if: always()
+        run: tools/gradle_profile_summary.py | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Gradle profile
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gradle-profile
+          path: build/reports/profile
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # Merges that land on main close together go into one release, instead of one release each. Every build
+  # of main that passes waits here 30 minutes, then publishes only if no newer build of main has passed in
+  # the meantime: the last build of the wave publishes, and its release notes list every pull request merged
+  # since the previous release. A newer build still running is waited for, since it may fail. "Publier
+  # maintenant" (workflow_dispatch on main) skips the 30 minutes. See tools/release_window.sh.
+  release-window:
+    name: Release window (30 min)
+    needs: build
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-24.04
+    # 30 minutes of quiet, plus at most 45 for a newer build still running.
+    timeout-minutes: 90
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      publish: ${{ steps.window.outputs.publish }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: tools
+
+      - name: Wait for the merges that follow
+        id: window
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QUIET_MINUTES: ${{ github.event_name == 'workflow_dispatch' && '0' || '30' }}
+          PENDING_MINUTES: '45'
+          BUILD_JOB: Build & Test Android APK
+        run: tools/release_window.sh
+
+  # Builds the signed release APK of the commit the window chose to publish, scans it with VirusTotal,
+  # publishes the GitHub release and points the README's VirusTotal badge at its report. Only this job reads
+  # the signing secrets: the 'release' environment, restricted to main, holds them (KEYSTORE_BASE64,
+  # STORE_PASSWORD, KEY_PASSWORD) with SENTRY_DSN (tools/setup-release-environment.sh). It is never cancelled
+  # half-way: a publication waits for the one in progress.
+  publish:
+    name: Publish the release
+    needs: release-window
+    if: ${{ needs.release-window.outputs.publish == 'true' }}
+    runs-on: ubuntu-24.04
+    environment: release
+    concurrency:
+      group: release-publish
+      cancel-in-progress: false
+    # contents: write to commit the badge link on main and to create the tag and the GitHub release.
+    permissions:
+      contents: write
+    env:
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+      # Same version as the build job of this run: the run number is the versionCode, so it always grows.
+      VERSION_CODE: ${{ github.run_number }}
+      VERSION_NAME: 1.0.${{ github.run_number }}
+      # Restore the Gradle User Home that the build job saves on main (dependencies, compiled classes).
+      GRADLE_BUILD_ACTION_CACHE_KEY_JOB: build
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2 (MIT-licensed cache; v6's default cache-provider is proprietary, see PR review)
+        with:
+          # The same entries as the build job, whose cache this restores; the build job alone saves it.
+          gradle-home-cache-includes: |
+            caches
+            notifications
+            dependency-check-data
+          cache-read-only: true
+
+      - name: Prepare build environment
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          chmod +x gradlew
+          if [ -n "${KEYSTORE_BASE64}" ]; then
+            echo "Restoring my-upload-key.jks from secrets.KEYSTORE_BASE64..."
+            printf '%s' "${KEYSTORE_BASE64}" | base64 -d > my-upload-key.jks
+          else
+            # Alias must match keyAlias "upload" in app/build.gradle.kts. publish_release.sh refuses the APK.
+            echo "::warning::KEYSTORE_BASE64 secret is not set: signing with a throwaway key. This APK cannot update an install signed by any other build."
+            keytool -genkeypair -keystore my-upload-key.jks -storepass android -alias upload -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=CI Ephemeral Upload Key,O=call-inspector,C=FR"
+          fi
+          # Fichier .env pour le plugin secrets-gradle
+          if [ ! -f .env ]; then
+            if [ -f .env.example ]; then cp .env.example .env; else touch .env; fi
+          fi
+
+      - name: Build Release APK
         env:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'android' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android' }}
           KEYSTORE_PATH: my-upload-key.jks
-          VERSION_CODE: ${{ env.VERSION_CODE }}
-          VERSION_NAME: ${{ env.VERSION_NAME }}
-        run: ./gradlew assembleRelease --stacktrace --profile
+        run: ./gradlew assembleRelease --stacktrace
 
       - name: Upload Release APK Artifact
-        if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: info-operateur-release-v${{ env.VERSION_NAME }}
@@ -184,30 +278,51 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # Informational VirusTotal scan of the release APK, on pushes to main only: detections produce a
-      # warning and the report link in the job summary, never a failure (continue-on-error, and the
-      # script itself only warns). Needs the VIRUSTOTAL_API_KEY secret, else it is skipped.
+      # Informational VirusTotal scan of the release APK: detections produce a warning and the report link in
+      # the job summary, never a failure (continue-on-error, and the script itself only warns). Needs the
+      # VIRUSTOTAL_API_KEY secret, else it is skipped.
       - name: Scan APK with VirusTotal (non-blocking)
         id: virustotal
-        if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
         continue-on-error: true
         timeout-minutes: 15
         env:
           VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
         run: tools/virustotal_scan.sh "$(ls app/build/outputs/apk/release/*.apk | head -1)"
 
-      # The badge in the README links to shields.io, which links to VirusTotal — but the report URL is
-      # keyed by the APK's own SHA-256, so it changes on every release and can't be hard-coded. This
-      # step points the badge's link straight at the report just produced, and commits that one line
-      # back to main. contents: write below is scoped to this job only (the rest of the workflow stays
-      # read-only). GITHUB_TOKEN pushes don't trigger further workflow runs, so this can't loop.
+      # Tag v<version> on the built commit, the signed APK and its SHA-256 as assets, and notes listing the
+      # checksums, signing certificate, VirusTotal report, this run, and the pull requests merged since the
+      # previous release, sorted into Nouveautés, Correctifs and Autres changements. The script refuses an APK
+      # that is not signed with the release key (a missing KEYSTORE_BASE64 secret makes the build fall back to
+      # a throwaway key): such an APK could not update any install. Tags made with GITHUB_TOKEN start no
+      # workflow run.
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Release signing certificate, as published in the README ("Vérifier la signature").
+          EXPECTED_CERT_SHA256: 1f45c660f2385aee7bdd9aa05eaa562d8b4caf7fcfcb32c386a2f2fdd8ed793a
+          ARTIFACT_NAME: info-operateur-release-v${{ env.VERSION_NAME }}
+          VIRUSTOTAL_REPORT_URL: ${{ steps.virustotal.outputs.report_url }}
+          VIRUSTOTAL_MALICIOUS: ${{ steps.virustotal.outputs.malicious }}
+          VIRUSTOTAL_SUSPICIOUS: ${{ steps.virustotal.outputs.suspicious }}
+        run: tools/publish_release.sh "$(ls app/build/outputs/apk/release/*.apk | head -1)"
+
+      # The badge in the README links to shields.io, which links to VirusTotal — but the report URL is keyed
+      # by the APK's own SHA-256, so it changes on every release and can't be hard-coded. This step points the
+      # badge's link straight at the report just produced, and commits that one line on main. Main may have
+      # moved since the built commit (the window lasts 30 minutes), so the edit is made on its current head.
+      # [skip ci], and pushes made with GITHUB_TOKEN start no workflow run anyway, so this can't loop.
       - name: Point the VirusTotal badge at the latest report
-        if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.virustotal.outputs.report_url != '' }}
+        if: ${{ steps.virustotal.outputs.report_url != '' }}
         continue-on-error: true
         env:
           REPORT_URL: ${{ steps.virustotal.outputs.report_url }}
         run: |
-          python3 - <<'EOF'
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          for attempt in 1 2 3; do
+            git fetch --depth=1 origin main
+            git checkout --detach --force FETCH_HEAD
+            python3 - <<'EOF'
           import os
           import re
 
@@ -228,54 +343,15 @@ jobs:
           else:
               print("README.md already links to the current report")
           EOF
-          if ! git diff --quiet -- README.md; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add README.md
-            git commit -m "docs: point the VirusTotal badge at the latest release APK report [skip ci]"
-            git push
-          fi
-
-      # Every build on main becomes a GitHub release: tag v<version> on the built commit, the signed APK and
-      # its SHA-256 as assets, and notes listing the checksums, signing certificate, VirusTotal report, this
-      # run, and the pull requests merged since the previous release. The script refuses an APK that is not
-      # signed with the release key (a missing KEYSTORE_BASE64 secret makes the build fall back to a throwaway
-      # key): such an APK could not update any install. Tags made with GITHUB_TOKEN start no workflow run.
-      - name: Publish the GitHub release
-        if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION_NAME: ${{ env.VERSION_NAME }}
-          # Release signing certificate, as published in the README ("Vérifier la signature").
-          EXPECTED_CERT_SHA256: 1f45c660f2385aee7bdd9aa05eaa562d8b4caf7fcfcb32c386a2f2fdd8ed793a
-          ARTIFACT_NAME: info-operateur-release-v${{ env.VERSION_NAME }}
-          VIRUSTOTAL_REPORT_URL: ${{ steps.virustotal.outputs.report_url }}
-          VIRUSTOTAL_MALICIOUS: ${{ steps.virustotal.outputs.malicious }}
-          VIRUSTOTAL_SUSPICIOUS: ${{ steps.virustotal.outputs.suspicious }}
-        run: tools/publish_release.sh "$(ls app/build/outputs/apk/release/*.apk | head -1)"
-
-      # Pull requests build the debug APK, whose D8 dexing of every library took about 7 CPU-minutes per
-      # run (mergeExtDexDebug waits on it): main only built the release APK (R8), so the Gradle cache it
-      # saves never held the debug dex, and no pull request could reuse it. Building the debug APK here
-      # puts it in main's cache. The APK itself is not uploaded.
-      - name: Warm the debug dexing cache (Main Branch)
-        if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
-        run: ./gradlew assembleDebug --stacktrace --profile
-
-      # Per-task timings (Gradle --profile) of every build step above, to compare runs: the slowest tasks
-      # go to the job summary and this log, the full reports to the gradle-profile artifact.
-      - name: Summarize Gradle profile
-        if: always()
-        run: tools/gradle_profile_summary.py | tee -a "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload Gradle profile
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: gradle-profile
-          path: build/reports/profile
-          if-no-files-found: ignore
-          retention-days: 14
+            if git diff --quiet -- README.md; then
+              exit 0
+            fi
+            git commit -m "docs: point the VirusTotal badge at the latest release APK report [skip ci]" -- README.md
+            # Rejected if main moved since the fetch: start again from its new head.
+            git push origin HEAD:main && exit 0
+            sleep 10
+          done
+          exit 1
 
   # Pull requests only: the advisory dependency scan runs next to the build instead of before the APK.
   dependency-check:
