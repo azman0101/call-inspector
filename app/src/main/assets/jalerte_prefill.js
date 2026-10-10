@@ -39,8 +39,11 @@
   var stalePick = null;
   // The profile changed while step 5 is shown: the contact details put in are to be emptied.
   var staleContact = false;
-  // The answer the script gave to the third-party question ('Oui' or 'Non'), from the user's share choice.
+  // The answer the script gave to the third-party question ('Oui' or 'Non'), from the user's share choice,
+  // and a profile change it has not caught up with yet: at whatever step it came, the next step 5 sees it
+  // (the server keeps the answer while the user goes back and forth between steps).
   var shareAnswer = null;
+  var staleShare = false;
   // The commune search under way; an answer to an earlier one (made before a profile change) is dropped.
   var search = 0;
   // The commune it found, selected on the next pass the server is idle for.
@@ -401,8 +404,11 @@
     if (staleContact) {
       if (step === 5 && dropContact()) { runLater(); return; }
       staleContact = false;
-      // The old choice goes with the old details: the new ones answer again when they come.
-      if (step === 5 && answerShare(null)) { runLater(); return; }
+    }
+    // The old choice goes with the old details: the new ones answer again when they come.
+    if (staleShare && step === 5) {
+      staleShare = false;
+      if (answerShare(null)) { runLater(); return; }
     }
     if (step === 3 && stalePick !== null) { dropStaleCommune(); runLater(); return; }
     if (step === 3 && found && selectFound()) { runLater(); return; }
@@ -428,7 +434,10 @@
   };
   window.__iaFillContact = function (details) {
     // Dropped (the profile changed): what the script put in the fields shown goes too, on the next pass.
-    if (!details && currentStep() === 5) staleContact = true;
+    if (!details) {
+      staleShare = true;
+      if (currentStep() === 5) staleContact = true;
+    }
     contact = details && currentStep() === 5 && onForm() ? details : null;
     run();
   };
