@@ -5,241 +5,21 @@
 [![Dernière release](https://img.shields.io/github/v/release/azman0101/call-inspector?label=t%C3%A9l%C3%A9charger%20l%27APK)](https://github.com/azman0101/call-inspector/releases/latest)
 [![Licence MIT](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
 
-Application Android Kotlin / Jetpack Compose qui analyse l'historique d'appels du téléphone et identifie automatiquement l'opérateur de télécommunication et l'entreprise titulaire de chaque numéro selon les données publiques de l'**ARCEP** (Autorité de régulation des communications électroniques, des postes et de la distribution de la presse).
-
-> **Note sur le nom et la marque pour publication** : Initialement nommé « Arcep Opérateur », le projet a été renommé **« Info Opérateur »** pour respecter le droit des marques de l'ARCEP et les règles de publication du Google Play Store interdisant l'usage de marques institutionnelles comme nom d'application.
+Application Android (Kotlin, Jetpack Compose) qui identifie, pour chaque appel reçu, l'opérateur et l'entreprise titulaires du numéro d'après les données publiques de l'**ARCEP**, et aide à signaler le démarchage abusif (SignalConso, J'alerte l'Arcep). Anciennement « Arcep Opérateur », elle a été renommée pour respecter la marque de l'ARCEP et les règles du Play Store.
 
 > [!NOTE]
-> **Code largement produit par IA.** L'essentiel de ce dépôt (code Kotlin, tests, workflows CI, scripts et documentation) a été écrit par des assistants de programmation, sous la direction et la relecture du mainteneur :
+> **Code largement produit par IA.** L'essentiel du dépôt (code, tests, CI, scripts, documentation) a été écrit par des assistants de programmation, sous la direction et la relecture du mainteneur : Google AI Studio au départ (d'où l'ancien identifiant `com.aistudio.operatorlookup`), puis Claude Code, Google Jules et l'agent GitHub Copilot, dont les commits portent le nom ou un trailer `Co-Authored-By`. La plupart des changements passent par une pull request et la CI (tests unitaires et Robolectric, scan OWASP, GitGuardian), et le mainteneur décide des fusions. Le code n'a pas eu d'audit indépendant : relisez-le avant de le réutiliser.
 >
-> - le projet a démarré dans Google AI Studio (d'où l'ancien identifiant `com.aistudio.operatorlookup`) ;
-> - Claude Code (Anthropic), Google Jules et l'agent GitHub Copilot ont ensuite produit une grande partie des commits et des pull requests (les commits des agents portent leur nom ou un trailer `Co-Authored-By`).
->
-> La plupart des changements passent par une pull request et la CI (tests unitaires et Robolectric, scan OWASP, GitGuardian), et le mainteneur décide des fusions. Le code n'a pas eu d'audit indépendant : relisez-le avant de le réutiliser.
->
-> **Coût d'une session.** À titre indicatif, une seule session Claude Code, du 25 au 27 septembre 2026 (dont les PR #29 à #35 : chiffrement des notes, CGU, accélération de la CI, durcissement avant publication), a demandé environ 1 000 réponses du modèle :
->
-> | Tokens | Volume |
-> |---|---:|
-> | Lus depuis le cache de prompt | 387 millions |
-> | Écrits dans le cache | 3,0 millions |
-> | Générés | 0,74 million |
-> | Entrée hors cache | ~2 000 |
->
-> Au tarif public de l'API Anthropic, cela représente **environ 115 $**, dont deux tiers pour les lectures en cache, qui sont facturées ~20 fois moins cher qu'une entrée normale. C'est un équivalent au tarif public : le montant réellement facturé dépend du mode d'accès (abonnement ou API). Les autres sessions et agents ne sont pas comptés.
+> À titre indicatif, une session Claude Code de trois jours (PR #29 à #35) a demandé environ 1 000 réponses du modèle, soit environ 115 $ au tarif public de l'API Anthropic, aux deux tiers des lectures du cache de prompt.
 
----
+## Installer
 
-## Sommaire
+Téléchargez `info-operateur-<version>.apk` depuis la [dernière release](https://github.com/azman0101/call-inspector/releases/latest) et ouvrez-le sur le téléphone (Android 7.0 ou plus récent) : il met à jour une installation existante.
 
-1. [Fonctionnalités](#fonctionnalités)
-2. [Choix d'implémentation et d'architecture](#choix-dimplémentation-et-darchitecture)
-3. [Corrections récentes apportées au projet](#corrections-récentes-apportées-au-projet)
-4. [Données ARCEP et fonctionnement de la base locale](#données-arcep-et-fonctionnement-de-la-base-locale)
-5. [Construire et tester l'application](#construire-et-tester-lapplication)
-6. [Structure du projet](#structure-du-projet)
-7. [TODO & Pistes d'évolution](#todo--pistes-dévolution)
-8. [Licence](#licence)
-
----
-
-## Fonctionnalités
-
-- **Journal d'appels enrichi (Call History)** :
-  - Lecture des appels reçus (entrants, manqués, rejetés et bloqués) avec date, heure et durée ; les appels sortants sont ignorés.
-  - Résolution instantanée de l'opérateur attributaire (Orange, SFR, Free, Bouygues Telecom, Manifone, OVH, BJT Partners, etc.).
-  - Filtres rapides : *Tous*, *⚠️ Démarchage / Spam*, *Manqués*, *Entrants*, *Favoris*.
-  - Recherche en texte intégral par numéro, nom de contact ou nom d'opérateur.
-- **Dossier légal ARCEP complet** :
-  - Identité officielle de l'entreprise (dénomination sociale).
-  - Identifiants légaux : numéro SIRET et Registre du Commerce (RCS).
-  - Siège social et adresse déclarée auprès du régulateur.
-  - Plage de numérotation complète (tranche début à tranche fin), territoire et date de décision d'attribution.
-  - Raccourci vers la fiche officielle : bouton direct ouvrant `arcep.fr` avec copie automatique du numéro dans le presse-papiers.
-- **Détection du démarchage commercial réglementé** :
-  - Reconnaissance automatique des préfixes réservés aux centres d'appels et télévendeurs depuis le 1er janvier 2023 (Décision ARCEP n° 2022-1583).
-- **Recherche manuelle & Préfixes** :
-  - Saisie libre d'un numéro à 10 chiffres ou d'un préfixe (ex. `01 62`, `06 12`, `07 81`, `08 92`).
-  - Bouton pour coller directement depuis le presse-papiers.
-  - Exploration de toutes les tranches attribuées correspondantes.
-- **Signalement assisté sur SignalConso** :
-  - Depuis la fiche d'un appel reçu, le bouton « Signaler ce démarchage (SignalConso) » ouvre le formulaire officiel de la DGCCRF (« Démarchage abusif ») dans l'application.
-  - Préremplissage à partir du journal d'appels : numéro appelant, dates des appels, description et motif. Le motif est choisi, par ordre de priorité, d'après :
-    - le sujet de l'appel, repéré dans la note de l'utilisateur ou le nom de l'appelant : administration usurpée, rénovation énergétique, CPF ;
-    - ce que montre l'appel lui-même : au moins 5 appels en 30 jours, week-end ou jour férié, hors horaires autorisés ;
-    - un refus de démarchage datant de moins de 60 jours, s'il est mentionné dans la note ;
-    - un numéro en 06/07 ;
-    - à défaut, « refus de démarchage datant de moins de 60 jours » : signaler l'appel revient à le tenir pour illicite. Un bandeau demande de vérifier ce motif, qui n'est pas repris dans la description.
-  - Entreprise signalée : le nom de l'appelant s'il figure dans le journal d'appels, sinon l'opérateur auquel l'ARCEP a attribué le numéro (recherche par SIRET, résultat sélectionné s'il est unique ; recherche par nom à défaut). Un bandeau explique ce choix et l'utilisateur peut le changer.
-  - Coordonnées (étape 4 : identité, email, téléphone, numéro de référence, choix de partage avec l'entreprise) mémorisables via « Mes coordonnées » : stockées dans une base locale dédiée (`reporter_profile_secure.db`) chiffrée par SQLCipher, avec une clé protégée par l'Android Keystore (StrongBox si disponible), exclue des sauvegardes et des transferts d'appareil ; elles ne quittent le téléphone que dans un signalement validé par l'utilisateur.
-  - L'utilisateur vérifie chaque étape, choisit l'entreprise si besoin et valide lui-même l'envoi.
-  - Signalements envoyés comptabilisés par numéro, quand SignalConso affiche son accusé de réception : l'historique indique le nombre de signalements et la date du dernier, rappelés sous le bouton de signalement. Ils sont stockés dans la même base chiffrée.
-- **Alerte à l'Arcep (J'alerte l'Arcep)** :
-  - Depuis la fiche d'un appel reçu, le bouton « Alerter l'Arcep » ouvre [J'alerte l'Arcep](https://jalerte.arcep.fr/jalerte/) dans l'application, pour cet appel ou pour tous les appels de démarchage reçus de numéros attribués au même opérateur (plages de démarchage, numéros marqués comme spam, et le numéro de l'appel). Regroupés, ces appels montrent à l'Arcep un opérateur dont les numéros servent souvent à démarcher, y compris quand l'appelant est à l'étranger et que SignalConso ne peut rien faire.
-  - Préremplissage, étape par étape :
-    - Contexte : particulier, « Fraudes et démarchage », mobile.
-    - Diagnostic : « Démarchage commercial non sollicité » et le type de chaque numéro : centre d'appel, mobile, fixe, étranger, masqué.
-    - Détails : la technologie (5G) ; l'opérateur auquel l'Arcep a attribué les numéros, choisi dans la liste de J'alerte l'Arcep (`jalerte_operators.txt`, rapprochement sans accents ni forme juridique, par marque ou par autre nom) ou, à défaut, saisi dans « Autre », et rappelé au-dessus du formulaire ; « Non » aux transports ; la commune, cherchée d'après le code postal (et la commune, si plusieurs partagent le code) enregistrés dans « Mes coordonnées ».
-    - Compléments : les numéros, dates et heures des appels, la tranche et l'opérateur (code ARCEP, SIRET), les notes.
-    - Validation : « Non » au contact du service client ; la transmission de l'alerte à des tiers selon le choix de partage de « Mes coordonnées » (le même que pour SignalConso ; aucune réponse s'il n'est pas renseigné) ; email, nom, prénom et téléphone des coordonnées enregistrées. Le consentement au traitement par l'Arcep, la note de satisfaction et l'envoi restent à l'utilisateur.
-  - Comme pour SignalConso, le script (`jalerte_prefill.js`) n'est injecté que sur le formulaire, en HTTPS ; les données restent dans sa fermeture, la commune n'est transmise qu'à l'étape 3 et les coordonnées qu'à l'étape 5.
-  - Alertes envoyées comptabilisées par numéro, quand J'alerte l'Arcep affiche « Votre alerte a été soumise » : une alerte compte pour chacun des numéros qu'elle regroupe (un numéro masqué n'a rien sur quoi la compter), et la fiche rappelle sous le bouton le nombre d'alertes et la date de la dernière. Elles sont stockées dans la même base chiffrée. Le script s'arrête alors et oublie la commune et les coordonnées ; une nouvelle alerte ouverte depuis cette page n'est plus préremplie.
-- **Gestion des annotations locales** :
-  - Marquage de numéros en favoris ou comme indésirables / démarchage.
-  - Ajout de notes personnelles locales associées aux numéros, chiffrées sur le téléphone (SQLCipher, clé Android Keystore).
-- **Observatoire et statistiques** :
-  - Métriques globales de la base ARCEP (20 655 tranches répertoriées, 1 592 opérateurs déclarés).
-  - Répartition des appels de l'utilisateur par opérateur et volume d'appels de téléprospection.
-  - Guide récapitulatif du cadre légal (Loi Naegelen, interdiction du démarchage en 06/07, protocole MAN).
-- **Copie par appui long** :
-  - Un appui long sur une information la copie dans le presse-papiers : numéro, contact, opérateur et son code, SIRET, adresse, tranche, dates, note, résumés de signalement, version de la base et de l'app, empreinte SHA-256 complète, erreurs de mise à jour, nouveautés d'une version, lignes de la tuile « Qui m'a appelé ? ».
-  - Seule la valeur est copiée, sans son libellé (« SIRET de l'acteur », « Note : »), sauf quand elle ne veut rien dire seule : un compteur de l'Observatoire est copié avec ce qu'il compte (« Manqués : 12 »).
-  - Une date relative (« Hier à 12:16 ») est copiée en entier (« 02/10/2026 12:16 »), et une valeur tronquée à l'écran (note, empreinte, aperçu de l'export) est copiée en entier. Un numéro seul (téléphone, SIRET, SIREN) est copié sans ses espaces (« 01 87 21 77 77 » donne « 0187217777 »).
-  - Un appui court garde son effet (ouvrir l'appel, cocher un numéro de l'export). Les numéros, contacts et notes sont marqués sensibles : Android 13+ ne les affiche pas dans l'aperçu du presse-papiers.
-
----
-
-## Choix d'implémentation et d'architecture
-
-### 1. Base SQLite locale embarquée (Offline-First & Privacy-by-Design)
-* **Pourquoi pas d'appels HTTP ou de scraping en direct sur `arcep.fr` ?**
-  - La page web de consultation de l'ARCEP (`identifier-un-operateur-par-un-numero.html`) intègre un mécanisme de protection anti-bot (WAF / challenge visuel / captcha) qui bloque tout scraping programmatique ou requête automatisée.
-  - **Confidentialité absolue** : Le journal d'appels d'un utilisateur contient des données éminemment personnelles. En embarquant la base complète dans `app/src/main/assets/arcep_data.db` (2.95 Mo), **aucun numéro de téléphone n'est envoyé à l'extérieur**. L'intégralité du traitement se fait en local sur le téléphone.
-  - **Performance** : La recherche s'exécute en moins de 2 millisecondes via des index SQLite optimisés (`idx_tranche`, `idx_ezabpqm`), sans dépendance au réseau ni risque d'erreur 429 / quota.
-
-### 2. Lien interactif avec la page officielle de l'ARCEP
-Pour répondre au besoin de vérification sur le site web officiel mentionné dans la demande initiale :
-- Chaque fiche d'appel ou résultat de recherche propose le bouton **« Consulter le portail officiel (arcep.fr) »**.
-- Ce bouton copie automatiquement le numéro normalisé dans le presse-papiers du smartphone et lance le navigateur vers `https://www.arcep.fr/mes-demarches-et-services/entreprises/fiches-pratiques/identifier-un-operateur-par-un-numero.html` pour que l'utilisateur puisse coller et corroborer l'information en un geste.
-
-### 3. Gestion transparente des autorisations Android (`READ_CALL_LOG`)
-L'autorisation d'accès au journal d'appels est une permission critique (*Dangerous Permission*) soumise à des règles strictes sur Google Play :
-- **Demande à l'exécution avec Jetpack Compose** via `rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())`.
-- **Mode Démo non bloquant** : Si l'utilisateur n'a pas encore accordé la permission (ou s'il exécute l'application sur un émulateur sans historique réel), l'application propose immédiatement un jeu de 10 appels français types (appels mobiles, fixes régionaux, télémarketing 0162/0270, services spéciaux).
-- **Dialogue d'information et de confidentialité (`PermissionRationaleDialog`)** : Présente clairement les garanties (traitement local, absence de partage tiers, utilité anti-spam).
-- **Gestion des refus persistants (`isPermanentlyDenied`)** : Détection des refus répétés avec bouton ouvrant directement les paramètres de l'application (`Settings.ACTION_APPLICATION_DETAILS_SETTINGS`).
-- **Synchronisation automatique** dans `MainActivity.onResume()` dès que la permission est activée.
-
-### 4. Réglementation française anti-démarchage (ARCEP 2022-1583)
-Depuis le 1er janvier 2023, la législation française encadre strictement le télémarketing :
-- Préfixes obligatoires réservés au démarchage :
-  - Région parisienne : `0162`, `0163`
-  - Nord-Ouest : `0270`, `0271`
-  - Nord-Est : `0377`, `0378`
-  - Sud-Est : `0424`, `0425`
-  - Sud-Ouest : `0568`, `0569`
-  - Numéros polyvalents nationaux : `0948`, `0949`
-  - Outre-mer : `09475` à `09482`
-- Interdiction formelle du démarchage à partir de numéros mobiles (06 / 07).
-- L'application met en évidence ces plages avec un badge distinctif et indique quel opérateur télécom héberge la ligne du centre d'appels.
-
-### 5. Confidentialité et conditions d'utilisation
-Le texte de référence est [`legal/CGU.md`](legal/CGU.md) : l'application affiche ce même fichier et demande de l'accepter à la première ouverture et à chaque modification. En bref :
-- Journal d'appels, notes, favoris et recherches sont traités sur le téléphone. Seuls un signalement SignalConso ou une alerte J'alerte l'Arcep validés par l'utilisateur transmettent des données (au service public SignalConso, à l'Arcep).
-- Pas de serveur propre : l'application se connecte à l'extranet de l'ARCEP pour mettre à jour sa base (au premier démarrage, puis chaque semaine), à SignalConso et à J'alerte l'Arcep pour les signalements, et à Sentry seulement si l'utilisateur l'active.
-- Rapports d'anomalies désactivés par défaut. S'ils sont activés : données techniques pseudonymes (identifiant d'installation aléatoire), sans numéro, contact, note, nom ni email.
-
----
-
-## Corrections récentes apportées au projet
-
-Plusieurs ajustements ciblés ont été réalisés pour assurer le bon fonctionnement sur appareil réel et la portabilité des builds :
-
-1. **Correction de la lecture du `CallLog` Android (`CallLogRepository.kt`)** :
-   - *Problème* : L'ajout d'une clause `LIMIT 100` dans le paramètre `sortOrder` de `ContentResolver.query` déclenchait une `IllegalArgumentException` ou un plantage SQLite sur certains appareils et versions d'Android ne tolérant pas de syntaxe SQL non standard dans le provider d'appels.
-   - *Correction* : Utilisation d'un tri pur `CallLog.Calls.DATE DESC`, avec arrêt de lecture plafonné programmatiquement (`while (cursor.moveToNext() && entries.size < 100)`), et ajout d'un log d'erreur explicite (`Log.e`).
-2. **Correction de la classification Outre-mer (`PhoneNumberType.kt`)** :
-   - *Problème* : Les vérifications génériques `startsWith("05")`, `startsWith("02")` et `startsWith("06")` intervenaient avant les tests ultramarins, rendant la détection des numéros des DOM (`0590`, `0594`, `0596`, `0262`, `0690`, `0692`, etc.) inaccessible.
-   - *Correction* : Réorganisation de l'ordre d'évaluation pour prioriser les indicatifs d'Outre-mer avant les plages métropolitaines.
-3. **Portabilité de la configuration Gradle (`gradle.properties`)** :
-   - *Problème* : La présence de `android.aapt2FromMavenOverride=/data/data/com.termux/...` dans le `gradle.properties` versionné du projet cassait la compilation sur toutes les machines non-Termux (environnement cloud, macOS, Linux, machines de build).
-   - *Correction* : Retrait de cet override du fichier partagé du dépôt. Le script `setup.sh` l'injecte de façon isolée dans `~/.gradle/gradle.properties` sur les environnements Termux ARM64 sans impacter les autres développeurs.
-4. **Mise à niveau du wrapper Gradle** :
-   - Mise à jour vers Gradle 9.6.0 (`gradle-wrapper.properties` et binaire wrapper associé).
-
----
-
-## Données ARCEP et fonctionnement de la base locale
-
-### Tables SQLite utilisées
-
-Le fichier `app/src/main/assets/arcep_data.db` est copié au premier démarrage dans le répertoire privé de l'application (`context.getDatabasePath("arcep_data.db")`).
-
-| Table | Rôle & Contenu |
-| --- | --- |
-| `number_ranges` | Contient les 20 655 tranches de numérotation attribuées par l'ARCEP (colonnes `ezabpqm`, `tranche_debut`, `tranche_fin`, `operator_code`, `operator_name`, `territory`, `attribution_date`). Indexée sur `(tranche_debut, tranche_fin)` et `ezabpqm`. |
-| `operators` | Contient les 1 592 opérateurs déclarés avec leurs identifiants légaux (`code`, `name`, `siret`, `rcs`, `address`, `declaration_date`). |
-| `call_notes` | Ancienne table des notes, favoris et drapeaux spam, désormais dans la base chiffrée `user_notes_secure.db` : les notes existantes y sont migrées au premier lancement, puis effacées d'`arcep_data.db`. |
-
-### Algorithme de résolution d'un numéro
-1. **Normalisation** : Suppression des espaces, tirets et conversion des formats internationaux (`+33` ou `0033` $\to$ `0`).
-2. **Recherche par encadrement de tranche** :
-   ```sql
-   SELECT * FROM number_ranges 
-   WHERE tranche_debut <= :normalized AND tranche_fin >= :normalized 
-   ORDER BY LENGTH(ezabpqm) DESC LIMIT 1;
-   ```
-3. **Recherche de repli par préfixe (EZABPQM)** : Analyse progressive des préfixes de longueur 7, 6, 5, 4, 3 si le numéro est partiel ou court.
-4. **Jointure avec l'opérateur** : Récupération des données administratives dans `operators` via `operator_code`.
-
-### Limites d'interprétation légales
-- **Portabilité des numéros** : L'ARCEP attribue des tranches initiales aux opérateurs. Un abonné particulier ou professionnel peut avoir porté son numéro chez un autre opérateur. L'ARCEP ne publie pas la base en temps réel des numéros portés (gérée par l'APNF entre opérateurs). La recherche identifie donc l'opérateur attributaire de la ressource.
-- **Nature du démarchage** : L'appartenance d'un numéro à une tranche légale de télémarketing (ex. `0162`) indique un usage réglementaire réservé aux appels de prospection commerciale par automate ou centre d'appels, mais ne préjuge pas à elle seule de la légalité ou du caractère frauduleux d'une société donnée.
-
----
-
-## Construire et tester l'application
-
-### Prérequis
-- **JDK 21**
-- **Android SDK** avec `platforms;android-36` (extension 1) et `build-tools;36.0.0`
-- Variables `ANDROID_HOME` ou `ANDROID_SDK_ROOT` configurées (ou chemin renseigné dans `local.properties`).
-
-### Compilation sur macOS / Linux
-```sh
-# Vérifier la version de Gradle
-./gradlew --version
-
-# Compiler l'application en mode Debug
-./gradlew assembleDebug
-
-# Exécuter les tests unitaires et Robolectric
-./gradlew testDebugUnitTest
-```
-
-L'APK généré se trouve dans `app/build/outputs/apk/debug/app-debug.apk`.
-
-### Déploiement sur appareil ou émulateur via ADB
-```sh
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
-
-### Compilation automatisée et téléchargement d'APK de test (GitHub Actions)
-Un workflow GitHub Actions dédié (`.github/workflows/build_apk.yml`) est configuré pour compiler et tester automatiquement l'application :
-- **Déclencheurs** :
-  - À chaque `push` ou `pull_request` sur les branches principales.
-  - Déclenchement manuel via **Actions > Build Test APK > Run workflow** (avec option pour exécuter ou ignorer les tests unitaires Robolectric).
-- **Artefact généré** :
-  - L'APK de test signé avec la clé de debug (`app-debug.apk`) est automatiquement téléchargeable sous le nom **`info-operateur-debug-apk`** dans la section *Artifacts* de l'exécution GitHub Actions (durée de rétention : 14 jours).
-  - Cet APK peut être installé directement sur n'importe quel smartphone Android de test sans certificat de production.
-
-### Tuile Réglages rapides
-- **Tuile « Qui m'a appelé ? »** (Réglages rapides) : un appui affiche le numéro, l'heure et l'opérateur ARCEP du dernier appel manqué, rejeté ou bloqué, sans ouvrir l'app. Téléphone verrouillé, la réponse n'apparaît qu'après le déverrouillage. « Voir dans l'app » ouvre le journal sur ce numéro.
-
-Tout est calculé sur le téléphone, à partir du journal d'appels : aucune connexion réseau.
-
-### Releases : télécharger l'APK signé
-
-Chaque build sur `main` publie une [release GitHub](https://github.com/azman0101/call-inspector/releases) (`tools/publish_release.sh`) :
-- un tag `v1.0.<numéro du run>` sur le commit construit ;
-- l'APK signé avec la clé de release, `info-operateur-<version>.apk`, et son fichier `.sha256` ;
-- des notes de version : empreinte SHA-256 de l'APK, certificat de signature, rapport VirusTotal, lien vers le run GitHub Actions et son artefact, puis les pull requests fusionnées depuis la release précédente.
-
-La [dernière release](https://github.com/azman0101/call-inspector/releases/latest) est toujours à la même adresse. L'application elle-même (APK release) consulte ces releases au plus une fois par jour : elle affiche un bandeau quand une version plus récente est publiée, avec ses nouveautés et le lien de téléchargement, et montre les nouveautés de la version installée au premier lancement après une mise à jour (réglage *Vérifier les mises à jour*, `AppUpdateChecker`). La CI refuse de publier un APK qui n'est pas signé avec la clé du projet (secret `KEYSTORE_BASE64` absent, par exemple) : il ne pourrait mettre à jour aucune installation. Relancer le job d'une version déjà publiée remplace ses fichiers et ses notes.
-
-### Analyse VirusTotal de l'APK release
-
-À chaque build sur `main`, la CI envoie l'APK release à [VirusTotal](https://www.virustotal.com) (`tools/virustotal_scan.sh`). Le badge VirusTotal ci-dessus pointe directement vers le rapport public de la dernière analyse : comme son lien dépend du SHA-256 de chaque APK, la CI le met à jour dans ce README à chaque build sur `main`. Le résumé du run donne les mêmes informations : empreinte SHA-256, nombre de détections, lien du rapport. L'analyse est informative : une détection, souvent un faux positif sur une app qui lit le journal d'appels, affiche un avertissement mais ne bloque jamais la release. Le secret `VIRUSTOTAL_API_KEY` active l'analyse ; sans lui, l'étape est ignorée et le badge garde son dernier lien connu.
+- Chaque build de `main` publie une [release](https://github.com/azman0101/call-inspector/releases) `v1.0.<numéro du run>` : l'APK signé, son fichier `.sha256`, et des notes avec les empreintes, le rapport VirusTotal et les pull requests fusionnées.
+- L'application vérifie au plus une fois par jour si une version plus récente est publiée et l'annonce avec ses nouveautés (réglage *Vérifier les mises à jour*).
+- Le badge VirusTotal mène au rapport de la dernière release analysée : si l'analyse échoue ou n'est pas configurée, il garde son lien précédent. Les notes de chaque release disent si son propre APK a été analysé. L'analyse est informative : une détection est souvent un faux positif pour une app qui lit le journal d'appels.
+- L'APK debug des pull requests est une autre application (« Info Opérateur (debug) », tuile « Qui m'a appelé ? (debug) ») : il s'installe à côté de la release au lieu de la mettre à jour.
 
 ### Vérifier la signature d'un APK de release
 Les APK de release construits sur `main` sont signés avec la clé d'upload stable du projet (secret `KEYSTORE_BASE64`). Pour vérifier qu'un APK téléchargé provient bien de cette clé (par ex. sous Termux, `pkg install apksigner`) :
@@ -255,153 +35,78 @@ Signer #1 certificate SHA-256 digest: 1f45c660f2385aee7bdd9aa05eaa562d8b4caf7fcf
 - Si l'empreinte SHA-256 diffère, l'APK n'a pas été signé avec la clé du projet (secret absent ou modifié) : il ne pourra pas mettre à jour une installation existante.
 - `keytool -printcert -jarfile` n'affiche rien pour cet APK : avec `minSdk` 24, seuls les schémas de signature v2+ sont utilisés, que `keytool` ne sait pas lire.
 
-### Environnement spécifique Termux (Android ARM64)
-Le fichier `setup.sh` à la racine automatise la préparation d'un environnement autonome sous Termux ARM64 :
+## Fonctionnalités
+
+- **Journal d'appels** : les 100 derniers appels reçus (entrants, manqués, rejetés, bloqués ; les appels sortants sont ignorés), avec l'opérateur attributaire de chaque numéro. Filtres *Tous*, *⚠️ Démarchage / Spam*, *Manqués*, *Entrants*, *Favoris*, et recherche par numéro, contact ou opérateur. Sans l'autorisation d'accès au journal, l'app propose 10 appels d'exemple ; après un refus définitif, un bouton ouvre ses réglages.
+- **Fiche ARCEP d'un numéro** : opérateur titulaire de la tranche, code exploitant, SIRET, RCS, siège, plage de numérotation, territoire, dates d'attribution et de déclaration. « Consulter le portail officiel (arcep.fr) » copie le numéro et ouvre la page de l'ARCEP pour vérifier.
+- **Démarchage repéré** : les numéros des plages réservées au démarchage depuis le 1er janvier 2023 (décision ARCEP n° 2022-1583) sont signalés : `0162`-`0163`, `0270`-`0271`, `0377`-`0378`, `0424`-`0425`, `0568`-`0569`, `0948`-`0949` et `09475` à `09482`. Démarcher depuis un mobile (06, 07) est interdit.
+- **Recherche manuelle** : un numéro ou un préfixe (`01 62`, `06 12`…), saisi ou collé, et toutes les tranches qui y correspondent.
+- **Export des appels** : « Exporter / copier » copie les appels choisis (date et heure), en Markdown ou en CSV, avec la ligne appelée et, au choix, vos notes, par exemple pour répondre à l'opérateur qui les demande.
+- **Tuile « Qui m'a appelé ? »** (Réglages rapides) : le numéro, l'heure et l'opérateur du dernier appel manqué, rejeté ou bloqué, sans ouvrir l'app (après déverrouillage du téléphone). « Voir dans l'app » ouvre le journal sur ce numéro.
+- **Signalement sur SignalConso** : depuis un appel reçu, le formulaire officiel « Démarchage abusif » s'ouvre dans l'app, prérempli : numéro, dates, description, motif et entreprise (le nom de l'appelant, sinon l'opérateur attributaire), proposés d'après votre note et l'historique de l'appel. Un bandeau signale les choix faits par défaut. Vous vérifiez chaque étape et envoyez vous-même.
+- **Alerte à l'Arcep (J'alerte l'Arcep)** : pour un appel ou pour tous les appels de démarchage venus de numéros d'un même opérateur, utile quand l'appelant est à l'étranger et que SignalConso ne peut rien faire. Chaque étape est préremplie (contexte, type des numéros, opérateur, commune, description, coordonnées) ; le consentement et l'envoi restent à vous.
+- **Mes coordonnées** : identité, email, téléphone, numéro de référence, code postal et commune, choix de partage, mémorisés pour préremplir les deux formulaires.
+- **Suivi des signalements** : les signalements SignalConso et les alertes Arcep envoyés sont comptés par numéro, avec la date du dernier, rappelés sur la fiche de l'appel.
+- **Notes et favoris** : favoris, numéros marqués indésirables, notes personnelles par numéro.
+- **Observatoire** : version de la base ARCEP et mise à jour à la demande, analyse de votre journal (démarchage, appels manqués, opérateurs les plus fréquents), règles du démarchage.
+- **Copie par appui long** : un appui long sur une information copie sa valeur, sans son libellé et en entier ; un numéro (téléphone, SIRET) est copié sans espaces.
+- **Base ARCEP à jour** : l'app la met à jour seule, au premier démarrage puis au plus une fois par semaine, seulement si les fichiers publiés par l'ARCEP ont changé.
+
+## Confidentialité
+
+Le texte de référence est [`legal/CGU.md`](legal/CGU.md) : l'application l'affiche et demande de l'accepter au premier lancement et à chaque modification. En bref :
+
+- Le journal d'appels, les notes, favoris et recherches sont traités sur le téléphone. L'opérateur d'un numéro est cherché dans la base embarquée, pas sur `arcep.fr`, dont la page de recherche bloque d'ailleurs les requêtes automatisées.
+- Les notes, vos coordonnées et l'historique des signalements sont stockés dans des bases chiffrées (SQLCipher, clé protégée par l'Android Keystore), exclues des sauvegardes et des transferts d'appareil.
+- Rien ne quitte le téléphone sans vous, sauf dans un signalement SignalConso ou une alerte J'alerte l'Arcep que vous validez. Les formulaires ne reçoivent vos coordonnées qu'à l'étape qui les demande.
+- Connexions : `extranet.arcep.fr` (mise à jour de la base) et `api.github.com` (nouvelle version, désactivable), sans aucune donnée vous concernant ; `signal.conso.gouv.fr`, `entreprise.signal.conso.gouv.fr` et `jalerte.arcep.fr` quand vous ouvrez un formulaire ; Sentry seulement si vous l'activez.
+- Les rapports d'anomalies (Sentry) sont désactivés par défaut : sans votre accord, le SDK ne démarre pas. Activés, ils envoient des données techniques liées à un identifiant d'installation aléatoire ; numéros, contacts, notes, noms et emails sont filtrés avant l'envoi.
+- La revue de sécurité de l'application est dans [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md).
+
+## Limites d'interprétation
+
+- **Portabilité des numéros** : l'ARCEP attribue des tranches aux opérateurs, mais un abonné peut avoir porté son numéro chez un autre opérateur, et la base des numéros portés n'est pas publique. L'app donne l'opérateur attributaire de la tranche.
+- **Nature du démarchage** : qu'un numéro appartienne à une plage de démarchage (par exemple `0162`) indique un usage réservé à la prospection commerciale, mais ne préjuge pas à lui seul de la légalité ou du caractère frauduleux d'une société.
+
+## Développement
+
+**Prérequis** : JDK 21, Android SDK avec `platforms;android-36.1` et `build-tools;36.0.0`, et `ANDROID_HOME` défini (ou `sdk.dir` dans `local.properties`).
+
 ```sh
-bash setup.sh
-./gradlew assembleDebug
+./gradlew assembleDebug        # APK debug : app/build/outputs/apk/debug/app-debug.apk
+./gradlew testDebugUnitTest    # tests unitaires et Robolectric
+./gradlew lintDebug
+./gradlew dependencyCheckAnalyze --no-configuration-cache   # scan OWASP des dépendances
+adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
----
+En cas d'erreurs HTTP 429 de Maven Central, `-PmavenCentralMirror=true` passe par le miroir de Google (voir [`AGENTS.md`](AGENTS.md), qui donne aussi les règles de suppression des CVE).
+
+- **CI** (`.github/workflows/build_apk.yml`) : chaque pull request vers `main` lance les tests et le scan OWASP (indicatif), et produit l'APK debug en artefact `info-operateur-debug-v<version>` (14 jours). Chaque push sur `main` relance les tests et le scan (bloquant), construit l'APK release signé, l'envoie à VirusTotal et publie la release (`tools/publish_release.sh`).
+- **Base ARCEP** : `tools/update_arcep_db.py` construit `app/src/main/assets/arcep_data.db` à partir de `MAJNUM.csv` et `identifiants_CE.csv`. Il se lance à la main et son résultat passe par une pull request relue : la CI ne publie plus de base (SR-02). Sur le téléphone, `ArcepAutoUpdate` et `ArcepUpdateManager` font la mise à jour (dates `Last-Modified`, contrôle de vraisemblance, bascule atomique) ; la table `arcep_metadata` garde les dates et les SHA-256 des fichiers sources. Un numéro est rapproché de la tranche qui le contient, sinon du plus long préfixe connu (`ArcepDatabaseManager.lookupNumbers`).
+- **Sentry** : le DSN est injecté au build par la variable `SENTRY_DSN`, avec un DSN par défaut dans `SentryHelper`. Le filtrage des événements est dans `OperatorInfoApp.kt`. L'envoi des mappings ProGuard est désactivé (`sentry-cli` ne fonctionne pas sous Termux).
+- **Termux (Android ARM64)** : `bash setup.sh`, puis `./gradlew assembleDebug`. Le script installe le JDK, le SDK et un `aapt2` natif AArch64 (celui de Termux est trop ancien pour le SDK 35 et plus), qu'il déclare dans `~/.gradle/gradle.properties` ; les détails sont dans son en-tête.
 
 ## Structure du projet
 
-```text
-├── app/
-│   ├── src/main/
-│   │   ├── AndroidManifest.xml          # Déclaration des permissions READ_CALL_LOG, INTERNET
-│   │   ├── assets/
-│   │   │   └── arcep_data.db            # Base SQLite officielle ARCEP pré-indexée (2.95 Mo)
-│   │   ├── java/net/slashetc/callinspector/
-│   │   │   ├── MainActivity.kt          # Point d'entrée, initialisation ViewModel & cycle de vie
-│   │   │   ├── data/
-│   │   │   │   ├── db/
-│   │   │   │   │   └── ArcepDatabaseManager.kt # Gestionnaire SQLite, requêtes indexées, notes
-│   │   │   │   ├── model/
-│   │   │   │   │   ├── ArcepModels.kt   # ArcepOperator, ArcepNumberRange
-│   │   │   │   │   ├── CallLogEntry.kt  # Modèle d'appel, CallType, ArcepLookupResult
-│   │   │   │   │   └── PhoneNumberType.kt # Catégorisation & préfixes légaux de démarchage
-│   │   │   │   └── repository/
-│   │   │   │       └── CallLogRepository.kt    # Lecture CallLog Android & données de démo
-│   │   │   ├── ui/
-│   │   │   │   ├── MainScreen.kt        # Navigation M3 (Journal, Recherche, Observatoire)
-│   │   │   │   ├── components/
-│   │   │   │   │   ├── CallItemCard.kt  # Carte d'appel avec badges opérateur & statut
-│   │   │   │   │   ├── CallDetailModal.kt # Dossier complet ARCEP & lien officiel
-│   │   │   │   │   ├── OperatorBadge.kt # Badges visuels distinctifs
-│   │   │   │   │   └── PermissionRationaleDialog.kt # Dialogue explicatif des autorisations
-│   │   │   │   └── screens/
-│   │   │   │       ├── CallHistoryScreen.kt    # Écran principal avec filtres et recherche
-│   │   │   │       ├── NumberLookupScreen.kt   # Outil de recherche manuelle et préfixes
-│   │   │   │       └── StatsAndInfoScreen.kt   # Observatoire, métriques et cadre réglementaire
-│   │   │   └── viewmodel/
-│   │   │       └── ArcepViewModel.kt    # Gestion de l'état UI, filtres, permissions, recherche
-│   │   └── res/                         # Ressources graphiques, icônes adaptatives, chaînes
-├── gradle/                              # Configuration du wrapper Gradle 9.6.0
-├── setup.sh                             # Script de provisionnement Termux ARM64
-└── README.md
-```
+| Dossier | Contenu |
+| --- | --- |
+| `app/src/main/java/net/slashetc/callinspector/data/db` | base ARCEP (`ArcepDatabaseManager`) et bases chiffrées (notes, coordonnées, signalements) |
+| `…/data/repository` | journal d'appels, mises à jour de la base ARCEP et de l'application |
+| `…/ui` | écrans Compose, formulaires SignalConso et J'alerte l'Arcep (WebView), tuile |
+| `…/util` | règles métier : signalement, alerte, export, mises à jour, CGU, formatage des numéros |
+| `…/viewmodel` | état de l'interface |
+| `app/src/main/assets` | `arcep_data.db`, scripts de préremplissage des formulaires, liste des opérateurs de J'alerte l'Arcep |
+| `app/src/test` | tests unitaires et Robolectric |
+| `legal` | CGU affichées par l'application |
+| `tools` | base ARCEP, releases, VirusTotal, configuration de la CI |
+| `config` | suppressions documentées du scan OWASP |
 
----
+## Feuille de route
 
-## 7. TODO & Pistes d'évolution
-
-### TODO initiale : Comment la base de donnée de l'ARCEP est-elle maintenue à jour ?
-> **Statut : ✅ Implémenté et fonctionnel**
-
-La question de la fraîcheur des données de l'ARCEP a été résolue par la mise en place d'une architecture à double niveau (statique & dynamique) :
-
-1. **Au niveau du code source** :
-   - Le script Python `tools/update_arcep_db.py` interroge les serveurs officiels de l'ARCEP (`MAJNUM.csv` et `identifiants_CE.csv`) et génère la base embarquée `arcep_data.db`.
-   - Il ne tourne plus en CI : une base téléchargée sur le réseau ne part plus en release sans relecture (revue de sécurité, SR-02). Pour rafraîchir la base embarquée, lancez-le et proposez le résultat en pull request.
-   - Les checksums SHA-256 et métadonnées de version sont stockés dans la table `arcep_metadata`.
-
-2. **Au niveau de l'application installée (Mise à jour Over-The-Air / OTA)** :
-   - **Automatique** : au premier démarrage, puis au plus une fois par semaine, l'application demande la date des deux fichiers ARCEP (requêtes `HEAD`). Elle ne les télécharge que si l'une d'elles diffère de celles enregistrées dans sa base (`version_date`, `ce_version_date`). Hors ligne, elle réessaie au démarrage suivant (`ArcepAutoUpdate.kt`).
-   - Le composant `ArcepUpdateManager.kt` télécharge les flux ARCEP, reconstruit une base SQLite locale sans bloquer l'interface, vérifie que les volumes sont plausibles, puis bascule de manière atomique sur la nouvelle base.
-   - Un bouton et une jauge de progression restent disponibles dans l'onglet **Observatoire** pour forcer une mise à jour.
-
-### Pistes d'évolution futures (Roadmap)
-- [ ] **Détection en temps réel des appels entrants (Call Screening Service)** : afficher le titulaire légal ARCEP et l'avertissement de démarchage directement sur l'écran d'appel Android (`TelecomManager` / `CallScreeningService`).
-- [ ] **Export / Import des notes et favoris** au format JSON ou CSV pour sauvegarde locale.
-- [ ] **Recherche géolocalisée des ZAB (Zones de numérotation élémentaire)** : cartographie interactive des zones géographiques associées aux indicatifs fixes (01 à 05).
-
----
-
-## Maintenance et mise à jour de la base ARCEP (Détails techniques)
-
-La base officielle de l'ARCEP est maintenue à jour à travers deux mécanismes complémentaires implémentés dans le projet :
-
-### 1. Script d'import (`tools/update_arcep_db.py`)
-Un script Python autonome est disponible dans le dépôt :
-```sh
-python3 tools/update_arcep_db.py --output app/src/main/assets/arcep_data.db
-```
-- **Téléchargement direct** des exports officiels de l'ARCEP :
-  - [`MAJNUM.csv`](https://extranet.arcep.fr/uploads/MAJNUM.csv) (ressources de numérotation).
-  - [`identifiants_CE.csv`](https://extranet.arcep.fr/uploads/identifiants_CE.csv) (identifiants et adresses des opérateurs).
-- **Contrôle d'intégrité et empreinte SHA-256** calculée pour chaque fichier source.
-- **Préservation des données utilisateur** : les notes, favoris et statuts de spam vivent dans leur propre base chiffrée, que les mises à jour ARCEP ne touchent pas.
-- **Indexation B-Tree optimisée** (`idx_tranche`, `idx_ezabpqm`, `idx_op_code`) et compression SQLite (`VACUUM`).
-- **Lancé à la main, plus en CI** : la base embarquée n'est rafraîchie que par une pull request relue. Les téléphones, eux, se mettent à jour seuls (section suivante).
-
-### 2. Mise à jour dynamique Over-The-Air (OTA) dans l'application (`ArcepUpdateManager.kt`)
-L'application actualise sa base ARCEP elle-même, sans attendre une mise à jour d'APK : au premier démarrage, puis au plus une fois par semaine, seulement si les fichiers de l'ARCEP ont changé. L'utilisateur peut aussi la forcer :
-- **Moteur de mise à jour local** (`ArcepUpdateManager.kt`) : télécharge les flux CSV officiels, compile la base dans un fichier SQLite temporaire, et permute atomiquement la base active (`replaceDatabaseFile`).
-- **Interface utilisateur dédiée dans l'Observatoire** (`StatsAndInfoScreen.kt`) :
-  - Affiche l'état de la mise à jour (progression en pourcentage, étapes en temps réel).
-  - Bouton interactif *« Vérifier et actualiser la base ARCEP »*.
-
-### 3. Traçabilité de la version de la base (`arcep_metadata`)
-Une table SQLite dédiée `arcep_metadata` enregistre la provenance exacte :
-- `version_date` et `ce_version_date` : dates de dernière modification (`Last-Modified`) de `MAJNUM.csv` et `identifiants_CE.csv` ; la mise à jour automatique les compare à celles de l'extranet pour ne télécharger que des fichiers modifiés.
-- `generated_at` : horodatage précis de la génération de la base.
-- `latest_attribution_date` : date d'attribution la plus récente accordée par l'ARCEP.
-- `majnum_sha256` et `ce_sha256` : empreintes cryptographiques pour auditabilité.
-
-### 4. Optimisation des dépendances (`app/build.gradle.kts`)
-- Les dépendances de scaffold superflues (Firebase AI, AppCheck, Retrofit) ont été désactivées pour réduire l'empreinte mémoire et la taille de l'APK.
-- Le client HTTP `OkHttp` est conservé pour le moteur de téléchargement OTA sécurisé de l'ARCEP.
-
----
-
-## Suivi d'exceptions et crash reporting (Sentry / GlitchTip)
-
-L'application intègre le SDK Sentry pour le monitoring des exceptions en production (également compatible GlitchTip) avec des garanties renforcées de confidentialité et de portabilité.
-
-### 1. Configuration Gradle (`app/build.gradle.kts`)
-- **Plugin Sentry** : Version officielle `6.22.0` (`io.sentry.android.gradle`), compatible AGP 9+ et Kotlin 2.2+.
-- **Tracing Instrumentation** : Le bloc `tracingInstrumentation` est activé pour instrumenter les requêtes de base de données Room/SQLite et les appels réseau OkHttp.
-- **Désactivation de l'upload des mappings** (`autoUploadProguardMapping.set(false)`) : Évite l'exécution locale de `sentry-cli` (qui échoue sous Termux et les architectures sans binaire natif).
-
-### 2. Désactivation en mode Debug (`src/debug/AndroidManifest.xml`)
-L'option `ignoredBuildTypes` du plugin ne coupant pas l'envoi d'événements au runtime, Sentry est explicitement désactivé pour tous les builds de debug via la métadonnée manifest :
-```xml
-<meta-data
-    android:name="io.sentry.enabled"
-    android:value="false" />
-```
-
-### 3. Respect absolu de la vie privée et confidentialité des appels
-L'application manipulant le journal d'appels personnel de l'utilisateur, des règles strictes de non-divulgation sont appliquées dans `OperatorInfoApp.kt` via le callback `beforeSend` :
-- **Aucune donnée personnelle transmise** : `event.user` est forcé à `null` (aucun identifiant, email ou nom d'utilisateur n'est associé).
-- **Nettoyage automatique des breadcrumbs** : Tous les événements de navigation et d'interface ont leurs messages et données assainis. Les clés contenant `phone`, `number`, `call`, `contact`, `email` ou `note` sont purgées.
-- **Masquage regex** : Les numéros de téléphone sont automatiquement remplacés par `[REDACTED_PHONE]` et les adresses courriel par `[REDACTED_EMAIL]`.
-
-### 4. Gestion des secrets et du DSN
-- Le DSN ou token Sentry n'est **jamais stocké en dur** dans le dépôt git.
-- Il est injecté au moment du build via la variable d'environnement `SENTRY_DSN` dans `BuildConfig.SENTRY_DSN` ou lu à l'exécution via `System.getenv("SENTRY_DSN")`.
-- En l'absence de DSN (valeur vide par défaut), le SDK reste inactif sans émettre de requête.
-
----
-
-## Spécificités de build sous Termux (Android ARM64)
-
-Pour compiler le projet directement sous un terminal Android Termux :
-1. **AAPT2 natif** : Gradle télécharge par défaut un binaire `aapt2` compilé pour Linux x86_64, incompatible avec l'architecture ARM64 de Termux. Le fichier `settings.gradle.kts` détecte automatiquement si `/data/data/com.termux/files/usr/bin/aapt2` est présent et configure l'override `android.aapt2FromMavenOverride`. Vous pouvez aussi décommenter la ligne dédiée dans `gradle.properties`.
-2. **SDK Android & local.properties** : Sous Termux, votre fichier `local.properties` (non versionné) doit définir `sdk.dir` vers votre dossier SDK (ex: `sdk.dir=/data/data/com.termux/files/usr/share/android-sdk`). Vérifiez que `compileSdk` (36) et les build-tools correspondent aux paquets installés via `pkg`.
-
----
+- [ ] **Identification pendant l'appel** (`CallScreeningService`) : afficher le titulaire ARCEP et l'avertissement de démarchage sur l'écran d'appel.
+- [ ] **Sauvegarde et restauration des notes et favoris** (JSON ou CSV).
+- [ ] **Carte des zones de numérotation (ZNE)** des numéros fixes (01 à 05).
 
 ## Licence
 
