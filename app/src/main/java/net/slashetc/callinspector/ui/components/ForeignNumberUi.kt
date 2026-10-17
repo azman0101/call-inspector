@@ -151,6 +151,7 @@ fun ForeignNumberReport(lookup: ArcepLookupResult) {
     Text(
         text = "Ouvre votre application de SMS avec le message prêt : vous l'envoyez vous-même.",
         fontSize = 11.sp,
+        lineHeight = 15.sp,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 4.dp, start = 4.dp)
     )

@@ -586,15 +586,16 @@ fun ArcepDossierContent(
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Regulatory Notice Note
-        Text(
-            text = "Information réglementaire : Cet outil identifie l'opérateur attributaire de la tranche initiale selon le plan national de numérotation. En cas de portabilité du numéro, l'abonné final peut être chez un autre opérateur, mais la responsabilité de routage initial incombe à l'opérateur mentionné ci-dessus.",
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            lineHeight = 15.sp
-        )
+        // Regulatory Notice Note (the ARCEP's ranges; the foreign card has its own)
+        if (!lookup.isForeign) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "Information réglementaire : Cet outil identifie l'opérateur attributaire de la tranche initiale selon le plan national de numérotation. En cas de portabilité du numéro, l'abonné final peut être chez un autre opérateur, mais la responsabilité de routage initial incombe à l'opérateur mentionné ci-dessus.",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 15.sp
+            )
+        }
     }
 }
 
