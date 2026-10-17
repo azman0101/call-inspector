@@ -6,6 +6,7 @@ import net.slashetc.callinspector.data.model.ArcepLookupResult
 import net.slashetc.callinspector.data.model.ArcepNumberRange
 import net.slashetc.callinspector.data.model.ArcepOperator
 import net.slashetc.callinspector.data.model.PhoneNumberType
+import net.slashetc.callinspector.util.ForeignNumbers
 import net.slashetc.callinspector.util.PhoneNumberFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -85,7 +86,8 @@ class ArcepDatabaseManager private constructor(private val context: Context) : L
             operator = null,
             range = null,
             numberType = PhoneNumberType.classify(PhoneNumberFormatter.normalize(rawNumber)),
-            isFound = false
+            isFound = false,
+            foreign = ForeignNumbers.describe(PhoneNumberFormatter.normalize(rawNumber))
         )
 
     suspend fun lookupNumbers(rawNumbers: Collection<String>): Map<String, ArcepLookupResult> = withContext(Dispatchers.IO) {
@@ -104,10 +106,10 @@ class ArcepDatabaseManager private constructor(private val context: Context) : L
 
         val rangeMap = mutableMapOf<String, ArcepNumberRange>()
 
-        // 1. Batched Direct Range Lookup
+        // 1. Batched Direct Range Lookup (foreign numbers have no ARCEP range)
         val directCandidates = uniqueNumbers.mapNotNull { rawNum ->
             val (normalized, _, _) = parsedMap[rawNum]!!
-            if (normalized.isNotBlank() && normalized.length >= 4) normalized else null
+            if (normalized.isNotBlank() && normalized.length >= 4 && !ForeignNumbers.isForeign(normalized)) normalized else null
         }.distinct()
 
         val directRangeByNormalized = mutableMapOf<String, ArcepNumberRange>()
@@ -159,7 +161,7 @@ class ArcepDatabaseManager private constructor(private val context: Context) : L
         // 2. Batched Prefix Fallback for unmatched numbers
         val unmatchedRawNumbers = uniqueNumbers.filter { rawNum ->
             val (normalized, _, _) = parsedMap[rawNum]!!
-            normalized.isNotBlank() && rangeMap[rawNum] == null
+            normalized.isNotBlank() && rangeMap[rawNum] == null && !ForeignNumbers.isForeign(normalized)
         }
 
         if (unmatchedRawNumbers.isNotEmpty()) {
@@ -282,7 +284,8 @@ class ArcepDatabaseManager private constructor(private val context: Context) : L
                 operator = operator,
                 range = range,
                 numberType = phoneType,
-                isFound = (range != null)
+                isFound = (range != null),
+                foreign = ForeignNumbers.describe(normalized)
             )
         }
 
