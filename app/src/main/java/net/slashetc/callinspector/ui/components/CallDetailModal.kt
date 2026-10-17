@@ -69,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.slashetc.callinspector.data.model.ArcepLookupResult
 import net.slashetc.callinspector.data.model.CallLogEntry
+import net.slashetc.callinspector.data.model.CallType
 import net.slashetc.callinspector.ui.theme.ArcepBlue
 import net.slashetc.callinspector.ui.theme.ArcepNavy
 import net.slashetc.callinspector.ui.theme.DangerRed
@@ -119,6 +120,7 @@ fun CallDetailBottomSheet(
                 ?.let { alert -> { alert(operatorCalls) } },
             operatorCallCount = operatorCalls.size,
             alertSummary = ArcepAlert.alertSummary(call.arcepAlertCount, call.lastArcepAlertAt),
+            offerSpamReport = call.callType != CallType.OUTGOING,
             onDismiss = onDismiss
         )
     }
@@ -140,6 +142,8 @@ fun ArcepDossierContent(
     onAlertArcepOperator: (() -> Unit)? = null,
     operatorCallCount: Int = 0,
     alertSummary: String? = null,
+    /** A foreign number: offer to report it to the 33700 (not for a number the user called). */
+    offerSpamReport: Boolean = true,
     onDismiss: (() -> Unit)? = null,
     isScrollable: Boolean = true,
     modifier: Modifier = Modifier
@@ -304,132 +308,137 @@ fun ArcepDossierContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ARCEP Official Identity Card
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-            ),
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(ArcepNavy),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Business,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "Opérateur titulaire de la tranche",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = lookup.operatorDisplayName,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
+        if (lookup.isForeign) {
+            // No ARCEP range abroad: the country, kind of line and original operator instead.
+            ForeignNumberCard(lookup)
+        } else {
+            // ARCEP Official Identity Card
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                ),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
                             modifier = Modifier
-                                .copyOnLongPress(lookup.operatorDisplayName)
-                                .testTag("dossier_operator")
-                        )
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(ArcepNavy),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Business,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Opérateur titulaire de la tranche",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = lookup.operatorDisplayName,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier
+                                    .copyOnLongPress(lookup.operatorDisplayName)
+                                    .testTag("dossier_operator")
+                            )
+                        }
                     }
-                }
 
-                Spacer(modifier = Modifier.height(16.dp))
-                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-                Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                // Detail Items Grid
-                DossierRow(
-                    label = "Code exploitant (CE)",
-                    value = lookup.operatorCode
-                )
+                    // Detail Items Grid
+                    DossierRow(
+                        label = "Code exploitant (CE)",
+                        value = lookup.operatorCode
+                    )
 
-                lookup.operator?.siret?.let { siret ->
-                    if (siret.isNotBlank()) {
-                        DossierRow(label = "SIRET de l'acteur", value = siret)
+                    lookup.operator?.siret?.let { siret ->
+                        if (siret.isNotBlank()) {
+                            DossierRow(label = "SIRET de l'acteur", value = siret)
+                        }
                     }
-                }
 
-                lookup.operator?.rcs?.let { rcs ->
-                    if (rcs.isNotBlank()) {
-                        DossierRow(label = "RCS", value = rcs)
+                    lookup.operator?.rcs?.let { rcs ->
+                        if (rcs.isNotBlank()) {
+                            DossierRow(label = "RCS", value = rcs)
+                        }
                     }
-                }
 
-                lookup.operator?.address?.let { addr ->
-                    if (addr.isNotBlank()) {
-                        DossierRow(
-                            label = "Siège social déclaré",
-                            value = addr,
-                            icon = Icons.Default.LocationOn
-                        )
+                    lookup.operator?.address?.let { addr ->
+                        if (addr.isNotBlank()) {
+                            DossierRow(
+                                label = "Siège social déclaré",
+                                value = addr,
+                                icon = Icons.Default.LocationOn
+                            )
+                        }
                     }
-                }
 
-                DossierRow(
-                    label = "Plage de numérotation",
-                    value = lookup.blockDisplay
-                )
+                    DossierRow(
+                        label = "Plage de numérotation",
+                        value = lookup.blockDisplay
+                    )
 
-                DossierRow(
-                    label = "Territoire",
-                    value = lookup.territory
-                )
+                    DossierRow(
+                        label = "Territoire",
+                        value = lookup.territory
+                    )
 
-                lookup.attributionDate?.let { date ->
-                    if (date.isNotBlank()) {
-                        DossierRow(label = "Date d'attribution", value = date)
+                    lookup.attributionDate?.let { date ->
+                        if (date.isNotBlank()) {
+                            DossierRow(label = "Date d'attribution", value = date)
+                        }
                     }
-                }
 
-                lookup.operator?.declarationDate?.let { decDate ->
-                    if (decDate.isNotBlank()) {
-                        DossierRow(label = "Déclaration opérateur", value = decDate)
+                    lookup.operator?.declarationDate?.let { decDate ->
+                        if (decDate.isNotBlank()) {
+                            DossierRow(label = "Déclaration opérateur", value = decDate)
+                        }
                     }
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-        // Official ARCEP Portal button & actions
-        Button(
-            onClick = {
-                // Copy number to clipboard so user can easily search
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                val clip = ClipData.newPlainText("Numéro de téléphone", lookup.normalizedNumber)
-                clipboard.setPrimaryClip(clip)
-                Toast.makeText(context, "Numéro copié ! Ouverture du site officiel...", Toast.LENGTH_SHORT).show()
+            // Official ARCEP Portal button & actions
+            Button(
+                onClick = {
+                    // Copy number to clipboard so user can easily search
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val clip = ClipData.newPlainText("Numéro de téléphone", lookup.normalizedNumber)
+                    clipboard.setPrimaryClip(clip)
+                    Toast.makeText(context, "Numéro copié ! Ouverture du site officiel...", Toast.LENGTH_SHORT).show()
 
-                // Open official ARCEP webpage
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(lookup.officialArcepUrl))
-                context.startActivity(intent)
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = ArcepBlue),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("verify_on_arcep_button")
-        ) {
-            Icon(imageVector = Icons.Default.OpenInBrowser, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Consulter le portail officiel (arcep.fr)",
-                fontWeight = FontWeight.SemiBold
-            )
+                    // Open official ARCEP webpage
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(lookup.officialArcepUrl))
+                    context.startActivity(intent)
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = ArcepBlue),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("verify_on_arcep_button")
+            ) {
+                Icon(imageVector = Icons.Default.OpenInBrowser, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Consulter le portail officiel (arcep.fr)",
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -441,7 +450,12 @@ fun ArcepDossierContent(
             OutlinedButton(
                 onClick = {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    val clip = ClipData.newPlainText("Détails ARCEP", "${lookup.formattedNumber} : Opérateur ${lookup.operatorDisplayName} (${lookup.operatorCode})")
+                    val details = if (lookup.isForeign) {
+                        "${lookup.formattedNumber} : ${lookup.operatorDisplayName}"
+                    } else {
+                        "${lookup.formattedNumber} : Opérateur ${lookup.operatorDisplayName} (${lookup.operatorCode})"
+                    }
+                    val clip = ClipData.newPlainText("Détails ARCEP", details)
                     clipboard.setPrimaryClip(clip)
                     Toast.makeText(context, "Informations copiées", Toast.LENGTH_SHORT).show()
                 },
@@ -465,6 +479,11 @@ fun ArcepDossierContent(
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(text = "Appeler", fontSize = 13.sp)
             }
+        }
+
+        if (lookup.isForeign && offerSpamReport) {
+            Spacer(modifier = Modifier.height(8.dp))
+            ForeignNumberReport(lookup)
         }
 
         if (onReport != null) {
@@ -580,7 +599,7 @@ fun ArcepDossierContent(
 }
 
 @Composable
-private fun DossierRow(
+internal fun DossierRow(
     label: String,
     value: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector? = null

@@ -1,5 +1,7 @@
 package net.slashetc.callinspector.data.model
 
+import net.slashetc.callinspector.util.ForeignNumbers
+
 enum class PhoneNumberType(
     val label: String,
     val description: String,
@@ -37,7 +39,7 @@ enum class PhoneNumberType(
     ),
     FIXE_OUTRE_MER(
         label = "Outre-Mer (DOM)",
-        description = "Guadeloupe, Martinique, Guyane, Réunion, Mayotte, etc."
+        description = "Guadeloupe, Martinique, Guyane, Réunion, Mayotte, Saint-Pierre-et-Miquelon, etc."
     ),
     SVA_SPECIAL(
         label = "Numéro Spécial / SVA",
@@ -53,7 +55,7 @@ enum class PhoneNumberType(
     ),
     INTERNATIONAL(
         label = "International",
-        description = "Numéro situé hors du plan de numérotation français"
+        description = "Numéro étranger, hors du plan de numérotation français (métropole et outre-mer de l'ARCEP)"
     ),
     INCONNU(
         label = "Non identifié",
@@ -88,7 +90,8 @@ enum class PhoneNumberType(
             }
 
             return when {
-                normalizedNumber.startsWith("059") || normalizedNumber.startsWith("026") || normalizedNumber.startsWith("069") -> FIXE_OUTRE_MER
+                normalizedNumber.startsWith("059") || normalizedNumber.startsWith("026") || normalizedNumber.startsWith("069") ||
+                    normalizedNumber.startsWith("0508") -> FIXE_OUTRE_MER
                 normalizedNumber.startsWith("06") || normalizedNumber.startsWith("07") -> MOBILE
                 normalizedNumber.startsWith("01") -> FIXE_ILE_DE_FRANCE
                 normalizedNumber.startsWith("02") -> FIXE_NORD_OUEST
@@ -97,7 +100,7 @@ enum class PhoneNumberType(
                 normalizedNumber.startsWith("05") -> FIXE_SUD_OUEST
                 normalizedNumber.startsWith("08") -> SVA_SPECIAL
                 normalizedNumber.startsWith("09") -> POLYVALENT_VOIP
-                normalizedNumber.startsWith("+") && !normalizedNumber.startsWith("+33") -> INTERNATIONAL
+                ForeignNumbers.isForeign(normalizedNumber) -> INTERNATIONAL
                 else -> INCONNU
             }
         }
