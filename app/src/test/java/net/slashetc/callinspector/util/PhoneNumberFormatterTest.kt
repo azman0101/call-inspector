@@ -104,7 +104,11 @@ class PhoneNumberFormatterTest {
     @Test
     fun format_withNonDigitOrUnmatchedLength_returnsOriginal() {
         assertEquals("12345", PhoneNumberFormatter.format("12345"))
-        assertEquals("+1 415 555 2671", PhoneNumberFormatter.format("+1 415 555 2671"))
+    }
+
+    @Test
+    fun format_withForeignNumber_writesItAsItsCountryDoes() {
+        assertEquals("+1 415-555-2671", PhoneNumberFormatter.format("+1 415 555 2671"))
     }
 
     // --- Tests for formatDuration ---

@@ -8,24 +8,26 @@ import java.util.TimeZone
 
 object PhoneNumberFormatter {
 
+    /**
+     * The number as the ARCEP writes it (0X XX XX XX XX) when it belongs to the French plan, metropolitan or
+     * overseas ([ForeignNumbers.ARCEP_COUNTRY_CODES]); any other number in international form, "+" then its
+     * country code ("0049..." becomes "+49...").
+     */
     fun normalize(raw: String?): String {
         if (raw == null) return ""
         val clean = raw.trim().replace(" ", "").replace("-", "").replace(".", "").replace("(", "").replace(")", "")
-
-        return when {
-            clean.startsWith("+33") -> "0" + clean.removePrefix("+33")
-            clean.startsWith("0033") -> "0" + clean.removePrefix("0033")
-            clean.startsWith("+590") -> "0" + clean.removePrefix("+590")
-            clean.startsWith("+594") -> "0" + clean.removePrefix("+594")
-            clean.startsWith("+596") -> "0" + clean.removePrefix("+596")
-            clean.startsWith("+262") -> "0" + clean.removePrefix("+262")
-            else -> clean
-        }
+        val international = if (clean.startsWith("00")) "+" + clean.removePrefix("00") else clean
+        val french = ForeignNumbers.ARCEP_COUNTRY_CODES.entries.firstOrNull { international.startsWith("+${it.key}") }
+            ?: return international
+        return french.value + international.removePrefix("+${french.key}")
     }
 
     fun format(number: String?): String {
         if (number.isNullOrBlank()) return "Inconnu"
         val normalized = normalize(number)
+
+        // Foreign number, as its country writes it: +49 173 4119637
+        ForeignNumbers.format(normalized)?.let { return it }
 
         // 10 digits French phone number (e.g. 0123456789 -> 01 23 45 67 89)
         if (normalized.length == 10 && normalized.startsWith("0")) {
