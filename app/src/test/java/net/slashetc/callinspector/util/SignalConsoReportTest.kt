@@ -144,6 +144,14 @@ class SignalConsoReportTest {
     }
 
     @Test
+    fun `calls from abroad are not reportable, from the French overseas territories they are`() {
+        assertFalse(SignalConsoReport.isReportable(call(1, now, number = "+491734119637")))
+        assertFalse(SignalConsoReport.isReportable(call(1, now, number = "+687751234")))
+        assertTrue(SignalConsoReport.isReportable(call(1, now, number = "0692123456")))
+        assertTrue(SignalConsoReport.isReportable(call(1, now, number = "0508412345")))
+    }
+
+    @Test
     fun `description includes call time, number and the user's note`() {
         val plan = SignalConsoReport.buildPlan(call(1, at(2026, 9, 26, 9, 5), note = "Isolation à 1 euro"), emptyList(), now, paris)
         assertTrue(plan.description, plan.description.startsWith("Appel de démarchage reçu le 26/09/2026 à 09h05 depuis le 01 62 00 00 00."))

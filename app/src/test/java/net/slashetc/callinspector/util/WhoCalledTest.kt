@@ -28,7 +28,10 @@ class WhoCalledTest {
         timestamp = System.currentTimeMillis() - 60_000,
         durationSeconds = 0,
         callType = type,
-        lookupResult = ArcepLookupResult(number, number, PhoneNumberFormatter.format(number), operator, null, PhoneNumberType.classify(number), operator != null),
+        lookupResult = ArcepLookupResult(
+            number, number, PhoneNumberFormatter.format(number), operator, null, PhoneNumberType.classify(number), operator != null,
+            foreign = ForeignNumbers.describe(number)
+        ),
         isSpamFlagged = spam || PhoneNumberType.classify(number).isDemarchage
     )
 
@@ -84,5 +87,20 @@ class WhoCalledTest {
             "Société Réunionnais…",
             WhoCalled.subtitle(call("0262000000", ArcepOperator("SRR", "Société Réunionnaise du Radiotéléphone")))
         )
+    }
+
+    @Test
+    fun `a call from abroad gives its country, original operator and kind, and warns against calling back`() {
+        val answer = WhoCalled.answer(call("+491734119637", operator = null), hasPermission = true)
+
+        assertEquals("+49 173 4119637", answer.title)
+        val texts = answer.lines.map { it.text }
+        assertTrue(texts.toString(), "Pays : Allemagne" in texts)
+        assertTrue(texts.toString(), "Opérateur d'origine : Vodafone" in texts)
+        assertTrue(texts.toString(), "Numéro étranger · Mobile" in texts)
+        assertEquals(WhoCalled.FOREIGN_CALLBACK_WARNING, texts.last())
+        assertFalse(texts.toString(), texts.any { it.startsWith("Opérateur :") })
+        assertEquals("Allemagne", answer.lines.first { it.text.startsWith("Pays") }.copy)
+        assertEquals("Vodafone · Allemagne", WhoCalled.subtitle(call("+491734119637", operator = null)))
     }
 }

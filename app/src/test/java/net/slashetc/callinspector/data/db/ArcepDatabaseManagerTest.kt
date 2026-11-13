@@ -79,6 +79,30 @@ class ArcepDatabaseManagerTest {
     }
 
     @Test
+    fun `test lookupNumbers describes a foreign number instead of matching an ARCEP range`() = runBlocking {
+        val lookup = dbManager.lookupNumbers(listOf("+491734119637"))["+491734119637"]!!
+        assertFalse(lookup.isFound)
+        assertTrue(lookup.isForeign)
+        assertEquals(PhoneNumberType.INTERNATIONAL, lookup.numberType)
+        assertEquals("+49 173 4119637", lookup.formattedNumber)
+        assertEquals("Allemagne", lookup.foreign?.countryName)
+        assertEquals("Vodafone · Allemagne", lookup.operatorDisplayName)
+        assertEquals("—", lookup.operatorCode)
+        assertEquals(lookup, dbManager.lookupNumber("+491734119637"))
+    }
+
+    @Test
+    fun `test lookupNumbers keeps the overseas numbers of the ARCEP plan French`() = runBlocking {
+        for (raw in listOf("+262692123456", "+508412345", "+590690123456", "+594694123456", "+596696012345")) {
+            val lookup = dbManager.lookupNumber(raw)
+            assertFalse(raw, lookup.isForeign)
+            assertNull(raw, lookup.foreign)
+            assertTrue("$raw is in an ARCEP range", lookup.isFound)
+        }
+        assertEquals("Saint Pierre et Miquelon", dbManager.lookupNumber("+508412345").territory)
+    }
+
+    @Test
     fun `test lookupNumbers marks a blank number as unknown`() = runBlocking {
         val result = dbManager.lookupNumbers(listOf(""))
         val lookup = result[""]

@@ -1,5 +1,8 @@
 package net.slashetc.callinspector.data.model
 
+import net.slashetc.callinspector.util.ForeignNumber
+import net.slashetc.callinspector.util.ForeignNumbers
+
 data class ArcepLookupResult(
     val queryNumber: String,
     val normalizedNumber: String,
@@ -8,25 +11,38 @@ data class ArcepLookupResult(
     val range: ArcepNumberRange?,
     val numberType: PhoneNumberType,
     val isFound: Boolean,
-    val officialArcepUrl: String = "https://www.arcep.fr/mes-demarches-et-services/entreprises/fiches-pratiques/identifier-un-operateur-par-un-numero.html"
+    val officialArcepUrl: String = "https://www.arcep.fr/mes-demarches-et-services/entreprises/fiches-pratiques/identifier-un-operateur-par-un-numero.html",
+    /** A number from abroad: its country, kind of line and original operator, from libphonenumber. */
+    val foreign: ForeignNumber? = null
 ) {
+    /**
+     * Outside the French plan the ARCEP publishes (metropolitan France and its overseas territories): no ARCEP
+     * range, and no SignalConso report or J'alerte l'Arcep alert, which only cover French numbers.
+     */
+    val isForeign: Boolean
+        get() = ForeignNumbers.isForeign(normalizedNumber)
+
     val operatorDisplayName: String
-        get() = operator?.name ?: range?.operatorName ?: "Opérateur non identifié"
+        get() = when {
+            foreign != null -> foreign.summary
+            isForeign -> "Numéro étranger"
+            else -> operator?.name ?: range?.operatorName ?: "Opérateur non identifié"
+        }
 
     val operatorCode: String
         get() = operator?.code ?: range?.operatorCode ?: "—"
 
     val territory: String
-        get() = range?.territory ?: "France (Métropole ou Outre-Mer)"
+        get() = foreign?.countryName ?: range?.territory ?: "France (Métropole ou Outre-Mer)"
 
     val attributionDate: String?
         get() = range?.attributionDate
 
     val blockDisplay: String
-        get() = if (range != null) {
-            "${range.trancheDebut} à ${range.trancheFin}"
-        } else {
-            "Tranche non déterminée"
+        get() = when {
+            range != null -> "${range.trancheDebut} à ${range.trancheFin}"
+            isForeign -> "Hors plan de numérotation français"
+            else -> "Tranche non déterminée"
         }
 }
 

@@ -77,7 +77,12 @@ object SignalConsoReport {
     private const val REPEATED_CALLS_THRESHOLD = 5
     private const val THIRTY_DAYS_MS = 30L * 24 * 60 * 60 * 1000
 
-    fun isReportable(call: CallLogEntry): Boolean = call.callType != CallType.OUTGOING
+    /**
+     * Whether the call can be reported to SignalConso or the Arcep: a received call (not outgoing) from a
+     * French number. A foreign number is out of their reach (no French company or operator to name); the
+     * call sheet offers the 33700 instead.
+     */
+    fun isReportable(call: CallLogEntry): Boolean = call.callType != CallType.OUTGOING && !call.lookupResult.isForeign
 
     /** "Signalé 2 fois · dernier le 26/09/2026", or null when the number was never reported from the app. */
     fun reportSummary(reportCount: Int, lastReportedAt: Long?, timeZone: TimeZone = TimeZone.getDefault()): String? {

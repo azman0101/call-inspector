@@ -224,7 +224,7 @@ fun NumberLookupScreen(
             }
 
             // Results Section
-            if (uiState.manualLookupResult != null && uiState.manualLookupResult.isFound) {
+            if (uiState.manualLookupResult != null && (uiState.manualLookupResult.isFound || uiState.manualLookupResult.isForeign)) {
                 ArcepDossierContent(
                     lookup = uiState.manualLookupResult,
                     isScrollable = false,

@@ -40,13 +40,25 @@ object WhoCalled {
                 )
             )
             call.cachedName?.takeIf { it.isNotBlank() }?.let { add(Line("Contact : $it", copy = it, sensitive = true)) }
-            val operator = lookup.operatorDisplayName + if (lookup.operatorCode != "—") " (${lookup.operatorCode})" else ""
-            add(Line("Opérateur : $operator", copy = operator))
-            add(Line(lookup.numberType.label, copy = lookup.numberType.label))
+            val foreign = lookup.foreign
+            if (lookup.isForeign) {
+                foreign?.let { add(Line("Pays : ${it.countryName}", copy = it.countryName)) }
+                foreign?.originalCarrier?.let { add(Line("Opérateur d'origine : $it", copy = it)) }
+                val kind = listOfNotNull("Numéro étranger", foreign?.lineType).joinToString(" · ")
+                add(Line(kind, copy = kind))
+            } else {
+                val operator = lookup.operatorDisplayName + if (lookup.operatorCode != "—") " (${lookup.operatorCode})" else ""
+                add(Line("Opérateur : $operator", copy = operator))
+                add(Line(lookup.numberType.label, copy = lookup.numberType.label))
+            }
             if (call.isSpamFlagged || lookup.numberType.isDemarchage) add(Line("⚠️ Numéro de démarchage ou signalé comme spam"))
+            if (lookup.isForeign) add(Line(FOREIGN_CALLBACK_WARNING))
         }
         return Answer(call.formattedNumber, lines, titleCopy = call.formattedNumber)
     }
+
+    /** Unanswered call from abroad: calling back an unknown foreign number can be costly (wangiri). */
+    const val FOREIGN_CALLBACK_WARNING = "⚠️ Ne rappelez pas un numéro étranger inconnu : il peut être surtaxé."
 
     private fun shorten(text: String, max: Int) = if (text.length <= max) text else text.take(max - 1).trimEnd() + "…"
 }
