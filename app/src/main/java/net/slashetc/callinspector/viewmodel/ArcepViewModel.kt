@@ -93,24 +93,31 @@ class ArcepViewModel(application: Application) : AndroidViewModel(application) {
                 isUpdateCheckEnabledInDebug = appUpdateChecker.isEnabledInDebug
             )
         }
+    }
+
+    private var appUpdateCheckStarted = false
+
+    /**
+     * Looks for a newer release (at most daily) and, right after an update, shows what it brings. Called once
+     * the terms of use are accepted (they disclose this connection to api.github.com), at most once per view
+     * model.
+     */
+    fun checkAppUpdateIfDue() {
+        if (appUpdateCheckStarted) return
+        appUpdateCheckStarted = true
         // Debug builds are another app (.debug): a release APK would install next to them, not update them,
         // so they only look for releases when the user turned that on ("Signaler les releases").
         if (BuildConfig.BUILD_TYPE == "release") {
-            checkAppUpdate()
+            viewModelScope.launch {
+                val whatsNew = appUpdateChecker.whatsNewAfterUpdate()
+                val update = appUpdateChecker.availableUpdate()
+                _uiState.update { it.copy(availableAppUpdate = update, releaseNotes = whatsNew ?: it.releaseNotes) }
+            }
         } else if (appUpdateChecker.isEnabledInDebug) {
             viewModelScope.launch {
                 val update = appUpdateChecker.availableUpdate()
                 _uiState.update { it.copy(availableAppUpdate = update) }
             }
-        }
-    }
-
-    /** Looks for a newer release (at most daily) and, right after an update, shows what it brings. */
-    private fun checkAppUpdate() {
-        viewModelScope.launch {
-            val whatsNew = appUpdateChecker.whatsNewAfterUpdate()
-            val update = appUpdateChecker.availableUpdate()
-            _uiState.update { it.copy(availableAppUpdate = update, releaseNotes = whatsNew ?: it.releaseNotes) }
         }
     }
 
