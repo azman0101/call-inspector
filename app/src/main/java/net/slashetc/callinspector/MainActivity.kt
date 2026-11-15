@@ -45,9 +45,13 @@ class MainActivity : ComponentActivity() {
                 // First launch, or terms changed since the version the user accepted.
                 val terms = remember { LegalTerms.load(this) }
                 var mustAcceptTerms by remember { mutableStateOf(LegalTerms.needsAcceptance(this, terms)) }
-                // The automatic ARCEP update is a connection the terms disclose: only once they are accepted.
+                // The automatic ARCEP update and the check for a newer version are connections the terms
+                // disclose: only once they are accepted.
                 LaunchedEffect(mustAcceptTerms) {
-                    if (!mustAcceptTerms) viewModel.updateArcepDatabaseIfDue()
+                    if (!mustAcceptTerms) {
+                        viewModel.updateArcepDatabaseIfDue()
+                        viewModel.checkAppUpdateIfDue()
+                    }
                 }
                 if (mustAcceptTerms) {
                     LegalTermsDialog(
