@@ -136,6 +136,9 @@ dependencyCheck {
   // Keep the NVD H2 database in Gradle User Home so CI can cache it between runs.
   data.directory.set(File(gradle.gradleUserHomeDir, "dependency-check-data").absolutePath)
   nvd.apiKey.set(providers.environmentVariable("NVD_API_KEY_RAW").orElse(""))
+  // -PdependencyCheckAutoUpdate=false scans with the vulnerability database already on disk, without asking
+  // the NVD for updates: the CI's second attempt when the NVD is down (it fails without a database).
+  autoUpdate = providers.gradleProperty("dependencyCheckAutoUpdate").orNull != "false"
 }
 
 // Configure the Secrets Gradle Plugin to use .env and .env.example files

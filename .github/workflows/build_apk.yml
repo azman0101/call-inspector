@@ -109,6 +109,10 @@ jobs:
 
       # On main the scan gates the release (the publish job needs this one), so it runs here. On pull
       # requests it is advisory and runs in the dependency-check job below, in parallel with this one.
+      # An NVD outage (HTTP 503 on 2026-11-13) made the scan fail and left two merges unreleased, with no
+      # vulnerability found: a failed scan is run once more without asking the NVD for updates, on the
+      # database restored from the Gradle cache. A dependency with a CVSS of 7 or more fails that second
+      # scan too, and so does a missing database: only the outage is forgiven.
       - name: Scan dependencies (OWASP Dependency-Check)
         if: ${{ github.event_name != 'pull_request' }}
         env:
@@ -119,7 +123,12 @@ jobs:
             export NVD_API_KEY_RAW="${nvd_api_key_trimmed}"
           fi
           unset NVD_API_KEY
-          ./gradlew dependencyCheckAnalyze --no-daemon --no-configuration-cache --stacktrace --info
+          scan() { ./gradlew dependencyCheckAnalyze --no-daemon --no-configuration-cache --stacktrace --info "$@"; }
+          if ! scan; then
+            echo "::warning::Dependency scan failed: scanning again with the cached vulnerability database, without NVD updates."
+            scan -PdependencyCheckAutoUpdate=false
+            echo "::warning::Dependency scan passed on the cached vulnerability database only: the NVD update failed, so the newest vulnerabilities may be missing."
+          fi
 
       - name: Upload dependency scan report
         if: ${{ always() && github.event_name != 'pull_request' }}
